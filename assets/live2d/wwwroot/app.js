@@ -14,7 +14,7 @@
  *   {type:"loadModel", url} / {type:"setState", state} / {type:"setMouth", value}
  *   {type:"setGaze", x, y} / {type:"setBubble", text} / {type:"setConfig", eyeFollow, idleMotion, mouthSync, scale, ...}
  * 页面消息（JS → C#）：
- *   {type:"ready"} / {type:"modelLoaded", name} / {type:"error", message}
+ *   {type:"ready"} / {type:"modelLoaded", name, width, height} / {type:"error", message}
  * ============================================================ */
 (function () {
   'use strict';
@@ -431,7 +431,12 @@
 
       applyModelState(live.state, true);
       setHint('');
-      sendHost({ type: 'modelLoaded', name: modelName });
+      sendHost({
+        type: 'modelLoaded',
+        name: modelName,
+        width: model.internalModel.width || 0,
+        height: model.internalModel.height || 0
+      });
       setStatus('<span class="ok">模型已加载</span> ' + escapeHtml(modelName) + '<br>' + escapeHtml(resolved));
       log('模型加载完成: ' + modelName);
       return true;

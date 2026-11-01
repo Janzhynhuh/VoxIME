@@ -157,6 +157,7 @@ public sealed class VoiceInputController : IVoiceInputController
         _tts.Error += OnTtsError;
         _live2d.ErrorOccurred += OnLive2DError;
         _live2d.Ready += OnLive2DReady;
+        _live2d.ModelSizeAvailable += OnLive2DModelSizeAvailable;
 
         var config = _configStore.Current;
         config.Normalize();
@@ -752,6 +753,45 @@ public sealed class VoiceInputController : IVoiceInputController
         _live2d.SetState(ToLive2DState(State));
     }
 
+    /// <summary>
+    /// 模型加载后按原始宽高比自动调整桌宠窗口（以当前高度为基准，可通过开关关闭）。
+    /// 保存到配置并立即应用到窗口，重启后保持一致。
+    /// </summary>
+    private void OnLive2DModelSizeAvailable(object? sender, Live2DModelSizeEventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            var config = _configStore.Current;
+            if (!config.Live2D.AutoFitWindow)
+            {
+                return;
+            }
+
+            var currentWidth = (int)Math.Round(config.Live2D.Width);
+            var currentHeight = (int)Math.Round(config.Live2D.Height);
+            var (width, height) = Live2DWindowSizing.FitToModel(currentWidth, currentHeight, e.Width, e.Height);
+            if (width == currentWidth && height == currentHeight)
+            {
+                return;
+            }
+
+            config.Live2D.Width = width;
+            config.Live2D.Height = height;
+            _configStore.Save(config);
+            _live2d.ApplyConfig(config.Live2D);
+            _logger.Info($"[Live2D] 已按模型比例自适应窗口：{width}×{height}（模型原始 {e.Width:0}×{e.Height:0}）");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[Live2D] 按模型比例自适应窗口失败：{ex.Message}");
+        }
+    }
+
     private double ToMouthOpen(float level, double gain) =>
         Math.Clamp(level * gain * Config.Live2D.MouthSensitivity, 0, 1);
 
@@ -907,6 +947,7 @@ public sealed class VoiceInputController : IVoiceInputController
             _tts.Error -= OnTtsError;
             _live2d.ErrorOccurred -= OnLive2DError;
             _live2d.Ready -= OnLive2DReady;
+            _live2d.ModelSizeAvailable -= OnLive2DModelSizeAvailable;
 
             _hotkeys.Stop();
             _hotkeys.Dispose();

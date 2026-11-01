@@ -42,6 +42,8 @@ public sealed class Live2DController : ILive2DController
     private CancellationTokenSource? _contentCts;
     private TaskCompletionSource<bool>? _pageReadySource;
     private TaskCompletionSource<string>? _modelLoadedSource;
+    private double _lastModelWidth;
+    private double _lastModelHeight;
 
     private Live2DState _state = Live2DState.Idle;
     private double _mouthValue;
@@ -177,6 +179,9 @@ public sealed class Live2DController : ILive2DController
 
     /// <inheritdoc />
     public event EventHandler<string>? ErrorOccurred;
+
+    /// <inheritdoc />
+    public event EventHandler<Live2DModelSizeEventArgs>? ModelSizeAvailable;
 
     /// <inheritdoc />
     public void Initialize(Live2DConfig config)
@@ -670,6 +675,7 @@ public sealed class Live2DController : ILive2DController
             SendConfigToPage();
             _logger.Info($"[Live2D] Live2D 模型加载成功：{loadedName}");
             MarkReady($"Live2D 模型：{loadedName}");
+            RaiseModelSizeAvailable(loadedName);
         }
         catch (OperationCanceledException)
         {
@@ -777,7 +783,31 @@ public sealed class Live2DController : ILive2DController
     // ------------------------------------------------------------------
     private void OnPageReady(object? sender, EventArgs e) => _pageReadySource?.TrySetResult(true);
 
-    private void OnModelLoaded(object? sender, string name) => _modelLoadedSource?.TrySetResult(name);
+    private void OnModelLoaded(object? sender, Live2DModelSizeEventArgs e)
+    {
+        _lastModelWidth = e.Width;
+        _lastModelHeight = e.Height;
+        _modelLoadedSource?.TrySetResult(e.Name);
+    }
+
+    /// <summary>模型加载成功后上报尺寸（供按模型比例自适应窗口）。</summary>
+    private void RaiseModelSizeAvailable(string name)
+    {
+        if (_disposed || !double.IsFinite(_lastModelWidth) || !double.IsFinite(_lastModelHeight)
+            || _lastModelWidth <= 0 || _lastModelHeight <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            ModelSizeAvailable?.Invoke(this, new Live2DModelSizeEventArgs(name, _lastModelWidth, _lastModelHeight));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[Live2D] 模型尺寸事件处理失败：{ex.Message}");
+        }
+    }
 
     private void OnPageError(object? sender, string message)
     {

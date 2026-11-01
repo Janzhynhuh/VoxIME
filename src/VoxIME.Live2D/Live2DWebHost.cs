@@ -4,6 +4,7 @@ using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using VoxIME.Core;
+using VoxIME.Core.Abstractions;
 using VoxIME.Core.Logging;
 
 namespace VoxIME.Live2D;
@@ -58,8 +59,8 @@ internal sealed class Live2DWebHost : IDisposable
     /// <summary>页面脚本就绪（收到 {type:"ready"}）。</summary>
     public event EventHandler? PageReady;
 
-    /// <summary>模型加载完成（收到 {type:"modelLoaded", name}）。</summary>
-    public event EventHandler<string>? ModelLoaded;
+    /// <summary>模型加载完成（收到 {type:"modelLoaded", name, width, height}）。</summary>
+    public event EventHandler<Live2DModelSizeEventArgs>? ModelLoaded;
 
     /// <summary>页面/加载错误（收到 {type:"error", message} 或导航失败）。</summary>
     public event EventHandler<string>? PageError;
@@ -379,8 +380,14 @@ internal sealed class Live2DWebHost : IDisposable
                 case "modelLoaded":
                 {
                     var name = root.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : null;
-                    _logger.Info($"[Live2D] 模型加载完成：{name ?? "(未命名)"}");
-                    ModelLoaded?.Invoke(this, name ?? "model");
+                    var width = root.TryGetProperty("width", out var widthElement) && widthElement.TryGetDouble(out var w)
+                        ? w
+                        : 0;
+                    var height = root.TryGetProperty("height", out var heightElement) && heightElement.TryGetDouble(out var h)
+                        ? h
+                        : 0;
+                    _logger.Info($"[Live2D] 模型加载完成：{name ?? "(未命名)"}，原始尺寸 {width:0}×{height:0}");
+                    ModelLoaded?.Invoke(this, new Live2DModelSizeEventArgs(name ?? "model", width, height));
                     break;
                 }
                 case "error":

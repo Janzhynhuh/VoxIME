@@ -39,6 +39,36 @@ public sealed class VoiceInputControllerTests
     }
 
     [Fact]
+    public void ModelSizeAvailable_AutoFitsWindowAndPersists()
+    {
+        _controller.Initialize();
+        _configStore.Current.Live2D.Width = 380;
+        _configStore.Current.Live2D.Height = 560;
+        _configStore.Current.Live2D.AutoFitWindow = true;
+
+        _live2d.RaiseModelSize("tall-model", 1000, 2000);
+
+        Assert.Equal(280, _configStore.Current.Live2D.Width);
+        Assert.Equal(560, _configStore.Current.Live2D.Height);
+        Assert.Equal(280, _live2d.Config!.Width);
+        Assert.Equal(560, _live2d.Config.Height);
+    }
+
+    [Fact]
+    public void ModelSizeAvailable_DoesNotResize_WhenAutoFitDisabled()
+    {
+        _controller.Initialize();
+        _configStore.Current.Live2D.Width = 380;
+        _configStore.Current.Live2D.Height = 560;
+        _configStore.Current.Live2D.AutoFitWindow = false;
+
+        _live2d.RaiseModelSize("tall-model", 1000, 2000);
+
+        Assert.Equal(380, _configStore.Current.Live2D.Width);
+        Assert.Equal(560, _configStore.Current.Live2D.Height);
+    }
+
+    [Fact]
     public void StartRecording_EntersListeningAndStartsAudio()
     {
         _controller.Initialize();

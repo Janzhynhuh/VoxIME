@@ -89,6 +89,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string _modelDirectory = "";
     private double _live2DWidth;
     private double _live2DHeight;
+    private bool _autoFitWindow = true;
     private double _live2DScale;
     private double _live2DOpacity;
     private double _mouthSensitivity;
@@ -762,6 +763,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _live2DHeight, Math.Clamp(value, 160, 1600));
     }
 
+    /// <summary>切换模型时按模型宽高比自动调整窗口尺寸（以当前高度为基准）。</summary>
+    public bool AutoFitWindow
+    {
+        get => _autoFitWindow;
+        set => SetProperty(ref _autoFitWindow, value);
+    }
+
     public double Live2DScale
     {
         get => _live2DScale;
@@ -1115,6 +1123,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ModelDirectory = config.Live2D.ModelDirectory ?? "";
         Live2DWidth = config.Live2D.Width;
         Live2DHeight = config.Live2D.Height;
+        AutoFitWindow = config.Live2D.AutoFitWindow;
         Live2DScale = config.Live2D.Scale;
         Live2DOpacity = config.Live2D.Opacity;
         MouthSensitivity = config.Live2D.MouthSensitivity;
@@ -1941,6 +1950,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ModelLibraryDirectory = IsDefaultModelLibraryDirectory() ? null : ModelLibraryDirectory.Trim(),
             Width = Live2DWidth,
             Height = Live2DHeight,
+            AutoFitWindow = AutoFitWindow,
             Scale = Live2DScale,
             Opacity = Live2DOpacity,
             ClickThrough = ClickThrough,

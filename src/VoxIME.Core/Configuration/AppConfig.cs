@@ -319,6 +319,8 @@ public sealed class Live2DConfig
     public string? ModelLibraryDirectory { get; set; }
     public double Width { get; set; } = 380;
     public double Height { get; set; } = 560;
+    /// <summary>切换模型时按模型原始宽高比自动调整窗口尺寸（以当前高度为基准）。</summary>
+    public bool AutoFitWindow { get; set; } = true;
     /// <summary>-1 表示自动吸附屏幕右下角。</summary>
     public double Left { get; set; } = -1;
     public double Top { get; set; } = -1;

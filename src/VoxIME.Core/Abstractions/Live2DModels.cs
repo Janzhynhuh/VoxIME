@@ -11,6 +11,21 @@ public enum Live2DState
     Error
 }
 
+/// <summary>模型加载完成后的尺寸信息（用于窗口自适应）。</summary>
+public sealed class Live2DModelSizeEventArgs : EventArgs
+{
+    public Live2DModelSizeEventArgs(string name, double width, double height)
+    {
+        Name = name;
+        Width = width;
+        Height = height;
+    }
+
+    public string Name { get; }
+    public double Width { get; }
+    public double Height { get; }
+}
+
 /// <summary>
 /// Live2D 桌宠控制器：负责透明置顶窗口、模型加载、状态/眼动/口型联动。
 /// 在无模型或 WebView2 不可用时应自动降级为内置兜底形象。
@@ -25,6 +40,9 @@ public interface ILive2DController : IDisposable
 
     event EventHandler? Ready;
     event EventHandler<string>? ErrorOccurred;
+
+    /// <summary>模型加载成功并上报原始宽高（用于按模型比例自适应窗口）。</summary>
+    event EventHandler<Live2DModelSizeEventArgs>? ModelSizeAvailable;
 
     void Initialize(Live2DConfig config);
     void ApplyConfig(Live2DConfig config);

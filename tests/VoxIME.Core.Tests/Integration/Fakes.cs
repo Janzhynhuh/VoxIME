@@ -229,6 +229,10 @@ internal sealed class FakeLive2DController : ILive2DController
 
     public event EventHandler? Ready;
     public event EventHandler<string>? ErrorOccurred;
+    public event EventHandler<Live2DModelSizeEventArgs>? ModelSizeAvailable;
+
+    public void RaiseModelSize(string name, double width, double height) =>
+        ModelSizeAvailable?.Invoke(this, new Live2DModelSizeEventArgs(name, width, height));
 
     public void Initialize(Live2DConfig config)
     {

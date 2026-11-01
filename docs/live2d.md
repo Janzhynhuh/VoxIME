@@ -151,6 +151,7 @@ Hiyori/
 | `ModelDirectory` | null | 当前模型的目录（由「选择模型」下拉框写入）；null/空 → 内置兜底形象 |
 | `ModelLibraryDirectory` | null | 模型库根目录（导入目标）；null/空 → `%APPDATA%\VoxIME\models`；可改到其它磁盘 |
 | `Width`/`Height` | 380/560 | 桌宠窗口尺寸（DIP，clamp 160..1600） |
+| `AutoFitWindow` | true | 切换模型时按模型原始宽高比自动调整窗口（以当前高度为基准，结果持久化） |
 | `Left`/`Top` | -1/-1 | 窗口左上角（DIP）；-1 → 自动吸附主屏工作区右下角；用户拖动后位置会保留 |
 | `Opacity` | 0.96 | 整窗透明度（0.2..1.0） |
 | `Scale` | 1.0 | 模型缩放（0.2..3.0）：JS 在 canvas 内缩放模型并随缩放提高渲染分辨率，兜底形象用 `RenderTransform`；不再使用 WebView2 `ZoomFactor`（会重排 viewport 导致缩放无效/发糊） |

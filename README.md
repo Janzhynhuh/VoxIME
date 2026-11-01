@@ -94,7 +94,7 @@ dotnet run --project src/VoxIME.App
 ## 🧩 Live2D 模型
 
 - 支持 Live2D **Cubism 3 / Cubism 4** 模型（`.model3.json`，需包含 `.moc3`、贴图、动作/物理文件）。
-- **模型管理**：设置 → 桌宠 → 「选择模型」下拉框可切换已导入模型或「内置兜底形象」；用「导入文件夹…」/「导入 ZIP…」把模型复制到模型库（默认 `%APPDATA%\VoxIME\models`，原文件夹保留；重名自动加序号；点「修改位置…」可换到其它磁盘；可打开模型库目录或删除副本）。
+- **模型管理**：设置 → 桌宠 → 「选择模型」下拉框可切换已导入模型或「内置兜底形象」；用「导入文件夹…」/「导入 ZIP…」把模型复制到模型库（默认 `%APPDATA%\VoxIME\models`，原文件夹保留；重名自动加序号；点「修改位置…」可换到其它磁盘；可打开模型库目录或删除副本）。默认会根据模型原始宽高比自动调整窗口尺寸（以当前高度为基准，可在设置里关闭）。
 - **眼动上下反转**：个别模型上下方向相反时，在 设置 → 桌宠 → 动作与口型 勾选「眼动上下反转」，会按模型记住（只影响 Live2D 模型，内置兜底形象不受影响）。
 - 没有模型也能用：内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画），可在下拉框中随时选回。
 - 官方示例模型（Hiyori / Haru 等）可从 Live2D 官方 CubismWebSamples 获取：
@@ -145,7 +145,7 @@ flowchart LR
 
 ```powershell
 dotnet build VoxIME.sln          # 全量构建（0 warning / 0 error）
-dotnet test                       # 320 个离线单元测试
+dotnet test                       # 326 个离线单元测试
 .\scripts\publish-x64.ps1         # 发布 x64 自包含包
 .\scripts\run.ps1                 # 开发模式运行
 .\scripts\e2e-smoke.ps1           # 端到端自检：录音→Mock 识别→上屏到前台文本框，结果写 %TEMP%\voxime-e2e-result.json
