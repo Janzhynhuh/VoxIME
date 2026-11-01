@@ -177,7 +177,7 @@ sequenceDiagram
 - 降级链：WebView2 不可用 / 模型加载失败 / 未配置模型 → WPF 内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画）。
 - 状态映射：Idle（待机动作循环 + 随机眨眼）、Listening（表情 + 口型跟随麦克风）、Thinking（思考动作/表情）、Speaking（口型跟随 TTS 音量）、Error（抖动/红色提示）。
 - 眼动：独立后台线程按 `Live2DConfig.EyeFollowFps`（5–300Hz，默认 30）采样全局光标位置，归一化为 `-1..1`（上下方向已修正）；UI 渲染帧（`CompositionTarget.Rendering`，通常等于显示器刷新率）再把最新值下发给模型，避免高频 DispatcherTimer 挤占 UI 线程导致抖动；`EyeFollow=false` 时停止采样并归零。
-- 模型库：`VoxIME.Core.Services.Live2DModelLibrary` 负责扫描/导入/删除模型库目录（默认 `%APPDATA%\VoxIME\models`，可由 `Live2DConfig.ModelLibraryDirectory` 改到其它磁盘；支持文件夹与 zip，重名自动编号，禁止删除库外目录）；设置页下拉框选择模型后仍只把 `Live2DConfig.ModelDirectory` 写入配置，桌宠加载逻辑不变。
+- 模型库：`VoxIME.Core.Services.Live2DModelLibrary` 负责扫描/导入/删除模型库目录（默认 `%APPDATA%\VoxIME\models`，可由 `Live2DConfig.ModelLibraryDirectory` 改到其它磁盘；支持文件夹与 zip，重名自动编号，禁止删除库外目录）；设置页「选择模型」下拉框包含「内置兜底形象」+ 已导入模型（旧配置的外部目录会显示为「当前模型（外部目录）」），选择后只把 `Live2DConfig.ModelDirectory` 写入配置，桌宠加载逻辑不变。
 
 ### 5.7 主控制器（`VoxIME.Core.Services.VoiceInputController`）
 

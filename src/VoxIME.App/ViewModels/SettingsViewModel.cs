@@ -158,11 +158,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             () => !string.IsNullOrWhiteSpace(SelectedProvider?.Descriptor?.DocsUrl));
 
         TestMicCommand = new AsyncRelayCommand(TestMicrophoneAsync, () => !IsMicTesting);
-        BrowseModelDirectoryCommand = new RelayCommand(BrowseModelDirectory);
         BrowseModelLibraryDirectoryCommand = new RelayCommand(BrowseModelLibraryDirectory);
         ImportLive2DModelCommand = new RelayCommand(ImportLive2DModel);
         ImportLive2DModelZipCommand = new RelayCommand(ImportLive2DModelZip);
-        DeleteLive2DModelCommand = new RelayCommand(DeleteLive2DModel, () => SelectedLive2DModel is not null);
+        DeleteLive2DModelCommand = new RelayCommand(DeleteLive2DModel, CanDeleteLive2DModel);
         RefreshLive2DModelsCommand = new RelayCommand(RefreshLive2DModelLibrary);
         OpenLive2DModelsFolderCommand = new RelayCommand(OpenLive2DModelsFolder);
         ShowLive2DCommand = new RelayCommand(() => SetLive2DVisible(true));
@@ -864,8 +863,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _live2DStatusText, value);
     }
 
-    /// <summary>模型库里已导入的 Live2D 模型，设置页下拉框选择。</summary>
+    /// <summary>模型库中的模型 + 「内置兜底形象」，设置页下拉框选择。</summary>
     public ObservableCollection<Live2DModelInfo> AvailableLive2DModels { get; } = new();
+
+    /// <summary>下拉框中的“内置兜底形象”选项（不加载 Live2D 模型，使用 WPF 矢量兜底）。</summary>
+    public static Live2DModelInfo BuiltInFallbackModel { get; } = new("内置兜底形象（无 Live2D 模型）", string.Empty, string.Empty);
 
     /// <summary>模型库根目录（导入目标），默认 %APPDATA%\VoxIME\models，可在设置页修改。</summary>
     public string ModelLibraryDirectory
@@ -892,17 +894,22 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            if (value is not null && !string.Equals(ModelDirectory, value.Directory, StringComparison.OrdinalIgnoreCase))
+            if (value is not null)
             {
-                ModelDirectory = value.Directory;
-                StatusText = $"已选择模型“{value.Name}”，点击“保存”后生效。";
+                var directory = value.Directory ?? "";
+                if (!string.Equals((ModelDirectory ?? "").Trim(), directory, StringComparison.OrdinalIgnoreCase))
+                {
+                    ModelDirectory = directory;
+                    StatusText = directory.Length == 0
+                        ? "已选择内置兜底形象，点击“保存”后生效。"
+                        : $"已选择模型“{value.Name}”，点击“保存”后生效。";
+                }
             }
 
             DeleteLive2DModelCommand.RaiseCanExecuteChanged();
         }
     }
 
-    public RelayCommand BrowseModelDirectoryCommand { get; }
     public RelayCommand BrowseModelLibraryDirectoryCommand { get; }
     public RelayCommand ImportLive2DModelCommand { get; }
     public RelayCommand ImportLive2DModelZipCommand { get; }
@@ -1407,30 +1414,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     // ==================== 桌宠页逻辑 ====================
 
-    private void BrowseModelDirectory()
-    {
-        try
-        {
-            var dialog = new OpenFolderDialog
-            {
-                Title = "选择 Live2D 模型目录（包含 *.model3.json）",
-                Multiselect = false
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                ModelDirectory = dialog.FolderName;
-                SyncSelectedLive2DModelFromDirectory();
-                StatusText = "已选择模型目录，点击“保存”后生效。";
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn($"选择模型目录失败：{ex.Message}");
-            Ui.Warn("无法打开目录选择框：" + ex.Message);
-        }
-    }
-
     private void BrowseModelLibraryDirectory()
     {
         try
@@ -1484,6 +1467,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             var models = CreateModelLibrary().Scan();
             AvailableLive2DModels.Clear();
+            AvailableLive2DModels.Add(BuiltInFallbackModel);
             foreach (var model in models)
             {
                 AvailableLive2DModels.Add(model);
@@ -1500,11 +1484,51 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private void SyncSelectedLive2DModelFromDirectory()
     {
         var directory = (ModelDirectory ?? "").Trim();
-        var match = AvailableLive2DModels.FirstOrDefault(
-            m => string.Equals(m.Directory, directory, StringComparison.OrdinalIgnoreCase));
+        Live2DModelInfo? match;
+        if (directory.Length == 0)
+        {
+            match = BuiltInFallbackModel;
+        }
+        else
+        {
+            match = AvailableLive2DModels.FirstOrDefault(
+                m => m.Directory.Length > 0 && string.Equals(m.Directory, directory, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                // 兼容旧配置：模型目录不在模型库中时，在下拉框显示“当前模型（外部目录）”，
+                // 这样用户既能看到实际加载的模型，也可以随时切回内置兜底形象。
+                var name = Path.GetFileName(directory);
+                if (string.IsNullOrEmpty(name))
+                {
+                    name = directory;
+                }
+
+                match = new Live2DModelInfo($"当前模型（外部目录）：{name}", directory, string.Empty);
+                AvailableLive2DModels.Add(match);
+            }
+        }
+
         _selectedLive2DModel = match;
         OnPropertyChanged(nameof(SelectedLive2DModel));
         DeleteLive2DModelCommand.RaiseCanExecuteChanged();
+    }
+
+    private bool CanDeleteLive2DModel()
+    {
+        var selected = SelectedLive2DModel;
+        if (selected is null || selected.Directory.Length == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            return CreateModelLibrary().Contains(selected.Directory);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private void ImportLive2DModel()
@@ -1580,7 +1604,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private void DeleteLive2DModel()
     {
         var selected = SelectedLive2DModel;
-        if (selected is null)
+        if (selected is null || selected.Directory.Length == 0)
         {
             return;
         }

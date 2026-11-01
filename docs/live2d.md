@@ -121,24 +121,25 @@ Hiyori/
 - 贴图/动作文件缺失会导致 WebView2 侧加载失败 → 触发 `{type:"error"}` → 自动降级兜底形象。
 - 模型目录通过虚拟主机 `https://voxime.models/` 暴露（`Allow` CORS，因为 moc3/贴图是跨源
   fetch 请求）；路径内中文/空格会按 URL segment 转义。
-- 用户自带模型只需把整个模型文件夹（含 model3.json 引用的所有文件）放到任意目录，然后在
-  「设置 → 桌宠 → 选择模型目录」选中该文件夹。**VoxIME 不附带任何商业模型。**
+- 用户自带模型可在「设置 → 桌宠 → 选择模型」里导入（见 4.1 模型库），也可以手动放进模型库目录后点「刷新列表」。**VoxIME 不附带任何商业模型。**
 
 ### 4.1 模型库导入与切换（推荐）
 
-「设置 → 桌宠 → 已导入的模型」提供模型库管理：
+「设置 → 桌宠 → 选择模型」提供模型库管理：
 
+- **内置兜底形象**：下拉框第一项是「内置兜底形象（无 Live2D 模型）」，选择它即可切回内置矢量形象（不加载模型）。
 - **导入文件夹…**：选择包含 `*.model3.json` 的模型目录，VoxIME 会把整个目录复制到
-  「模型库位置」（默认 `%APPDATA%\VoxIME\models\<模型名>\`，可改成其它磁盘目录；原目录保留，不改动）。
+  「模型库位置」（默认 `%APPDATA%\VoxIME\models\<模型名>\`；原目录保留，不改动）。
 - **导入 ZIP…**：选择 zip 包（可包含一层模型目录），自动解压后按同样方式导入；
   压缩包内含多个模型时提示分别导入。
-- **模型库位置**：可直接编辑或点「浏览…」指定导入目标（适合模型很大、C 盘空间不足的情况）；
+- **模型库位置**：默认 `%APPDATA%\VoxIME\models`；点右侧「修改位置…」可换到其它磁盘目录（适合模型很大、C 盘空间不足）。
   只影响之后的导入，已有模型不会自动迁移。
 - 导入后出现在下拉框中，选择不同模型即可在多个模型间切换（点击「保存」后应用到桌宠）。
 - **打开模型库目录**：直接查看/手动放入模型（手动放入后点「刷新列表」）。
 - **删除选中模型**：只删除模型库里的副本（有二次确认），不会影响你原来的文件夹。
 - 模型名优先取 `*.model3.json` 的文件名（如 `Hiyori.model3.json` → Hiyori），重名自动追加 `(2)`、`(3)`。
-- 也可以继续用下面「自定义模型目录（可选）」直接指定任意现成目录，不复制进模型库。
+- 兼容旧配置：如果 `ModelDirectory` 指向模型库之外的外部目录，下拉框会显示「当前模型（外部目录）：xxx」，
+  可以随时切回内置兜底形象。
 
 ![Live2D 模型库导入与切换](screenshots/live2d-model-library.png)
 
@@ -147,7 +148,7 @@ Hiyori/
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `Enabled` | true | 是否启用桌宠子系统；false 时 Initialize 后窗口保持隐藏（显式 `Show()` 仍可显示） |
-| `ModelDirectory` | null | 含 `.model3.json` 的目录；null/空 → 显示内置兜底形象（不算错误） |
+| `ModelDirectory` | null | 当前模型的目录（由「选择模型」下拉框写入）；null/空 → 内置兜底形象 |
 | `ModelLibraryDirectory` | null | 模型库根目录（导入目标）；null/空 → `%APPDATA%\VoxIME\models`；可改到其它磁盘 |
 | `Width`/`Height` | 380/560 | 桌宠窗口尺寸（DIP，clamp 160..1600） |
 | `Left`/`Top` | -1/-1 | 窗口左上角（DIP）；-1 → 自动吸附主屏工作区右下角；用户拖动后位置会保留 |
@@ -418,7 +419,7 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 | 嘴巴不动 | 模型未声明 `LipSync` 组且没有 `ParamMouthOpenY`；或 `MouthSync=false`/音量为 0 |
 | 眼动不跟随 | 模型没有 `ParamEyeBallX/Y`/`ParamAngleX/Y`；或 `EyeFollow=false` |
 | 点击穿透失效/拖不动 | `ClickThrough=true` 时整窗穿透（鼠标事件给下层窗口），这是预期；需要拖动时在设置里关闭点击穿透（或 `ApplyConfig` 热切换），此时窗口整体可拖动 |
-| 打开设置里选择模型目录后没变化 | `ApplyConfig` 会重新加载；若目录中模型过多，递归查找取层级最浅的第一个；确认目录里有 `*.model3.json` |
+| 导入/选择模型后没变化 | 需要点「保存」应用配置；确认模型目录里有 `*.model3.json`；导入会复制到模型库位置，可点「打开模型库目录」核对 |
 | 多开应用时 WebView2 报错/卡住 | WebView2 用户数据目录被占用。产品默认使用 `%APPDATA%\VoxIME\webview2`，多实例请只保留一个；开发/验证可用环境变量 `VOXIME_LIVE2D_USER_DATA_DIR` 指定独立目录 |
 | 截图里看不到模型/白屏 | headless 简单模式不支持动画（fps=0）；用 9.4 的 CDP 脚本或真实窗口工具；确认 `--enable-unsafe-swiftshader`（无 GPU 环境） |
 | 高 DPI 下窗口位置偏移 | 窗口/位置/尺寸均使用 WPF DIP；`GetWindowRect` 只用于开发期截图像素坐标。应用需为 PerMonitorV2 DPI 感知（VoxIME.App 的 app.manifest 已配置） |

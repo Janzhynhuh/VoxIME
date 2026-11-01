@@ -94,9 +94,9 @@ dotnet run --project src/VoxIME.App
 
 ## 🧩 Live2D 模型
 
-- 支持 Live2D **Cubism 3 / Cubism 4** 模型目录：选择包含 `.model3.json` 的文件夹即可（需包含 `.moc3`、贴图、动作/物理文件）。
-- **模型库导入**：设置 → 桌宠 → 「导入文件夹…」/「导入 ZIP…」，模型会复制到模型库位置（默认 `%APPDATA%\VoxIME\models`，可在设置页改到其它磁盘），之后可在下拉框里随时切换不同模型（原文件夹保留；重名自动加序号；可打开模型库目录或删除副本）。
-- 没有模型也能用：内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画）。
+- 支持 Live2D **Cubism 3 / Cubism 4** 模型（`.model3.json`，需包含 `.moc3`、贴图、动作/物理文件）。
+- **模型管理**：设置 → 桌宠 → 「选择模型」下拉框可切换已导入模型或「内置兜底形象」；用「导入文件夹…」/「导入 ZIP…」把模型复制到模型库（默认 `%APPDATA%\VoxIME\models`，原文件夹保留；重名自动加序号；点「修改位置…」可换到其它磁盘；可打开模型库目录或删除副本）。
+- 没有模型也能用：内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画），可在下拉框中随时选回。
 - 官方示例模型（Hiyori / Haru 等）可从 Live2D 官方 CubismWebSamples 获取：
   ```powershell
   .\scripts\fetch-sample-model.ps1   # 下载 Hiyori 到 assets\live2d\models\Hiyori
