@@ -38,12 +38,23 @@
         "光标在下": "眼动下发 gaze=(0.00,0.27) → 视线向下",
         "消息策略": "后台 300Hz 采样，但只在渲染帧（CompositionTarget.Rendering，约等于显示器刷新率）且值变化超过阈值时才下发，避免高频消息与 UI 线程抖动"
       }
+    },
+    {
+      "name": "不同模型上下方向（按模型记忆的反转开关）",
+      "method": "同一光标位置（宠物上方）分别配置 eyeFollowInvertY=false/true，读取下发日志；再用 UIA 勾选设置页「眼动上下反转」并保存，检查配置",
+      "result": {
+        "invertY_false": "眼动下发 gaze=(0.00,-0.60) invertY=False → 模型向上",
+        "invertY_true": "眼动下发 gaze=(0.00,0.60) invertY=True → 推送方向反转",
+        "按模型保存": "保存后 eyeFollowInvertYByModel[Hiyori 目录]=true，配置持久化成功",
+        "说明": "反转只作用于 WebView2 模型；WPF 兜底形象始终使用原始方向，不受影响"
+      }
     }
   ],
   "notes": [
     "修复前 C# 侧只在接口上支持 SetGaze，实际上没有轮询全局光标，因此眼动不会跟随鼠标。",
     "当前实现：独立后台线程按 Live2DConfig.EyeFollowFps（5–300Hz，默认 30，设置页「桌宠 → 眼动采样帧率」滑动条可调）采样光标；UI 渲染帧再下发最新值；上下方向已修正。",
     "抖动修复：不再使用高频 DispatcherTimer，改为后台采样 + 渲染帧下发，并在 JS 侧对 gaze 做低通插值；高帧率下不会抽搐。",
+    "不同模型骨骼绑定方向可能相反：新增「眼动上下反转」开关，按模型目录记忆（EyeFollowInvertYByModel），只影响 Live2D 模型。",
     "同时修复：关闭「待机动画」时立即停止当前动作（此前只是不再随机下一个动作，当前动作会继续循环，可能遮挡眼动）。"
   ]
 }

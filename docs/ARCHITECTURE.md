@@ -176,7 +176,7 @@ sequenceDiagram
 - 渲染：`WebView2CompositionControl`（WPF 合成，支持透明）承载本地网页；网页用 pixi.js + pixi-live2d-display（Cubism 4 Core）渲染 `.model3.json`；`renderer.backgroundAlpha=0` 保证透明。
 - 降级链：WebView2 不可用 / 模型加载失败 / 未配置模型 → WPF 内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画）。
 - 状态映射：Idle（待机动作循环 + 随机眨眼）、Listening（表情 + 口型跟随麦克风）、Thinking（思考动作/表情）、Speaking（口型跟随 TTS 音量）、Error（抖动/红色提示）。
-- 眼动：独立后台线程按 `Live2DConfig.EyeFollowFps`（5–300Hz，默认 30）采样全局光标位置，归一化为 `-1..1`（上下方向已修正）；UI 渲染帧（`CompositionTarget.Rendering`，通常等于显示器刷新率）再把最新值下发给模型，避免高频 DispatcherTimer 挤占 UI 线程导致抖动；`EyeFollow=false` 时停止采样并归零。
+- 眼动：独立后台线程按 `Live2DConfig.EyeFollowFps`（5–300Hz，默认 30）采样全局光标位置，归一化为 `-1..1`（上下方向已修正）；UI 渲染帧（`CompositionTarget.Rendering`，通常等于显示器刷新率）再把最新值下发给模型，避免高频 DispatcherTimer 挤占 UI 线程导致抖动；`EyeFollow=false` 时停止采样并归零。部分模型骨骼绑定把上下方向做反，提供 `EyeFollowInvertY`（按模型目录记忆于 `EyeFollowInvertYByModel`），只反转下发给 WebView2 模型的 Y，WPF 兜底形象不受影响。
 - 模型库：`VoxIME.Core.Services.Live2DModelLibrary` 负责扫描/导入/删除模型库目录（默认 `%APPDATA%\VoxIME\models`，可由 `Live2DConfig.ModelLibraryDirectory` 改到其它磁盘；支持文件夹与 zip，重名自动编号，禁止删除库外目录）；设置页「选择模型」下拉框包含「内置兜底形象」+ 已导入模型（旧配置的外部目录会显示为「当前模型（外部目录）」），选择后只把 `Live2DConfig.ModelDirectory` 写入配置，桌宠加载逻辑不变。
 
 ### 5.7 主控制器（`VoxIME.Core.Services.VoiceInputController`）
@@ -242,7 +242,7 @@ sequenceDiagram
 
 | 层级 | 方式 | 命令/产物 |
 |---|---|---|
-| 单元测试 | 315 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
+| 单元测试 | 316 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
 | 窗口级自检 | 构造并显示欢迎/设置/历史/关于/HUD 五个窗口后退出 | `VoxIME.exe --tray --selftest`（日志 `SELFTEST` 行，退出码 0/2） |
 | 端到端 | 真实启动应用 → 录音 3 秒 → 识别 → 上屏到一个真实前台 WinForms 文本框；结果写 JSON；支持 `-ForceAudioWav` 用指定 WAV 走真实厂商接口 | `scripts/e2e-smoke.ps1` → `%TEMP%\voxime-e2e-result.json` |
 | 真实厂商联调 | Windows SAPI 合成中文语音 → 应用完整链路（强制 WAV）→ 小米 MiMo ASR → 上屏；HTTP 200，识别结果与原文逐字一致，上屏内容与识别结果一致 | `docs/verification/e2e-mimo-real-asr.json` |

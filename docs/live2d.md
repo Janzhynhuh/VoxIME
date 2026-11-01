@@ -157,6 +157,8 @@ Hiyori/
 | `ClickThrough` | true | 点击穿透（`WS_EX_TRANSPARENT` + `WM_NCHITTEST=HTTRANSPARENT`）；false 时可拖动窗口 |
 | `AlwaysOnTop` | true | 置顶（`WS_EX_TOPMOST`） |
 | `EyeFollow` | true | 眼动跟随开关（`SetGaze` 是否驱动眼球/头部） |
+| `EyeFollowInvertY` | false | 眼动上下反转（当前生效值；保存时按当前模型从下面的 map 解析） |
+| `EyeFollowInvertYByModel` | {} | 按模型目录记住的上下反转偏好（不同模型骨骼绑定方向可能相反） |
 | `IdleMotion` | true | 待机动作循环开关（关闭后停止 Idle 动作组，模型仍保持呼吸/眨眼） |
 | `MouthSync` | true | 口型同步开关（关闭后嘴巴闭合） |
 | `MouthSensitivity` | 1.0 | 口型灵敏度（0.1..5.0，与输入音量相乘后 clamp 到 0..1） |
@@ -202,6 +204,9 @@ Hiyori/
   - `ParamAngleX` = 30 × x（-30..30），`ParamAngleY` = 30 × y
   - 平滑由 `focusController` 内部阻尼完成，无需额外插值。
 - 若模型没有这些参数，Cubism Core 的安全写入逻辑会忽略（不报错）。
+- **不同模型的骨骼绑定可能把 `ParamEyeBallY`/`ParamAngleY` 的上下方向做反**：设置页提供
+  「眼动上下反转」（`EyeFollowInvertY`），会按模型目录记忆（`EyeFollowInvertYByModel`）。
+  该反转只作用于 WebView2 模型，WPF 兜底形象始终保持正确方向。
 - 眨眼：`model3.json` 声明了 `Groups.EyeBlink.Ids` 时由 Cubism 自动眨眼（Hiyori 为
   `ParamEyeLOpen`/`ParamEyeROpen`）；模型未声明 EyeBlink 组时不会眨眼。
 - 呼吸：CubismWebFramework 的 `updateNaturalMovements` 自动驱动（`ParamBreath` 等）。

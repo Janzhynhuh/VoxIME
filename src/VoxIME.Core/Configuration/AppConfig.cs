@@ -169,6 +169,7 @@ public sealed class AppConfig
         Live2D.Scale = Math.Clamp(Live2D.Scale, 0.2, 3.0);
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
         Live2D.EyeFollowFps = Math.Clamp(Live2D.EyeFollowFps, 5, 300);
+        Live2D.EyeFollowInvertYByModel ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         Live2D.ModelLibraryDirectory = string.IsNullOrWhiteSpace(Live2D.ModelLibraryDirectory)
             ? null
             : Live2D.ModelLibraryDirectory.Trim();
@@ -291,6 +292,10 @@ public sealed class Live2DConfig
     public bool EyeFollow { get; set; } = true;
     /// <summary>眼动跟随的采样帧率（Hz，5–300，默认 30）；采样在后台线程完成，实际渲染上限为显示器刷新率。</summary>
     public int EyeFollowFps { get; set; } = 30;
+    /// <summary>眼动上下反转（当前生效值，保存时由 <see cref="EyeFollowInvertYByModel"/> 按当前模型解析）。</summary>
+    public bool EyeFollowInvertY { get; set; }
+    /// <summary>按模型目录记住的“眼动上下反转”偏好（不同模型的骨骼绑定可能相反）。</summary>
+    public Dictionary<string, bool> EyeFollowInvertYByModel { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool IdleMotion { get; set; } = true;
     public bool MouthSync { get; set; } = true;
     public double MouthSensitivity { get; set; } = 1.0;

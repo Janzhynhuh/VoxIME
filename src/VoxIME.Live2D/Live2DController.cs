@@ -67,6 +67,7 @@ public sealed class Live2DController : ILive2DController
     private double _lastSentMouth = double.NaN;
     private double _lastSentGazeX = double.NaN;
     private double _lastSentGazeY = double.NaN;
+    private bool _lastSentGazeInvertY;
     private string? _lastSentBubble;
     private bool _lastSentBubbleVisible;
 
@@ -1033,19 +1034,27 @@ public sealed class Live2DController : ILive2DController
             return;
         }
 
-        if (NearlyEqual(effectiveX, _lastSentGazeX, 0.005) && NearlyEqual(effectiveY, _lastSentGazeY, 0.005))
+        // 不同厂商/作者的模型可能把 ParamEyeBallY / ParamAngleY 的上下方向绑反（骨骼绑定约定不同），
+        // 因此提供按模型记忆的“上下反转”开关；只影响 WebView2 模型，WPF 兜底形象始终保持正确方向。
+        var invertY = config.EyeFollowInvertY;
+        var webGazeY = invertY ? -effectiveY : effectiveY;
+        var invertChanged = invertY != _lastSentGazeInvertY;
+        if (!invertChanged
+            && NearlyEqual(effectiveX, _lastSentGazeX, 0.005)
+            && NearlyEqual(effectiveY, _lastSentGazeY, 0.005))
         {
             return;
         }
 
         _lastSentGazeX = effectiveX;
         _lastSentGazeY = effectiveY;
+        _lastSentGazeInvertY = invertY;
         try
         {
             _window.Avatar.GazeX = effectiveX;
             _window.Avatar.GazeY = effectiveY;
-            _webHost?.SendGaze(Math.Round(effectiveX, 3), Math.Round(effectiveY, 3));
-            _logger.Debug($"[Live2D] 眼动下发 gaze=({effectiveX:0.00},{effectiveY:0.00})");
+            _webHost?.SendGaze(Math.Round(effectiveX, 3), Math.Round(webGazeY, 3));
+            _logger.Debug($"[Live2D] 眼动下发 gaze=({effectiveX:0.00},{webGazeY:0.00}) invertY={invertY}");
         }
         catch (Exception ex)
         {

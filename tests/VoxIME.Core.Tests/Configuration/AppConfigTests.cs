@@ -64,6 +64,21 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void Normalize_InitializesEyeFollowInvertMap()
+    {
+        var config = new AppConfig
+        {
+            Live2D = new Live2DConfig { EyeFollowInvertY = true, EyeFollowInvertYByModel = null! }
+        };
+
+        config.Normalize();
+
+        Assert.NotNull(config.Live2D.EyeFollowInvertYByModel);
+        Assert.Empty(config.Live2D.EyeFollowInvertYByModel);
+        Assert.True(config.Live2D.EyeFollowInvertY);
+    }
+
+    [Fact]
     public void Normalize_ClampsEyeFollowFpsToValidRange()
     {
         var low = new AppConfig { Live2D = new Live2DConfig { EyeFollowFps = -3 } };

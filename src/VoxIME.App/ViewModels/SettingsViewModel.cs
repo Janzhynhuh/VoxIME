@@ -81,6 +81,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private bool _alwaysOnTop;
     private bool _eyeFollow;
     private int _eyeFollowFps = 30;
+    private bool _eyeFollowInvertY;
     private bool _idleMotion;
     private bool _mouthSync;
     private bool _showBubble;
@@ -803,6 +804,25 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _eyeFollowFps, Math.Clamp(value, 5, 300));
     }
 
+    /// <summary>眼动上下反转（按当前模型记忆；部分模型骨骼绑定方向相反）。</summary>
+    public bool EyeFollowInvertY
+    {
+        get => _eyeFollowInvertY;
+        set
+        {
+            if (!SetProperty(ref _eyeFollowInvertY, value))
+            {
+                return;
+            }
+
+            var directory = (ModelDirectory ?? "").Trim();
+            if (directory.Length > 0)
+            {
+                _working.Live2D.EyeFollowInvertYByModel[directory] = value;
+            }
+        }
+    }
+
     public bool IdleMotion
     {
         get => _idleMotion;
@@ -904,6 +924,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                         ? "已选择内置兜底形象，点击“保存”后生效。"
                         : $"已选择模型“{value.Name}”，点击“保存”后生效。";
                 }
+
+                _eyeFollowInvertY = ResolveEyeFollowInvertYPreference(ModelDirectory) ?? false;
+                OnPropertyChanged(nameof(EyeFollowInvertY));
             }
 
             DeleteLive2DModelCommand.RaiseCanExecuteChanged();
@@ -1098,6 +1121,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         AlwaysOnTop = config.Live2D.AlwaysOnTop;
         EyeFollow = config.Live2D.EyeFollow;
         EyeFollowFps = config.Live2D.EyeFollowFps;
+        _eyeFollowInvertY = ResolveEyeFollowInvertYPreference(config.Live2D.ModelDirectory) ?? false;
+        OnPropertyChanged(nameof(EyeFollowInvertY));
         IdleMotion = config.Live2D.IdleMotion;
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
@@ -1413,6 +1438,27 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     }
 
     // ==================== 桌宠页逻辑 ====================
+
+    private bool? ResolveEyeFollowInvertYPreference(string? modelDirectory)
+    {
+        var directory = (modelDirectory ?? "").Trim();
+        if (directory.Length == 0)
+        {
+            return false;
+        }
+
+        if (_configStore.Current.Live2D.EyeFollowInvertYByModel.TryGetValue(directory, out var saved))
+        {
+            return saved;
+        }
+
+        if (_working.Live2D.EyeFollowInvertYByModel.TryGetValue(directory, out var draft))
+        {
+            return draft;
+        }
+
+        return false;
+    }
 
     private void BrowseModelLibraryDirectory()
     {
@@ -1839,6 +1885,18 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             Top = currentOverlay.Top
         };
 
+        var invertMap = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in _working.Live2D.EyeFollowInvertYByModel)
+        {
+            invertMap[pair.Key] = pair.Value;
+        }
+
+        var currentModelDirectory = (ModelDirectory ?? "").Trim();
+        if (currentModelDirectory.Length > 0)
+        {
+            invertMap[currentModelDirectory] = EyeFollowInvertY;
+        }
+
         config.Live2D = new Live2DConfig
         {
             Enabled = Live2DEnabled,
@@ -1852,6 +1910,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             AlwaysOnTop = AlwaysOnTop,
             EyeFollow = EyeFollow,
             EyeFollowFps = EyeFollowFps,
+            EyeFollowInvertY = EyeFollowInvertY,
+            EyeFollowInvertYByModel = invertMap,
             IdleMotion = IdleMotion,
             MouthSync = MouthSync,
             MouthSensitivity = MouthSensitivity,
