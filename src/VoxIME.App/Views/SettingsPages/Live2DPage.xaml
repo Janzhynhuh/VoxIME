@@ -35,7 +35,7 @@
                                 Command="{Binding ImportLive2DModelZipCommand}" />
                     </Grid>
                     <TextBlock Style="{StaticResource HintText}" Margin="0,6,0,0"
-                               Text="导入会把模型复制到 %APPDATA%\VoxIME\models（原文件夹保留），重名自动加序号；支持完整 Cubism 3/4 模型目录或 zip。" />
+                               Text="导入会把模型复制到下面的「模型库位置」（默认 %APPDATA%\VoxIME\models，原文件夹保留），重名自动加序号；支持完整 Cubism 3/4 模型目录或 zip。" />
 
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                         <Button Style="{StaticResource SmallButton}" Content="打开模型库目录"
@@ -45,6 +45,22 @@
                         <Button Style="{StaticResource SmallButton}" Content="删除选中模型" Margin="8,0,0,0"
                                 Command="{Binding DeleteLive2DModelCommand}" />
                     </StackPanel>
+
+                    <TextBlock Text="模型库位置（导入目标）" Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding ModelLibraryDirectory, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="默认 %APPDATA%\VoxIME\models；可改成空间更大的磁盘目录" />
+                        <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="浏览…"
+                                Margin="8,0,0,0" Padding="14,7"
+                                Command="{Binding BrowseModelLibraryDirectoryCommand}" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
+                               Text="修改后新导入的模型会复制到新位置；已有模型不会自动迁移，可手动移动文件夹后点「刷新列表」。" />
 
                     <TextBlock Text="自定义模型目录（可选，直接使用现成目录）" Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
                     <Grid>

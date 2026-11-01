@@ -169,6 +169,9 @@ public sealed class AppConfig
         Live2D.Scale = Math.Clamp(Live2D.Scale, 0.2, 3.0);
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
         Live2D.EyeFollowFps = Math.Clamp(Live2D.EyeFollowFps, 5, 300);
+        Live2D.ModelLibraryDirectory = string.IsNullOrWhiteSpace(Live2D.ModelLibraryDirectory)
+            ? null
+            : Live2D.ModelLibraryDirectory.Trim();
         Live2D.IdleMotionGroup = string.IsNullOrWhiteSpace(Live2D.IdleMotionGroup) ? "Idle" : Live2D.IdleMotionGroup.Trim();
 
         Tts ??= new TtsConfig();
@@ -274,6 +277,8 @@ public sealed class Live2DConfig
     public bool Enabled { get; set; } = true;
     /// <summary>模型目录（包含 .model3.json 的文件夹）；为空时使用内置兜底形象。</summary>
     public string? ModelDirectory { get; set; }
+    /// <summary>模型库根目录（「导入文件夹/ZIP」复制的目标位置）；null/空 → %APPDATA%\VoxIME\models。</summary>
+    public string? ModelLibraryDirectory { get; set; }
     public double Width { get; set; } = 380;
     public double Height { get; set; } = 560;
     /// <summary>-1 表示自动吸附屏幕右下角。</summary>

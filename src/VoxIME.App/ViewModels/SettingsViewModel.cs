@@ -23,11 +23,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private readonly IAsrProviderRegistry? _registry;
     private readonly IHistoryStore _historyStore;
     private readonly IAppLogger _logger;
-    private readonly Live2DModelLibrary _live2DModelLibrary = new(AppInfo.DefaultModelDirectory);
 
     private AppConfig _working;
     private bool _disposed;
-
     private SettingsPage _currentPage;
     private int _selectedPageIndex;
     private string _statusText = "";
@@ -100,6 +98,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string _fallbackAvatarTheme = "violet";
     private string _live2DStatusText = "";
     private Live2DModelInfo? _selectedLive2DModel;
+    private string _modelLibraryDirectory = AppInfo.DefaultModelDirectory;
 
     // ---- 朗读 ----
     private bool _ttsEnabled;
@@ -160,6 +159,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         TestMicCommand = new AsyncRelayCommand(TestMicrophoneAsync, () => !IsMicTesting);
         BrowseModelDirectoryCommand = new RelayCommand(BrowseModelDirectory);
+        BrowseModelLibraryDirectoryCommand = new RelayCommand(BrowseModelLibraryDirectory);
         ImportLive2DModelCommand = new RelayCommand(ImportLive2DModel);
         ImportLive2DModelZipCommand = new RelayCommand(ImportLive2DModelZip);
         DeleteLive2DModelCommand = new RelayCommand(DeleteLive2DModel, () => SelectedLive2DModel is not null);
@@ -867,6 +867,21 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>模型库里已导入的 Live2D 模型，设置页下拉框选择。</summary>
     public ObservableCollection<Live2DModelInfo> AvailableLive2DModels { get; } = new();
 
+    /// <summary>模型库根目录（导入目标），默认 %APPDATA%\VoxIME\models，可在设置页修改。</summary>
+    public string ModelLibraryDirectory
+    {
+        get => _modelLibraryDirectory;
+        set
+        {
+            if (!SetProperty(ref _modelLibraryDirectory, value?.Trim() ?? ""))
+            {
+                return;
+            }
+
+            RefreshLive2DModelLibrary();
+        }
+    }
+
     public Live2DModelInfo? SelectedLive2DModel
     {
         get => _selectedLive2DModel;
@@ -888,6 +903,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     }
 
     public RelayCommand BrowseModelDirectoryCommand { get; }
+    public RelayCommand BrowseModelLibraryDirectoryCommand { get; }
     public RelayCommand ImportLive2DModelCommand { get; }
     public RelayCommand ImportLive2DModelZipCommand { get; }
     public RelayCommand DeleteLive2DModelCommand { get; }
@@ -1084,6 +1100,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SpeakingExpression = config.Live2D.SpeakingExpression ?? "";
         ErrorExpression = config.Live2D.ErrorExpression ?? "";
         FallbackAvatarTheme = config.Live2D.FallbackAvatarTheme;
+        ModelLibraryDirectory = string.IsNullOrWhiteSpace(config.Live2D.ModelLibraryDirectory)
+            ? AppInfo.DefaultModelDirectory
+            : config.Live2D.ModelLibraryDirectory;
         RefreshLive2DStatus();
         RefreshLive2DModelLibrary();
 
@@ -1412,11 +1431,58 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void BrowseModelLibraryDirectory()
+    {
+        try
+        {
+            var dialog = new OpenFolderDialog
+            {
+                Title = "选择模型库位置（导入的模型会复制到这里）",
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            ModelLibraryDirectory = dialog.FolderName;
+            StatusText = "已选择模型库位置，点击“保存”后生效；已有模型不会自动迁移，可手动移动文件夹后点“刷新列表”。";
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"选择模型库位置失败：{ex.Message}");
+            Ui.Warn("无法打开目录选择框：" + ex.Message);
+        }
+    }
+
+    private Live2DModelLibrary CreateModelLibrary()
+    {
+        var root = string.IsNullOrWhiteSpace(ModelLibraryDirectory)
+            ? AppInfo.DefaultModelDirectory
+            : ModelLibraryDirectory.Trim();
+        return new Live2DModelLibrary(root);
+    }
+
+    private bool IsDefaultModelLibraryDirectory()
+    {
+        if (string.IsNullOrWhiteSpace(ModelLibraryDirectory))
+        {
+            return true;
+        }
+
+        var current = ModelLibraryDirectory.Trim()
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var defaultRoot = AppInfo.DefaultModelDirectory
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return string.Equals(current, defaultRoot, StringComparison.OrdinalIgnoreCase);
+    }
+
     private void RefreshLive2DModelLibrary()
     {
         try
         {
-            var models = _live2DModelLibrary.Scan();
+            var models = CreateModelLibrary().Scan();
             AvailableLive2DModels.Clear();
             foreach (var model in models)
             {
@@ -1456,7 +1522,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            var imported = _live2DModelLibrary.Import(dialog.FolderName);
+            var imported = CreateModelLibrary().Import(dialog.FolderName);
             RefreshLive2DModelLibrary();
             SelectImportedModel(imported);
         }
@@ -1484,7 +1550,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            var imported = _live2DModelLibrary.ImportZip(dialog.FileName);
+            var imported = CreateModelLibrary().ImportZip(dialog.FileName);
             RefreshLive2DModelLibrary();
             SelectImportedModel(imported);
         }
@@ -1530,7 +1596,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         try
         {
-            _live2DModelLibrary.Delete(selected.Directory);
+            CreateModelLibrary().Delete(selected.Directory);
             if (string.Equals((ModelDirectory ?? "").Trim(), selected.Directory, StringComparison.OrdinalIgnoreCase))
             {
                 ModelDirectory = "";
@@ -1550,8 +1616,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         try
         {
-            Directory.CreateDirectory(_live2DModelLibrary.RootDirectory);
-            WindowHelper.OpenFolder(_live2DModelLibrary.RootDirectory);
+            var library = CreateModelLibrary();
+            Directory.CreateDirectory(library.RootDirectory);
+            WindowHelper.OpenFolder(library.RootDirectory);
         }
         catch (Exception ex)
         {
@@ -1752,6 +1819,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             Enabled = Live2DEnabled,
             ModelDirectory = string.IsNullOrWhiteSpace(ModelDirectory) ? null : ModelDirectory.Trim(),
+            ModelLibraryDirectory = IsDefaultModelLibraryDirectory() ? null : ModelLibraryDirectory.Trim(),
             Width = Live2DWidth,
             Height = Live2DHeight,
             Scale = Live2DScale,

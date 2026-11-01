@@ -49,6 +49,21 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void Normalize_TrimsModelLibraryDirectory_AndTreatsWhitespaceAsNull()
+    {
+        var config = new AppConfig
+        {
+            Live2D = new Live2DConfig { ModelLibraryDirectory = "  D:\\VoxIMEModels  " }
+        };
+        config.Normalize();
+        Assert.Equal("D:\\VoxIMEModels", config.Live2D.ModelLibraryDirectory);
+
+        var blank = new AppConfig { Live2D = new Live2DConfig { ModelLibraryDirectory = "   " } };
+        blank.Normalize();
+        Assert.Null(blank.Live2D.ModelLibraryDirectory);
+    }
+
+    [Fact]
     public void Normalize_ClampsEyeFollowFpsToValidRange()
     {
         var low = new AppConfig { Live2D = new Live2DConfig { EyeFollowFps = -3 } };
