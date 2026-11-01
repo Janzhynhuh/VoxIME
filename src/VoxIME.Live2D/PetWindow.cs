@@ -164,12 +164,14 @@ internal sealed class PetWindow : Window
         _avatar.RenderTransform = transform;
     }
 
-    /// <summary>应用尺寸/位置/透明度/置顶/穿透。left/top 为负时自动吸附屏幕右下角。</summary>
+    /// <summary>应用尺寸/位置/透明度/置顶/穿透。snapToEdge=true 时吸附主屏工作区右下角。</summary>
     public void ApplyGeometry(
         double width,
         double height,
         double left,
         double top,
+        bool snapToEdge,
+        bool keepAboveTaskbar,
         double opacity,
         bool topmost,
         bool clickThrough)
@@ -181,17 +183,21 @@ internal sealed class PetWindow : Window
         ClickThrough = clickThrough;
         _bubble.UpdateMaxWidth(Width);
 
-        if (left >= 0 && top >= 0 && IsFinite(left) && IsFinite(top))
+        if (snapToEdge)
+        {
+            MoveToAutoPosition(keepAboveTaskbar);
+        }
+        else if (left >= 0 && top >= 0 && IsFinite(left) && IsFinite(top))
         {
             Left = left;
             Top = top;
         }
         else
         {
-            MoveToAutoPosition();
+            MoveToCenter();
         }
 
-        ClampToVirtualScreen();
+        ClampToVirtualScreen(snapToEdge && keepAboveTaskbar);
     }
 
     public void MoveTo(double left, double top)
@@ -206,15 +212,31 @@ internal sealed class PetWindow : Window
         ClampToVirtualScreen();
     }
 
-    public void MoveToAutoPosition()
+    public void MoveToAutoPosition(bool keepAboveTaskbar = true)
     {
         var workArea = SystemParameters.WorkArea;
+        // 关闭“任务栏之上”时允许窗口压到任务栏区域；开启时用工作区底部作为下边界。
+        // 注意：不能用 VirtualScreenBottom（多显示器时可能是副屏底部），这里用主屏高度。
+        var bottom = keepAboveTaskbar
+            ? workArea.Bottom
+            : SystemParameters.PrimaryScreenHeight;
         Left = workArea.Right - Width - AutoPositionMarginRight;
-        Top = workArea.Bottom - Height - AutoPositionMarginBottom;
+        Top = bottom - Height - AutoPositionMarginBottom;
     }
 
-    /// <summary>把窗口限制在虚拟桌面范围内（避免拖到屏幕外再也找不回来）。</summary>
-    public void ClampToVirtualScreen()
+    /// <summary>没有保存位置且未开启自动贴边时，居中显示在主屏工作区。</summary>
+    public void MoveToCenter()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Left = workArea.Left + (workArea.Width - Width) / 2;
+        Top = workArea.Top + (workArea.Height - Height) / 2;
+    }
+
+    /// <summary>
+    /// 把窗口限制在虚拟桌面范围内（避免拖到屏幕外再也找不回来）。
+    /// preserveBottomAboveTaskbar=true 时优先保证窗口底边在任务栏上方，允许顶部超出屏幕。
+    /// </summary>
+    public void ClampToVirtualScreen(bool preserveBottomAboveTaskbar = false)
     {
         var virtualLeft = SystemParameters.VirtualScreenLeft;
         var virtualTop = SystemParameters.VirtualScreenTop;
@@ -223,7 +245,20 @@ internal sealed class PetWindow : Window
 
         var visibleMargin = 60.0;
         var left = Math.Min(Math.Max(Left, virtualLeft - Width + visibleMargin), virtualRight - visibleMargin);
-        var top = Math.Min(Math.Max(Top, virtualTop - 10), virtualBottom - visibleMargin);
+        double top;
+        if (preserveBottomAboveTaskbar)
+        {
+            // 窗口可能比工作区还高：此时只限制“底边不超过任务栏顶部”，
+            // 不再把顶部强行拉回屏幕内，否则会把底边重新推回任务栏区域。
+            var workArea = SystemParameters.WorkArea;
+            var maxTop = workArea.Bottom - Height - AutoPositionMarginBottom;
+            top = Math.Min(Top, maxTop);
+        }
+        else
+        {
+            top = Math.Min(Math.Max(Top, virtualTop - 10), virtualBottom - visibleMargin);
+        }
+
         if (Math.Abs(left - Left) > 0.5)
         {
             Left = left;

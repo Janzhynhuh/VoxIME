@@ -390,6 +390,8 @@ public sealed class Live2DController : ILive2DController
             config.Height,
             left,
             top,
+            config.SnapToEdge,
+            config.KeepAboveTaskbar,
             config.Opacity,
             config.AlwaysOnTop,
             config.ClickThrough);

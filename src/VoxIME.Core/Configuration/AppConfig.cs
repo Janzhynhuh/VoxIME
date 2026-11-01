@@ -323,6 +323,10 @@ public sealed class Live2DConfig
     public double Height { get; set; } = 560;
     /// <summary>切换模型时按模型原始宽高比自动调整窗口尺寸（以当前高度为基准）。</summary>
     public bool AutoFitWindow { get; set; } = true;
+    /// <summary>启动/切换模型时自动吸附到屏幕右下角；关闭后使用拖动保存的位置或屏幕居中。</summary>
+    public bool SnapToEdge { get; set; } = true;
+    /// <summary>贴边时窗口下边缘保持在任务栏上方的工作区内。</summary>
+    public bool KeepAboveTaskbar { get; set; } = true;
     /// <summary>模型在窗口内的水平偏移（-1..1，按窗口宽度比例；正=向右）。</summary>
     public double ModelOffsetX { get; set; }
     /// <summary>模型在窗口内的垂直偏移（-1..1，按窗口高度比例；正=向下）。</summary>

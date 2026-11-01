@@ -90,6 +90,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _live2DWidth;
     private double _live2DHeight;
     private bool _autoFitWindow = true;
+    private bool _snapToEdge = true;
+    private bool _keepAboveTaskbar = true;
     private double _live2DScale;
     private double _modelOffsetX;
     private double _modelOffsetY;
@@ -772,6 +774,20 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _autoFitWindow, value);
     }
 
+    /// <summary>启动/切换模型时自动吸附到屏幕右下角。</summary>
+    public bool SnapToEdge
+    {
+        get => _snapToEdge;
+        set => SetProperty(ref _snapToEdge, value);
+    }
+
+    /// <summary>贴边时窗口下边缘保持在任务栏上方的工作区内。</summary>
+    public bool KeepAboveTaskbar
+    {
+        get => _keepAboveTaskbar;
+        set => SetProperty(ref _keepAboveTaskbar, value);
+    }
+
     public double Live2DScale
     {
         get => _live2DScale;
@@ -1140,6 +1156,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         Live2DWidth = config.Live2D.Width;
         Live2DHeight = config.Live2D.Height;
         AutoFitWindow = config.Live2D.AutoFitWindow;
+        SnapToEdge = config.Live2D.SnapToEdge;
+        KeepAboveTaskbar = config.Live2D.KeepAboveTaskbar;
         Live2DScale = config.Live2D.Scale;
         ModelOffsetX = config.Live2D.ModelOffsetX;
         ModelOffsetY = config.Live2D.ModelOffsetY;
@@ -1969,6 +1987,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             Width = Live2DWidth,
             Height = Live2DHeight,
             AutoFitWindow = AutoFitWindow,
+            SnapToEdge = SnapToEdge,
+            KeepAboveTaskbar = KeepAboveTaskbar,
             Scale = Live2DScale,
             ModelOffsetX = ModelOffsetX,
             ModelOffsetY = ModelOffsetY,

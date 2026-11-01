@@ -81,6 +81,11 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
         _logger.Info($"配置：{ConfigStore.ConfigFilePath}");
         _logger.Info($"日志：{_logger.LogFilePath}");
 
+        if (Live2D is Live2DController live2DController)
+        {
+            live2DController.PositionChanged += OnLive2DPositionChanged;
+        }
+
         Controller.Initialize();
         CreateHud();
         CreateTray();
@@ -384,6 +389,28 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
 
     // ==================== 释放 ====================
 
+    /// <summary>记住用户拖动后的桌宠位置；关闭自动贴边后下次启动恢复到该位置。</summary>
+    private void OnLive2DPositionChanged(object? sender, Live2DPositionChangedEventArgs e)
+    {
+        try
+        {
+            var config = ConfigStore.Current;
+            if (Math.Abs(config.Live2D.Left - e.Left) < 0.5 && Math.Abs(config.Live2D.Top - e.Top) < 0.5)
+            {
+                return;
+            }
+
+            config.Live2D.Left = e.Left;
+            config.Live2D.Top = e.Top;
+            ConfigStore.Save(config);
+            _logger.Debug($"[Live2D] 保存桌宠位置：({e.Left:0},{e.Top:0})");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"保存桌宠位置失败：{ex.Message}");
+        }
+    }
+
     private void DisposeUi()
     {
         try
@@ -494,6 +521,11 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
 
         _disposed = true;
         DisposeUi();
+
+        if (Live2D is Live2DController live2DController)
+        {
+            live2DController.PositionChanged -= OnLive2DPositionChanged;
+        }
 
         try
         {
