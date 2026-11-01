@@ -387,17 +387,10 @@ internal sealed class PetWindow : Window
             return false;
         }
 
-        // 窗口比该显示器可用高度还高时压到刚好放得下，避免贴底后顶部被裁掉。
+        // 下边吸附只允许改 Y 和高度，完全不改 X：否则贴右边缘时会被水平钳制“回弹”。
         var maxHeight = Math.Max(160, bottom - workArea.Top);
         Height = Math.Min(Height, maxHeight);
         Top = bottom - Height;
-
-        // 只做水平防丢边界，不改变 X 的摆放意图。
-        var left = Math.Min(Math.Max(Left, workArea.Left), Math.Max(workArea.Left, workArea.Right - Width));
-        if (Math.Abs(left - Left) > 0.5)
-        {
-            Left = left;
-        }
 
         return true;
     }
