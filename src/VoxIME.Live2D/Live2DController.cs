@@ -1,6 +1,7 @@
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using VoxIME.Core.Abstractions;
 using VoxIME.Core.Configuration;
@@ -16,8 +17,8 @@ namespace VoxIME.Live2D;
 /// - 通过 WebView2CompositionControl 渲染 Cubism 3/4 模型（真正透明合成）；
 /// - 无模型 / 无 WebView2 Runtime / 模型加载失败 / 握手超时 → 自动降级为 WPF 矢量兜底形象，
 ///   并通过 <see cref="ErrorOccurred"/> 与 <see cref="LastError"/> 报告原因；
-/// - 任意线程调用安全：高频接口（口型/眼动/状态）写入字段，由 UI 线程 30Hz 合并后下发，
-///   避免跨线程 UI 访问与消息洪泛；
+/// - 任意线程调用安全：状态/口型写入字段后由 UI 线程 30Hz 合并下发；眼动由独立后台线程按
+///   配置帧率（5–300Hz）采样光标，再在渲染帧下发给模型，避免高频定时器挤占 UI 线程；
 /// - 环境变量 <c>VOXIME_LIVE2D_DISABLE_WEBVIEW=1</c> 可强制走兜底形象（开发/验收用）。
 /// </summary>
 public sealed class Live2DController : ILive2DController
@@ -31,6 +32,7 @@ public sealed class Live2DController : ILive2DController
 
     private readonly IAppLogger _logger;
     private readonly object _sync = new();
+    private readonly object _gazeSync = new();
     private readonly Dispatcher? _dispatcher;
     private readonly DispatcherTimer? _flushTimer;
 
@@ -47,9 +49,19 @@ public sealed class Live2DController : ILive2DController
     private double _gazeY;
     private string? _bubbleText;
     private DateTime _bubbleSetAt = DateTime.MinValue;
-    private DateTime _lastGazePollAt = DateTime.MinValue;
     private string? _lastRaisedError;
     private DateTime _lastRaisedErrorAt = DateTime.MinValue;
+
+    // 眼动跟随：后台线程按配置帧率（5–300Hz）采样全局光标，UI 渲染帧再下发给 JS，避免高频定时器挤占 UI 线程。
+    private Thread? _gazeThread;
+    private volatile bool _gazeThreadStop;
+    private volatile bool _gazeActive;
+    private volatile int _gazeFps = 30;
+    private long _gazeWindowHandle;
+    private double _gazeSampleX;
+    private double _gazeSampleY;
+    private bool _gazeSampleDirty;
+    private bool _renderingHooked;
 
     private Live2DState _lastSentState = (Live2DState)(-1);
     private double _lastSentMouth = double.NaN;
@@ -308,9 +320,11 @@ public sealed class Live2DController : ILive2DController
             EnsureWindow();
             ApplyWindowConfiguration();
             _flushTimer?.Start();
-            ApplyFlushInterval();
+            HookRendering();
+            StartGazeThread();
 
             var config = GetConfig();
+            ApplyGazeConfig(config);
             if (config.Enabled)
             {
                 _window!.Show();
@@ -325,6 +339,9 @@ public sealed class Live2DController : ILive2DController
                 _visible = false;
                 _logger.Info("[Live2D] 配置 Enabled=false，桌宠窗口保持隐藏。");
             }
+
+            UpdateGazeWindowHandle();
+            UpdateGazeState();
         }
         catch (Exception ex)
         {
@@ -390,7 +407,7 @@ public sealed class Live2DController : ILive2DController
         {
             var previousDirectory = GetConfig().ModelDirectory;
             ApplyWindowConfiguration();
-            ApplyFlushInterval();
+            ApplyGazeConfig(config);
 
             if (_window is not null)
             {
@@ -439,6 +456,9 @@ public sealed class Live2DController : ILive2DController
                     StartContentInitialization();
                 }
             }
+
+            UpdateGazeWindowHandle();
+            UpdateGazeState();
         }
         catch (Exception ex)
         {
@@ -463,7 +483,10 @@ public sealed class Live2DController : ILive2DController
             _window!.Show();
             _visible = true;
             _flushTimer?.Start();
-            ApplyFlushInterval();
+            UpdateGazeWindowHandle();
+            HookRendering();
+            StartGazeThread();
+            UpdateGazeState();
             if (!_contentInitialized)
             {
                 // 注意：内容初始化（WebView2 EnsureCoreWebView2Async）期间绝对不能折叠 WebView 控件，
@@ -490,6 +513,7 @@ public sealed class Live2DController : ILive2DController
         {
             _window?.Hide();
             _visible = false;
+            _gazeActive = false;
             _flushTimer?.Stop();
             _logger.Info("[Live2D] 桌宠已隐藏。");
         }
@@ -822,29 +846,211 @@ public sealed class Live2DController : ILive2DController
     // 30Hz 合帧下发：状态 / 口型 / 眼动 / 气泡
     // ------------------------------------------------------------------
 
-    /// <summary>
-    /// 按 <see cref="Live2DConfig.EyeFollowFps"/> 调整合帧定时器频率：
-    /// 眼动可配 5–60Hz，定时器最快提到约 8ms/帧；其它状态/口型消息仍是"变化才下发"，提升帧率开销很小。
-    /// </summary>
-    private void ApplyFlushInterval()
+    /// <summary>应用眼动配置：采样帧率（5–300Hz）与是否启用。</summary>
+    private void ApplyGazeConfig(Live2DConfig config)
     {
-        var timer = _flushTimer;
-        if (timer is null)
+        var fps = Math.Clamp(config.EyeFollowFps, 5, 300);
+        if (_gazeFps != fps)
+        {
+            _gazeFps = fps;
+            _logger.Debug($"[Live2D] 眼动采样帧率 = {fps}fps");
+        }
+
+        UpdateGazeState();
+    }
+
+    private void UpdateGazeState()
+    {
+        _gazeActive = _visible && GetConfig().EyeFollow && Interlocked.Read(ref _gazeWindowHandle) != 0;
+        if (!_gazeActive)
+        {
+            lock (_gazeSync)
+            {
+                _gazeSampleDirty = false;
+            }
+        }
+    }
+
+    private void UpdateGazeWindowHandle()
+    {
+        var handle = _window?.Handle ?? IntPtr.Zero;
+        Interlocked.Exchange(ref _gazeWindowHandle, handle.ToInt64());
+    }
+
+    private void HookRendering()
+    {
+        if (_renderingHooked)
+        {
+            return;
+        }
+
+        CompositionTarget.Rendering += OnRenderingFrame;
+        _renderingHooked = true;
+    }
+
+    private void UnhookRendering()
+    {
+        if (!_renderingHooked)
+        {
+            return;
+        }
+
+        try
+        {
+            CompositionTarget.Rendering -= OnRenderingFrame;
+        }
+        catch (Exception)
+        {
+            // 进程退出时可能已无法访问 WPF 静态事件，忽略。
+        }
+
+        _renderingHooked = false;
+    }
+
+    private void StartGazeThread()
+    {
+        if (_gazeThread is not null)
+        {
+            return;
+        }
+
+        _gazeThreadStop = false;
+        _gazeThread = new Thread(GazeThreadMain)
+        {
+            IsBackground = true,
+            Name = "VoxIME.Live2DGaze"
+        };
+        _gazeThread.Start();
+    }
+
+    private void StopGazeThread()
+    {
+        _gazeThreadStop = true;
+        var thread = _gazeThread;
+        _gazeThread = null;
+        if (thread is not null)
+        {
+            try
+            {
+                thread.Join(1000);
+            }
+            catch (Exception)
+            {
+                // 忽略退出阶段的线程等待异常。
+            }
+        }
+    }
+
+    /// <summary>
+    /// 后台按配置帧率采样全局光标（5–300Hz，采样成本极低），把归一化视线缓存起来；
+    /// 真正下发给 WebView2 由渲染帧（CompositionTarget.Rendering）完成，
+    /// 这样高帧率不会用高频 DispatcherTimer 挤占 UI 线程（之前 60fps 抽搐的根因）。
+    /// </summary>
+    private void GazeThreadMain()
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        while (!_gazeThreadStop)
+        {
+            var fps = Math.Clamp(_gazeFps, 5, 300);
+            var intervalMs = 1000.0 / fps;
+            var deadline = stopwatch.Elapsed.TotalMilliseconds + intervalMs;
+            try
+            {
+                if (_gazeActive)
+                {
+                    var handle = new IntPtr(Interlocked.Read(ref _gazeWindowHandle));
+                    if (handle != IntPtr.Zero
+                        && WindowInterop.TryGetCursorPosition(out var cursorX, out var cursorY)
+                        && WindowInterop.TryGetWindowRect(handle, out var left, out var top, out var width, out var height))
+                    {
+                        var centerX = left + width / 2.0;
+                        var centerY = top + height / 2.0;
+                        // 鼠标距窗口中心约 1.8 倍窗口尺寸时达到最大偏转。
+                        var gazeX = Math.Clamp((cursorX - centerX) / Math.Max(1.0, width * 1.8), -1, 1);
+                        // 上下方向修正：屏幕 Y 向下为正，而 Cubism 视线 Y 正方向与屏幕相反，这里直接按“光标在上→视线向上”换算。
+                        var gazeY = Math.Clamp((cursorY - centerY) / Math.Max(1.0, height * 1.8), -1, 1);
+                        lock (_gazeSync)
+                        {
+                            _gazeSampleX = gazeX;
+                            _gazeSampleY = gazeY;
+                            _gazeSampleDirty = true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug($"[Live2D] 眼动采样异常：{ex.Message}");
+            }
+
+            while (!_gazeThreadStop && stopwatch.Elapsed.TotalMilliseconds < deadline)
+            {
+                var remaining = deadline - stopwatch.Elapsed.TotalMilliseconds;
+                if (remaining > 2.0)
+                {
+                    Thread.Sleep(1);
+                }
+                else
+                {
+                    Thread.SpinWait(40);
+                }
+            }
+        }
+    }
+
+    /// <summary>渲染帧回调：每帧把后台采样到的最新视线下发给模型（通常等于显示器刷新率），并驱动 WPF 兜底形象。</summary>
+    private void OnRenderingFrame(object? sender, EventArgs e)
+    {
+        if (_disposed || _window is null)
         {
             return;
         }
 
         var config = GetConfig();
-        var eyeFollowFps = config.EyeFollow ? Math.Clamp(config.EyeFollowFps, 5, 60) : 30;
-        var intervalMs = Math.Max(8.0, Math.Min(FlushIntervalMilliseconds, 1000.0 / eyeFollowFps));
-        var interval = TimeSpan.FromMilliseconds(intervalMs);
-        if (timer.Interval != interval)
+        double gazeX;
+        double gazeY;
+        bool dirty;
+        lock (_gazeSync)
         {
-            timer.Interval = interval;
+            gazeX = _gazeSampleX;
+            gazeY = _gazeSampleY;
+            dirty = _gazeSampleDirty;
+            _gazeSampleDirty = false;
         }
 
-        _lastGazePollAt = DateTime.MinValue;
-        _logger.Debug($"[Live2D] 合帧间隔={intervalMs:0.0}ms（眼动轮询目标 {eyeFollowFps}fps）");
+        double manualX;
+        double manualY;
+        lock (_sync)
+        {
+            manualX = _gazeX;
+            manualY = _gazeY;
+        }
+
+        var effectiveX = config.EyeFollow ? gazeX : manualX;
+        var effectiveY = config.EyeFollow ? gazeY : manualY;
+        if (!dirty && config.EyeFollow)
+        {
+            return;
+        }
+
+        if (NearlyEqual(effectiveX, _lastSentGazeX, 0.005) && NearlyEqual(effectiveY, _lastSentGazeY, 0.005))
+        {
+            return;
+        }
+
+        _lastSentGazeX = effectiveX;
+        _lastSentGazeY = effectiveY;
+        try
+        {
+            _window.Avatar.GazeX = effectiveX;
+            _window.Avatar.GazeY = effectiveY;
+            _webHost?.SendGaze(Math.Round(effectiveX, 3), Math.Round(effectiveY, 3));
+            _logger.Debug($"[Live2D] 眼动下发 gaze=({effectiveX:0.00},{effectiveY:0.00})");
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"[Live2D] 眼动下发失败：{ex.Message}");
+        }
     }
 
     private void OnFlushTick(object? sender, EventArgs e)
@@ -859,16 +1065,12 @@ public sealed class Live2DController : ILive2DController
             var config = GetConfig();
             Live2DState state;
             double mouth;
-            double gazeX;
-            double gazeY;
             string? bubble;
             DateTime bubbleSetAt;
             lock (_sync)
             {
                 state = _state;
                 mouth = _mouthValue;
-                gazeX = _gazeX;
-                gazeY = _gazeY;
                 bubble = _bubbleText;
                 bubbleSetAt = _bubbleSetAt;
             }
@@ -900,37 +1102,6 @@ public sealed class Live2DController : ILive2DController
                 _lastSentMouth = effectiveMouth;
                 avatar.MouthOpen = effectiveMouth;
                 _webHost?.SendMouth(Math.Round(effectiveMouth, 3));
-            }
-
-            // 眼动跟随：EyeFollow 开启时按配置的 EyeFollowFps 轮询全局光标位置并换算成相对于桌宠窗口中心的
-            // 归一化视线，覆盖显式 SetGaze 的默认值（桌面宠物没有焦点，无法靠 WPF 鼠标事件拿到全局坐标）。
-            // 合帧定时器会按该帧率提速（最高 60fps），其它状态/口型消息仍是变化才下发，开销很小。
-            var eyeFollowFps = Math.Clamp(config.EyeFollowFps, 5, 60);
-            var gazePollIntervalMs = 1000.0 / eyeFollowFps;
-            var nowUtc = DateTime.UtcNow;
-            var gazePollDue = (nowUtc - _lastGazePollAt).TotalMilliseconds >= gazePollIntervalMs - 1.0;
-            if (config.EyeFollow && _visible && _window.IsVisible && gazePollDue
-                && WindowInterop.TryGetCursorPosition(out var cursorX, out var cursorY)
-                && WindowInterop.TryGetWindowRect(_window.Handle, out var windowLeft, out var windowTop, out var windowWidth, out var windowHeight))
-            {
-                _lastGazePollAt = nowUtc;
-                var centerX = windowLeft + windowWidth / 2.0;
-                var centerY = windowTop + windowHeight / 2.0;
-                // 鼠标距窗口中心约 1.8 倍窗口尺寸时达到最大偏转，全屏范围内不会过于夸张。
-                gazeX = Math.Clamp((cursorX - centerX) / Math.Max(1.0, windowWidth * 1.8), -1, 1);
-                gazeY = Math.Clamp((centerY - cursorY) / Math.Max(1.0, windowHeight * 1.8), -1, 1);
-            }
-
-            var effectiveGazeX = config.EyeFollow ? gazeX : 0;
-            var effectiveGazeY = config.EyeFollow ? gazeY : 0;
-            if (!NearlyEqual(effectiveGazeX, _lastSentGazeX, 0.01) || !NearlyEqual(effectiveGazeY, _lastSentGazeY, 0.01))
-            {
-                _lastSentGazeX = effectiveGazeX;
-                _lastSentGazeY = effectiveGazeY;
-                avatar.GazeX = effectiveGazeX;
-                avatar.GazeY = effectiveGazeY;
-                _webHost?.SendGaze(Math.Round(effectiveGazeX, 3), Math.Round(effectiveGazeY, 3));
-                _logger.Debug($"[Live2D] 眼动下发 gaze=({effectiveGazeX:0.00},{effectiveGazeY:0.00})");
             }
 
             var bubbleVisible = config.ShowBubble && !string.IsNullOrEmpty(bubble);
@@ -1164,6 +1335,10 @@ public sealed class Live2DController : ILive2DController
     private void CleanupCore()
     {
         _flushTimer?.Stop();
+        UnhookRendering();
+        StopGazeThread();
+        _gazeActive = false;
+        Interlocked.Exchange(ref _gazeWindowHandle, 0);
         CancelContentToken();
         DisposeWebHost();
 

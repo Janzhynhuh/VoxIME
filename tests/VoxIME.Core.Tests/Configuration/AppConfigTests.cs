@@ -40,7 +40,7 @@ public sealed class AppConfigTests
         Assert.Equal(1.0, config.Live2D.Opacity);
         Assert.Equal(0.2, config.Live2D.Scale);
         Assert.Equal(5.0, config.Live2D.MouthSensitivity);
-        Assert.Equal(60, config.Live2D.EyeFollowFps);
+        Assert.Equal(300, config.Live2D.EyeFollowFps);
         Assert.Equal(10, config.Tts.Rate);
         Assert.Equal(0, config.Tts.Volume);
         Assert.Equal(10, config.Ui.HistoryLimit);
@@ -57,7 +57,7 @@ public sealed class AppConfigTests
 
         var high = new AppConfig { Live2D = new Live2DConfig { EyeFollowFps = 1000 } };
         high.Normalize();
-        Assert.Equal(60, high.Live2D.EyeFollowFps);
+        Assert.Equal(300, high.Live2D.EyeFollowFps);
 
         var normal = new AppConfig { Live2D = new Live2DConfig { EyeFollowFps = 45 } };
         normal.Normalize();

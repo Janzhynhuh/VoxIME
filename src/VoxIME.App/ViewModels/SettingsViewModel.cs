@@ -788,11 +788,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _eyeFollow, value);
     }
 
-    /// <summary>眼动跟随轮询帧率（Hz，5–60）。</summary>
+    /// <summary>眼动跟随采样帧率（Hz，5–300）。</summary>
     public int EyeFollowFps
     {
         get => _eyeFollowFps;
-        set => SetProperty(ref _eyeFollowFps, Math.Clamp(value, 5, 60));
+        set => SetProperty(ref _eyeFollowFps, Math.Clamp(value, 5, 300));
     }
 
     public bool IdleMotion

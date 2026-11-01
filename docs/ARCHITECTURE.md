@@ -176,7 +176,7 @@ sequenceDiagram
 - 渲染：`WebView2CompositionControl`（WPF 合成，支持透明）承载本地网页；网页用 pixi.js + pixi-live2d-display（Cubism 4 Core）渲染 `.model3.json`；`renderer.backgroundAlpha=0` 保证透明。
 - 降级链：WebView2 不可用 / 模型加载失败 / 未配置模型 → WPF 内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画）。
 - 状态映射：Idle（待机动作循环 + 随机眨眼）、Listening（表情 + 口型跟随麦克风）、Thinking（思考动作/表情）、Speaking（口型跟随 TTS 音量）、Error（抖动/红色提示）。
-- 眼动：C# 合帧定时器按 `Live2DConfig.EyeFollowFps`（5–60Hz，默认 30）节流轮询全局光标位置，归一化为 `-1..1` 后推送；帧率高于 30 时定时器自动提速（最快约 8ms/帧），其它状态/口型消息仍是变化才下发；`EyeFollow=false` 时停止轮询并归零。
+- 眼动：独立后台线程按 `Live2DConfig.EyeFollowFps`（5–300Hz，默认 30）采样全局光标位置，归一化为 `-1..1`（上下方向已修正）；UI 渲染帧（`CompositionTarget.Rendering`，通常等于显示器刷新率）再把最新值下发给模型，避免高频 DispatcherTimer 挤占 UI 线程导致抖动；`EyeFollow=false` 时停止采样并归零。
 
 ### 5.7 主控制器（`VoxIME.Core.Services.VoiceInputController`）
 

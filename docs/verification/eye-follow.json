@@ -1,10 +1,10 @@
 {
-  "description": "眼动跟随鼠标验证：C# 侧 30Hz 轮询全局光标 → 归一化 gaze → JS focusController 驱动 Cubism 参数",
+  "description": "眼动跟随鼠标验证：后台线程按配置帧率采样全局光标 → 归一化 gaze → UI 渲染帧下发 → JS focusController 驱动 Cubism 参数",
   "date": "2026-11-01",
   "app": "VoxIME 0.1.1+ (main)",
   "tests": [
     {
-      "name": "Hiyori 模型（真实 WebView2 桌宠）",
+      "name": "Hiyori 模型（真实 WebView2 桌宠，左右方向）",
       "method": "应用运行中，把系统光标分别移到屏幕左侧 (150,760) 与右侧 (2500,760)，各等待 2s 后截取桌宠窗口区域并做像素对比",
       "result": {
         "headRegionChangedPercent": 7.2,
@@ -13,25 +13,37 @@
       }
     },
     {
-      "name": "内置 WPF 兜底形象",
+      "name": "内置 WPF 兜底形象（左右方向）",
       "method": "VOXIME_LIVE2D_DISABLE_WEBVIEW=1 强制兜底，同样左右移动光标并对比瞳孔位置",
       "result": {
         "avatarRegionChangedPercent": 18.9,
-        "pupils": "左图瞳孔偏左下、右图偏右上，跟随明显"
+        "pupils": "光标在左时瞳孔偏左，在右时偏右，跟随明显"
       }
     },
     {
-      "name": "JS focusController 参数回读（Edge headless + CDP）",
-      "method": "preview 页 ?gaze=1,0 与 ?gaze=-1,0，读取更新帧参数",
+      "name": "上下方向标定（Edge headless + CDP，idlemotion=0）",
+      "method": "preview 页 ?gaze=0,-1 与 ?gaze=0,1，读取更新帧参数并截图",
       "result": {
-        "gaze_1_0": { "ParamAngleX": 25.16, "ParamEyeBallX": 1.0 },
-        "gaze_-1_0": { "ParamAngleX": -23.79, "ParamEyeBallX": -0.71 }
+        "gaze_0_-1": { "ParamAngleY": -26.0, "ParamEyeBallY": -0.99, "visual": "抬头/眼睛向上看" },
+        "gaze_0_1": { "ParamAngleY": 23.5, "ParamEyeBallY": 1.0, "visual": "低头/眼睛向下看" },
+        "结论": "gazeY 负值 = 眼睛向上；屏幕 Y 向下为正，所以 C# 侧使用 (cursorY - windowCenterY) 换算，光标在上时得到负值（已修正原先上下反转的问题）"
+      }
+    },
+    {
+      "name": "应用内上下方向 + 300Hz 采样日志",
+      "method": "配置 EyeFollowFps=300、idleMotion=false，光标移到宠物窗口上方 (2287,250) 与下方 (2287,1350)，读取 debug 日志",
+      "result": {
+        "采样帧率日志": "眼动采样帧率 = 300fps",
+        "光标在上": "眼动下发 gaze=(0.00,-0.60) → 视线向上",
+        "光标在下": "眼动下发 gaze=(0.00,0.27) → 视线向下",
+        "消息策略": "后台 300Hz 采样，但只在渲染帧（CompositionTarget.Rendering，约等于显示器刷新率）且值变化超过阈值时才下发，避免高频消息与 UI 线程抖动"
       }
     }
   ],
   "notes": [
     "修复前 C# 侧只在接口上支持 SetGaze，实际上没有轮询全局光标，因此眼动不会跟随鼠标。",
-    "本次修复后由 Live2DController 在合帧 tick 中读取 GetCursorPos 并换算到桌宠窗口中心；轮询帧率由 Live2DConfig.EyeFollowFps 控制（5–60Hz，默认 30，设置页“桌宠 → 眼动轮询帧率”滑动条可调）。",
-    "同时修复：关闭“待机动画”时立即停止当前动作（此前只是不再随机下一个动作，当前动作会继续循环，可能遮挡眼动）。"
+    "当前实现：独立后台线程按 Live2DConfig.EyeFollowFps（5–300Hz，默认 30，设置页「桌宠 → 眼动采样帧率」滑动条可调）采样光标；UI 渲染帧再下发最新值；上下方向已修正。",
+    "抖动修复：不再使用高频 DispatcherTimer，改为后台采样 + 渲染帧下发，并在 JS 侧对 gaze 做低通插值；高帧率下不会抽搐。",
+    "同时修复：关闭「待机动画」时立即停止当前动作（此前只是不再随机下一个动作，当前动作会继续循环，可能遮挡眼动）。"
   ]
 }

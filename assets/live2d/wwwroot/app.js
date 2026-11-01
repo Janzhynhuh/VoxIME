@@ -48,8 +48,10 @@
     state: 'idle',
     mouth: 0,          // 当前平滑值
     targetMouth: 0,    // 目标值
-    gazeX: 0,
-    gazeY: 0
+    gazeX: 0,          // 当前平滑视线（渲染用）
+    gazeY: 0,
+    targetGazeX: 0,    // C# 采样下发的目标视线
+    targetGazeY: 0
   };
 
   var stateExpressions = { listening: null, thinking: null, speaking: null, error: null };
@@ -200,9 +202,12 @@
       fpsCounter.since = now;
     }
 
-    // 口型/眼动平滑（C# 以 ~30Hz 推送，页面侧做插值让动作自然）
+    // 口型/眼动平滑（C# 以配置帧率推送目标值，页面侧插值让动作自然，避免高帧率下出现抖动）
     var k = Math.min(1, dt * 16);
     live.mouth += (live.targetMouth - live.mouth) * k;
+    var gazeK = Math.min(1, dt * 25);
+    live.gazeX += (live.targetGazeX - live.gazeX) * gazeK;
+    live.gazeY += (live.targetGazeY - live.gazeY) * gazeK;
 
     if (model) {
       if (config.eyeFollow) {
@@ -512,14 +517,14 @@
   }
 
   function setGaze(x, y) {
-    live.gazeX = clampGaze(x);
-    live.gazeY = clampGaze(y);
-    if (demo) demo.setGaze(live.gazeX, live.gazeY);
+    live.targetGazeX = clampGaze(x);
+    live.targetGazeY = clampGaze(y);
+    if (demo) demo.setGaze(live.targetGazeX, live.targetGazeY);
     if (isPreview) {
       var sx = document.getElementById('gaze-x');
       var sy = document.getElementById('gaze-y');
-      if (sx) sx.value = String(live.gazeX);
-      if (sy) sy.value = String(live.gazeY);
+      if (sx) sx.value = String(live.targetGazeX);
+      if (sy) sy.value = String(live.targetGazeY);
     }
   }
 
@@ -1003,6 +1008,8 @@
     if (state) live.state = normalizeState(state);
     var mouth = params.get('mouth');
     if (mouth != null && mouth !== '') setMouth(parseFloat(mouth));
+    var idleMotionParam = params.get('idlemotion');
+    if (idleMotionParam !== null) config.idleMotion = idleMotionParam !== '0';
     var gaze = params.get('gaze');
     if (gaze) {
       var parts = gaze.split(',');
@@ -1164,7 +1171,7 @@
     // 预处理：C# 可能在 ready 后立刻下发消息，这里确保配置立即生效
     if (!isPreview && params.get('state')) applyModelState(live.state, true);
     if (!isPreview) setMouth(live.targetMouth);
-    setGaze(live.gazeX, live.gazeY);
+    if (!isPreview) setGaze(live.gazeX, live.gazeY);
   }
 
   // 暴露少量调试接口（headless 验证/开发者控制台用）
@@ -1188,6 +1195,8 @@
         targetMouth: live.targetMouth,
         gazeX: live.gazeX,
         gazeY: live.gazeY,
+        targetGazeX: live.targetGazeX,
+        targetGazeY: live.targetGazeY,
         groups: modelGroups,
         idleGroup: idleGroup,
         demoActive: demoActive,
