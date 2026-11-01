@@ -378,11 +378,14 @@ public sealed class Live2DController : ILive2DController
         var config = GetConfig();
         var left = config.Left;
         var top = config.Top;
-        if ((left < 0 || top < 0) && _userLeft.HasValue && _userTop.HasValue)
+        // 默认哨兵是 (-1,-1)；负坐标在多显示器/贴顶场景是合法位置，不能因为 top<0 就当成“未保存”。
+        var hasSavedPosition = !(Math.Abs(left + 1) < 0.01 && Math.Abs(top + 1) < 0.01);
+        if (!hasSavedPosition && _userLeft.HasValue && _userTop.HasValue)
         {
             // 用户拖动过：在配置未显式给坐标时保留用户位置
             left = _userLeft.Value;
             top = _userTop.Value;
+            hasSavedPosition = true;
         }
 
         _window.ApplyGeometry(
@@ -392,6 +395,7 @@ public sealed class Live2DController : ILive2DController
             top,
             config.SnapToEdge,
             config.KeepAboveTaskbar,
+            hasSavedPosition,
             config.Opacity,
             config.AlwaysOnTop,
             config.ClickThrough);
@@ -1320,6 +1324,16 @@ public sealed class Live2DController : ILive2DController
         _userTop = e.Top;
         try
         {
+            var config = GetConfig();
+            if (config.SnapToEdge && _window is not null)
+            {
+                // 拖动结束后贴到最近的屏幕边缘；这样拖到顶部就贴顶部，不会被强制拉回右下角。
+                _window.SnapToNearestEdge(config.KeepAboveTaskbar);
+                _userLeft = _window.Left;
+                _userTop = _window.Top;
+                e = new Live2DPositionChangedEventArgs(_window.Left, _window.Top);
+            }
+
             PositionChanged?.Invoke(this, e);
         }
         catch (Exception ex)

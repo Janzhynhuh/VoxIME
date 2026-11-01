@@ -172,6 +172,7 @@ internal sealed class PetWindow : Window
         double top,
         bool snapToEdge,
         bool keepAboveTaskbar,
+        bool hasSavedPosition,
         double opacity,
         bool topmost,
         bool clickThrough)
@@ -185,13 +186,24 @@ internal sealed class PetWindow : Window
 
         if (snapToEdge)
         {
-            MoveToAutoPosition(keepAboveTaskbar);
-            // 自动贴边时位置由下边界反推，不能再做通用“把顶部拉回屏幕”的纵向钳制；
-            // 否则窗口越高越会被推到底部以下（表现为模型只剩半个头、穿到屏幕外）。
-            ClampToVirtualScreen(horizontalOnly: true);
+            if (hasSavedPosition && IsFinite(left) && IsFinite(top))
+            {
+                // 记住用户上次贴近的边（顶部/左侧等），而不是每次都强制回右下角。
+                Left = left;
+                Top = top;
+                SnapToNearestEdge(keepAboveTaskbar);
+            }
+            else
+            {
+                MoveToAutoPosition(keepAboveTaskbar);
+                // 自动贴边时位置由下边界反推，不能再做通用“把顶部拉回屏幕”的纵向钳制；
+                // 否则窗口越高越会被推到底部以下（表现为模型只剩半个头、穿到屏幕外）。
+                ClampToVirtualScreen(horizontalOnly: true);
+            }
         }
-        else if (left >= 0 && top >= 0 && IsFinite(left) && IsFinite(top))
+        else if (hasSavedPosition && IsFinite(left) && IsFinite(top))
         {
+            // 保存的位置允许负坐标（多显示器/窗口顶部超出主屏）；只有默认哨兵 (-1,-1) 才居中。
             Left = left;
             Top = top;
             ClampToVirtualScreen();
@@ -233,6 +245,60 @@ internal sealed class PetWindow : Window
 
         Left = workArea.Right - Width - AutoPositionMarginRight;
         Top = bottom - Height - AutoPositionMarginBottom;
+    }
+
+    /// <summary>
+    /// 拖到屏幕边缘附近（默认 60 DIP 内）时吸附到最近的主屏工作区边缘；
+    /// 不在边缘附近则保持用户放下时的位置，避免“随便拖也被强制拉回边上”。
+    /// keepAboveTaskbar 只影响底边。返回是否发生了吸附。
+    /// </summary>
+    public bool SnapToNearestEdge(bool keepAboveTaskbar = true, double threshold = 60)
+    {
+        var workArea = SystemParameters.WorkArea;
+        var bottom = keepAboveTaskbar
+            ? workArea.Bottom
+            : SystemParameters.PrimaryScreenHeight;
+
+        var right = workArea.Right;
+        var leftDistance = Math.Abs(Left - workArea.Left);
+        var rightDistance = Math.Abs(right - (Left + Width));
+        var topDistance = Math.Abs(Top - workArea.Top);
+        var bottomDistance = Math.Abs(bottom - (Top + Height));
+
+        var min = Math.Min(Math.Min(leftDistance, rightDistance), Math.Min(topDistance, bottomDistance));
+        if (min > threshold)
+        {
+            return false;
+        }
+
+        // 只在真正吸附时压缩到可用区域，避免“窗口比屏幕高/宽”时无论贴哪边都会被裁掉。
+        var maxWidth = Math.Max(160, workArea.Width - AutoPositionMarginRight);
+        var maxHeight = Math.Max(160, bottom - workArea.Top - AutoPositionMarginBottom);
+        Width = Math.Min(Width, maxWidth);
+        Height = Math.Min(Height, maxHeight);
+
+        if (min == bottomDistance)
+        {
+            Top = bottom - Height - AutoPositionMarginBottom;
+            Left = Math.Min(Math.Max(Left, workArea.Left), Math.Max(workArea.Left, right - Width));
+        }
+        else if (min == rightDistance)
+        {
+            Left = right - Width - AutoPositionMarginRight;
+            Top = Math.Min(Math.Max(Top, workArea.Top), Math.Max(workArea.Top, bottom - Height));
+        }
+        else if (min == topDistance)
+        {
+            Top = workArea.Top;
+            Left = Math.Min(Math.Max(Left, workArea.Left), Math.Max(workArea.Left, right - Width));
+        }
+        else
+        {
+            Left = workArea.Left;
+            Top = Math.Min(Math.Max(Top, workArea.Top), Math.Max(workArea.Top, bottom - Height));
+        }
+
+        return true;
     }
 
     /// <summary>没有保存位置且未开启自动贴边时，居中显示在主屏工作区。</summary>

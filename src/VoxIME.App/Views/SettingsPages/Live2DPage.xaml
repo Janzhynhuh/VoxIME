@@ -116,13 +116,13 @@
                     <CheckBox Content="窗口尺寸随模型比例自动调整（切换模型时以当前高度为基准）"
                               Margin="0,0,0,10" IsChecked="{Binding AutoFitWindow, Mode=TwoWay}" />
 
-                    <CheckBox Content="启动/切换模型时窗口自动贴边（吸附屏幕右下角）"
+                    <CheckBox Content="启动/拖动/调整尺寸时窗口自动贴边（吸附最近的屏幕边缘；首次显示在右下角）"
                               Margin="0,0,0,4" IsChecked="{Binding SnapToEdge, Mode=TwoWay}" />
                     <CheckBox Content="贴边时整个窗口底部保持在任务栏之上"
                               Margin="24,0,0,10" IsChecked="{Binding KeepAboveTaskbar, Mode=TwoWay}"
                               IsEnabled="{Binding SnapToEdge}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,-4,0,10"
-                               Text="关闭自动贴边后，窗口使用你上次拖动保存的位置；首次没有保存位置时在屏幕居中显示。贴边时若窗口宽高超过屏幕可用区域，会自动压缩到屏幕内，避免模型被裁掉。" />
+                               Text="拖动到屏幕边缘约 60px 内会自动吸附；中间位置不会强制贴边。关闭自动贴边后使用你上次拖动保存的位置，首次没有位置时屏幕居中。贴边时若窗口宽高超过屏幕可用区域，会自动压缩到屏幕内。" />
 
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
