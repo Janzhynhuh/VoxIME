@@ -22,6 +22,28 @@ public static class HotkeyGesture
         ["meta"] = "Win"
     };
 
+    /// <summary>鼠标键别名 → 规范名（与 Core HotkeyGesture 保持一致）。</summary>
+    private static readonly Dictionary<string, string> MouseButtonAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["mousex1"] = "MouseX1",
+        ["xbutton1"] = "MouseX1",
+        ["mouse4"] = "MouseX1",
+        ["sidebutton1"] = "MouseX1",
+        ["mousex2"] = "MouseX2",
+        ["xbutton2"] = "MouseX2",
+        ["mouse5"] = "MouseX2",
+        ["sidebutton2"] = "MouseX2",
+        ["mousemiddle"] = "MouseMiddle",
+        ["middle"] = "MouseMiddle",
+        ["mouse3"] = "MouseMiddle",
+        ["mouseleft"] = "MouseLeft",
+        ["mouse1"] = "MouseLeft",
+        ["leftbutton"] = "MouseLeft",
+        ["mouseright"] = "MouseRight",
+        ["mouse2"] = "MouseRight",
+        ["rightbutton"] = "MouseRight"
+    };
+
     /// <summary>解析并规范化；失败时通过 error 返回中文提示。</summary>
     public static bool TryNormalize(string? input, out string normalized, out string? error)
     {
@@ -113,6 +135,43 @@ public static class HotkeyGesture
     /// <summary>把 WPF 的按键组合格式化为配置字符串。</summary>
     public static string Format(ModifierKeys modifiers, Key key)
     {
+        var parts = BuildModifierParts(modifiers);
+
+        var keyName = GetKeyName(key);
+        if (!string.IsNullOrEmpty(keyName))
+        {
+            parts.Add(keyName);
+        }
+
+        return string.Join("+", parts);
+    }
+
+    /// <summary>把 WPF 鼠标键格式化为配置字符串（如 <c>MouseX1</c>、<c>Ctrl+MouseX2</c>）。</summary>
+    public static string FormatMouse(ModifierKeys modifiers, MouseButton button)
+    {
+        var parts = BuildModifierParts(modifiers);
+        var buttonName = GetMouseButtonName(button);
+        if (!string.IsNullOrEmpty(buttonName))
+        {
+            parts.Add(buttonName);
+        }
+
+        return string.Join("+", parts);
+    }
+
+    /// <summary>WPF 鼠标键 → 配置规范名；不支持的键返回 null。</summary>
+    public static string? GetMouseButtonName(MouseButton button) => button switch
+    {
+        MouseButton.XButton1 => "MouseX1",
+        MouseButton.XButton2 => "MouseX2",
+        MouseButton.Middle => "MouseMiddle",
+        MouseButton.Left => "MouseLeft",
+        MouseButton.Right => "MouseRight",
+        _ => null
+    };
+
+    private static List<string> BuildModifierParts(ModifierKeys modifiers)
+    {
         var parts = new List<string>();
         if (modifiers.HasFlag(ModifierKeys.Control))
         {
@@ -134,13 +193,7 @@ public static class HotkeyGesture
             parts.Add("Win");
         }
 
-        var keyName = GetKeyName(key);
-        if (!string.IsNullOrEmpty(keyName))
-        {
-            parts.Add(keyName);
-        }
-
-        return string.Join("+", parts);
+        return parts;
     }
 
     /// <summary>规范化单个按键名；无法识别返回 null。</summary>
@@ -152,6 +205,12 @@ public static class HotkeyGesture
         }
 
         var token = part.Trim();
+
+        // 鼠标键（侧键/中键/左右键）：与 Core 解析器保持一致的规范名。
+        if (MouseButtonAliases.TryGetValue(token, out var mouseButtonName))
+        {
+            return mouseButtonName;
+        }
 
         if (token.Length == 1 && char.IsLetterOrDigit(token[0]))
         {
@@ -321,10 +380,34 @@ public static class HotkeyCapture
         }
 
         box.PreviewKeyDown -= OnPreviewKeyDown;
+        box.PreviewMouseDown -= OnPreviewMouseDown;
         if (e.NewValue is true)
         {
             box.PreviewKeyDown += OnPreviewKeyDown;
+            box.PreviewMouseDown += OnPreviewMouseDown;
         }
+    }
+
+    /// <summary>鼠标侧键/中键录制：左键/右键保留正常文本选择与右键菜单，不参与热键录制。</summary>
+    private static void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not TextBox box)
+        {
+            return;
+        }
+
+        if (e.ChangedButton is not (MouseButton.XButton1 or MouseButton.XButton2 or MouseButton.Middle))
+        {
+            return;
+        }
+
+        var gesture = HotkeyGesture.FormatMouse(Keyboard.Modifiers, e.ChangedButton);
+        if (HotkeyGesture.TryNormalize(gesture, out var normalized, out _))
+        {
+            box.Text = normalized;
+        }
+
+        e.Handled = true;
     }
 
     private static void OnPreviewKeyDown(object sender, KeyEventArgs e)

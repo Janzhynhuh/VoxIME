@@ -38,7 +38,7 @@
                 <StackPanel>
                     <TextBlock Text="全局热键" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10"
-                               Text="在输入框中直接按下组合键即可录制（例如 Ctrl+Alt、Ctrl+Shift+Space、F2）。" />
+                               Text="在输入框中直接按下组合键即可录制（例如 Ctrl+Alt、Ctrl+Shift+Space、F2）；也支持鼠标侧键：把光标放进输入框后按鼠标侧键/中键，会录成 MouseX1、MouseX2 或 MouseMiddle。" />
 
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -96,7 +96,7 @@
 
                     <Border Style="{StaticResource InnerCard}" Margin="0,12,0,0">
                         <TextBlock Style="{StaticResource HintText}"
-                                   Text="提示：热键通过低级键盘钩子全局生效，保存后立即应用。若与其它软件冲突，请更换组合键。" />
+                                   Text="提示：热键通过低级键盘/鼠标钩子全局生效，保存后立即应用。鼠标侧键命中已配置热键时会拦截该键的默认行为（如浏览器前进/后退）。若与其它软件冲突，请更换组合键。" />
                     </Border>
                 </StackPanel>
             </Border>

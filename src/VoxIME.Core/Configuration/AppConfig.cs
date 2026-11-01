@@ -232,9 +232,9 @@ public sealed class ProviderProfile
 
 public sealed class HotkeyConfig
 {
-    /// <summary>按住说话的热键组合，如 "Ctrl+Alt"、"F2"、"Ctrl+Shift+Space"。</summary>
+    /// <summary>按住说话的热键组合，如 "Ctrl+Alt"、"F2"、"Ctrl+Shift+Space"、"MouseX1"（鼠标侧键）。</summary>
     public string PushToTalk { get; set; } = AppInfo.DefaultHotkeyPushToTalk;
-    /// <summary>切换录音的热键，如 "Ctrl+Alt+M"。</summary>
+    /// <summary>切换录音的热键，如 "Ctrl+Alt+M"、"MouseX2"（鼠标侧键）。</summary>
     public string Toggle { get; set; } = AppInfo.DefaultHotkeyToggle;
     public string Cancel { get; set; } = "Esc";
     public bool EnablePushToTalk { get; set; } = true;

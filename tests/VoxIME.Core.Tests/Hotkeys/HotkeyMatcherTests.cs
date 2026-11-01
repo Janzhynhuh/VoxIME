@@ -217,4 +217,72 @@ public class HotkeyMatcherTests
         Assert.Empty(matcher.ProcessKeyUp(0));
         Assert.Empty(matcher.ProcessKeyDown(0));
     }
+
+    [Fact]
+    public void 鼠标侧键按住说话()
+    {
+        var config = DefaultConfig();
+        config.PushToTalk = "MouseX1";
+        var matcher = new HotkeyMatcher(config);
+
+        var pressed = Assert.Single(matcher.ProcessKeyDown(0x05));
+        Assert.Equal(HotkeyAction.PushToTalkPressed, pressed.Action);
+        Assert.Equal("MouseX1", pressed.Gesture);
+        Assert.True(matcher.IsPushToTalkActive);
+
+        var released = Assert.Single(matcher.ProcessKeyUp(0x05));
+        Assert.Equal(HotkeyAction.PushToTalkReleased, released.Action);
+        Assert.Equal("MouseX1", released.Gesture);
+        Assert.False(matcher.IsPushToTalkActive);
+    }
+
+    [Fact]
+    public void 带修饰键的鼠标侧键需要修饰键也按下()
+    {
+        var config = DefaultConfig();
+        config.PushToTalk = "Ctrl+MouseX2";
+        var matcher = new HotkeyMatcher(config);
+
+        Assert.Empty(matcher.ProcessKeyDown(0x06));
+        Assert.Empty(matcher.ProcessKeyUp(0x06));
+
+        matcher.ProcessKeyDown(LCtrl);
+        var pressed = Assert.Single(matcher.ProcessKeyDown(0x06));
+        Assert.Equal(HotkeyAction.PushToTalkPressed, pressed.Action);
+        Assert.Equal("Ctrl+MouseX2", pressed.Gesture);
+
+        var released = Assert.Single(matcher.ProcessKeyUp(LCtrl));
+        Assert.Equal(HotkeyAction.PushToTalkReleased, released.Action);
+    }
+
+    [Fact]
+    public void 鼠标键也可以作为切换录音热键()
+    {
+        var config = DefaultConfig();
+        config.Toggle = "MouseX2";
+        config.EnablePushToTalk = false;
+        var matcher = new HotkeyMatcher(config);
+
+        var toggle = Assert.Single(matcher.ProcessKeyDown(0x06));
+        Assert.Equal(HotkeyAction.TogglePressed, toggle.Action);
+        Assert.Equal("MouseX2", toggle.Gesture);
+        Assert.Empty(matcher.ProcessKeyUp(0x06));
+    }
+
+    [Fact]
+    public void 鼠标键与键盘热键互不影响()
+    {
+        var config = DefaultConfig();
+        config.PushToTalk = "MouseX1";
+        var matcher = new HotkeyMatcher(config);
+
+        Assert.Single(matcher.ProcessKeyDown(0x05));
+        Assert.True(matcher.IsPushToTalkActive);
+
+        matcher.ProcessKeyDown(0x41);
+        Assert.True(matcher.IsPushToTalkActive);
+
+        Assert.Single(matcher.ProcessKeyUp(0x05));
+        Assert.False(matcher.IsPushToTalkActive);
+    }
 }

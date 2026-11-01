@@ -28,7 +28,7 @@
 
 | 模块 | 能力 |
 |---|---|
-| 语音输入 | 按住 `Ctrl+Alt` 说话（松开即识别），或按 `Ctrl+Alt+M` 开始/结束；识别结果自动粘贴到当前焦点窗口 |
+| 语音输入 | 按住 `Ctrl+Alt` 说话（松开即识别），或按 `Ctrl+Alt+M` 开始/结束；支持把热键改成鼠标侧键（`MouseX1`/`MouseX2`/`MouseMiddle`）；识别结果自动粘贴到当前焦点窗口 |
 | 多厂商 ASR | 一套配置界面接入 OpenAI Whisper / 硅基流动 / LM Studio 等兼容接口、小米 MiMo-ASR、阿里 DashScope、腾讯云、讯飞、本地 CLI 离线识别，随时切换 |
 | 本地离线 | 支持 whisper.cpp、FunASR、sherpa-onnx 命令行，无需联网与 API Key |
 | 编辑与历史 | HUD 显示识别结果，可先预览编辑再上屏；完整历史记录、可复制、可清空 |
@@ -41,7 +41,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.1.0.zip`，解压到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
+1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.1.1.zip`，解压到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
 2. 双击 `VoxIME.exe` 启动，托盘出现声语图标。
 3. 托盘右键 → **设置**：
    - 「服务」页点击 **新增服务**，选择你的识别厂商，填入 BaseUrl / Model / API Key，点 **测试识别** 验证。
@@ -59,7 +59,7 @@ dotnet run --project src/VoxIME.App
 
 # 发布自包含 x64 包（含 .NET 运行时，目标机器无需安装 SDK）
 .\scripts\publish-x64.ps1
-# 产物：deploy\VoxIME-win-x64\ 与 deploy\VoxIME-win-x64-v0.1.0.zip
+# 产物：deploy\VoxIME-win-x64\ 与 deploy\VoxIME-win-x64-v0.1.1.zip
 ```
 
 ## 🎙️ 支持的语音识别服务
@@ -86,6 +86,7 @@ dotnet run --project src/VoxIME.App
 
 - **按住说话**：按住 `Ctrl+Alt`（可改），松手后识别并上屏；`Esc` 取消。
 - **切换模式**：`Ctrl+Alt+M` 开始/结束（可在设置中改成默认模式）。
+- **鼠标侧键**：设置 → 录音 → 把光标放进热键输入框后按鼠标侧键/中键，即可录成 `MouseX1` / `MouseX2` / `MouseMiddle`（也支持 `Ctrl+MouseX1` 等组合）。鼠标侧键命中已配置热键时 VoxIME 会拦截该键，避免同时触发浏览器前进/后退。
 - **HUD**：屏幕底部状态条显示聆听/识别状态；开启「预览确认」时可先编辑再按回车插入。
 - **托盘菜单**：显示/隐藏桌宠、暂停热键、设置、历史记录、打开日志目录、退出。
 - **桌宠**：右键托盘可显示/隐藏；`设置 → 桌宠` 可设置点击穿透、置顶、缩放、口型灵敏度与各状态表情映射。
@@ -143,7 +144,7 @@ flowchart LR
 
 ```powershell
 dotnet build VoxIME.sln          # 全量构建（0 warning / 0 error）
-dotnet test                       # 285 个离线单元测试
+dotnet test                       # 306 个离线单元测试
 .\scripts\publish-x64.ps1         # 发布 x64 自包含包
 .\scripts\run.ps1                 # 开发模式运行
 .\scripts\e2e-smoke.ps1           # 端到端自检：录音→Mock 识别→上屏到前台文本框，结果写 %TEMP%\voxime-e2e-result.json

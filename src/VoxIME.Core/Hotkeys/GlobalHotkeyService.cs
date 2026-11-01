@@ -6,14 +6,17 @@ using VoxIME.Core.Logging;
 namespace VoxIME.Core.Hotkeys;
 
 /// <summary>
-/// 基于 <c>SetWindowsHookEx(WH_KEYBOARD_LL)</c> 的全局热键服务。
+/// 基于 <c>SetWindowsHookEx(WH_KEYBOARD_LL)</c> + <c>WH_MOUSE_LL</c> 的全局热键服务。
 /// </summary>
 /// <remarks>
-/// <para>支持三类热键：按住说话（如 <c>Ctrl+Alt</c>，组合键全部按下→Pressed、任一抬起→Released）、
-/// 按下切换（如 <c>Ctrl+Alt+M</c>）、取消（如 <c>Esc</c>）。</para>
+/// <para>支持三类热键：按住说话（如 <c>Ctrl+Alt</c> 或 <c>MouseX1</c>，组合键全部按下→Pressed、任一抬起→Released）、
+/// 按下切换（如 <c>Ctrl+Alt+M</c> 或 <c>MouseX2</c>）、取消（如 <c>Esc</c>）。</para>
+/// <para>鼠标键使用 MouseX1 / MouseX2（侧键）、MouseMiddle、MouseLeft、MouseRight 表示；
+/// 当鼠标事件命中已配置的热键时会吞掉该事件（避免同时触发浏览器前进/后退等系统默认行为），
+/// 未配置的鼠标事件照常传递，不吞用户输入。</para>
 /// <para>钩子运行在独立后台线程（自带消息循环），启动/停止/更新配置线程安全；
 /// 任何失败都通过 <see cref="Error"/> 事件与日志上报，不会抛到 UI 线程之外。</para>
-/// <para>钩子回调始终调用 <c>CallNextHookEx</c>，绝不吞掉用户按键。</para>
+/// <para>钩子回调始终调用 <c>CallNextHookEx</c>（键盘与未命中的鼠标事件），绝不吞掉用户按键。</para>
 /// </remarks>
 public sealed class GlobalHotkeyService : IHotkeyService
 {
@@ -31,8 +34,10 @@ public sealed class GlobalHotkeyService : IHotkeyService
     private Thread? _hookThread;
     private uint _hookThreadId;
     private IntPtr _hookHandle;
+    private IntPtr _mouseHookHandle;
     private ManualResetEventSlim? _hookReady;
     private KeyboardNativeMethods.LowLevelKeyboardProc? _hookProc;
+    private KeyboardNativeMethods.LowLevelMouseProc? _mouseHookProc;
     private bool _disposed;
 
     public GlobalHotkeyService(IAppLogger logger)
@@ -107,6 +112,9 @@ public sealed class GlobalHotkeyService : IHotkeyService
         _matcher = matcher;
         _stopRequested = false;
         _hookInstalled = false;
+        _hookHandle = IntPtr.Zero;
+        _mouseHookHandle = IntPtr.Zero;
+        _mouseHookProc = MouseHookCallback;
 
         var ready = new ManualResetEventSlim(false);
         _hookReady = ready;
@@ -148,7 +156,8 @@ public sealed class GlobalHotkeyService : IHotkeyService
         _running = true;
         _logger.Info($"全局热键已启动：按住说话={matcher.PushToTalkGesture?.Display ?? "未启用"}，" +
                      $"按下切换={matcher.ToggleGesture?.Display ?? "未启用"}，" +
-                     $"取消={matcher.CancelGesture?.Display ?? "未启用"}");
+                     $"取消={matcher.CancelGesture?.Display ?? "未启用"}；" +
+                     $"鼠标钩子={(_mouseHookHandle != IntPtr.Zero ? "已启用" : "不可用")}");
     }
 
     private void StopCore()
@@ -225,8 +234,35 @@ public sealed class GlobalHotkeyService : IHotkeyService
             }
 
             _hookInstalled = true;
+
+            // 安装鼠标钩子（可选）：失败不致命，但配置了鼠标热键时需要明确上报。
+            var mouseProc = _mouseHookProc;
+            if (mouseProc is not null)
+            {
+                _mouseHookHandle = KeyboardNativeMethods.SetWindowsHookExMouse(
+                    KeyboardNativeMethods.WH_MOUSE_LL,
+                    mouseProc,
+                    KeyboardNativeMethods.GetModuleHandle(null),
+                    0);
+
+                if (_mouseHookHandle == IntPtr.Zero)
+                {
+                    var mouseError = Marshal.GetLastWin32Error();
+                    var message = $"安装全局鼠标钩子失败（Windows 错误码 {mouseError}），鼠标热键不可用。";
+                    _logger.Error(message);
+                    if (MatcherUsesMouse(_matcher))
+                    {
+                        ReportError(message);
+                    }
+                }
+                else
+                {
+                    _logger.Debug("全局鼠标钩子安装成功（支持鼠标侧键热键）。");
+                }
+            }
+
             SignalReady();
-            _logger.Debug("全局键盘钩子线程已就绪。");
+            _logger.Debug("全局钩子线程已就绪（键盘 + 鼠标）。");
 
             while (!_stopRequested)
             {
@@ -261,9 +297,23 @@ public sealed class GlobalHotkeyService : IHotkeyService
                 }
             }
 
+            var mouseHandle = _mouseHookHandle;
+            _mouseHookHandle = IntPtr.Zero;
+            if (mouseHandle != IntPtr.Zero)
+            {
+                try
+                {
+                    KeyboardNativeMethods.UnhookWindowsHookEx(mouseHandle);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug("注销全局鼠标钩子失败：" + ex.Message);
+                }
+            }
+
             _hookInstalled = false;
             SignalReady();
-            _logger.Debug("全局键盘钩子线程已退出。");
+            _logger.Debug("全局钩子线程已退出。");
         }
     }
 
@@ -318,6 +368,95 @@ public sealed class GlobalHotkeyService : IHotkeyService
         // 永远继续传递按键，不能吞键。
         return KeyboardNativeMethods.CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
     }
+
+    /// <summary>
+    /// 低级鼠标钩子回调：把鼠标侧键/中键/左右键映射为虚拟键码交给同一个 <see cref="HotkeyMatcher"/>。
+    /// 只有命中已配置热键的鼠标事件会被吞掉（返回 1），其余事件照常传递。
+    /// </summary>
+    private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        var swallow = false;
+        try
+        {
+            if (nCode >= 0 && !_stopRequested)
+            {
+                var message = wParam.ToInt32();
+                var isDown = message is KeyboardNativeMethods.WM_LBUTTONDOWN
+                    or KeyboardNativeMethods.WM_RBUTTONDOWN
+                    or KeyboardNativeMethods.WM_MBUTTONDOWN
+                    or KeyboardNativeMethods.WM_XBUTTONDOWN;
+                var isUp = message is KeyboardNativeMethods.WM_LBUTTONUP
+                    or KeyboardNativeMethods.WM_RBUTTONUP
+                    or KeyboardNativeMethods.WM_MBUTTONUP
+                    or KeyboardNativeMethods.WM_XBUTTONUP;
+                if (isDown || isUp)
+                {
+                    var data = Marshal.PtrToStructure<KeyboardNativeMethods.MSLLHOOKSTRUCT>(lParam);
+                    // 忽略其它程序注入的鼠标事件（如自动化工具），避免误触发热键。
+                    if ((data.flags & KeyboardNativeMethods.LLMHF_INJECTED) == 0
+                        && TryMapMouseButton(message, data.mouseData, out var virtualKey))
+                    {
+                        var matcher = _matcher;
+                        if (matcher is not null)
+                        {
+                            var events = isDown
+                                ? matcher.ProcessKeyDown(virtualKey)
+                                : matcher.ProcessKeyUp(virtualKey);
+                            for (var i = 0; i < events.Count; i++)
+                            {
+                                RaiseHotkeyTriggered(events[i]);
+                            }
+
+                            // 命中已配置热键时吞掉该鼠标事件，避免浏览器前进/后退等系统默认行为同时触发。
+                            swallow = events.Count > 0;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("全局鼠标钩子回调异常", ex);
+        }
+
+        return swallow
+            ? new IntPtr(1)
+            : KeyboardNativeMethods.CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
+    }
+
+    private static bool TryMapMouseButton(int message, uint mouseData, out int virtualKey)
+    {
+        switch (message)
+        {
+            case KeyboardNativeMethods.WM_LBUTTONDOWN:
+            case KeyboardNativeMethods.WM_LBUTTONUP:
+                virtualKey = VirtualKeys.MouseLeft;
+                return true;
+            case KeyboardNativeMethods.WM_RBUTTONDOWN:
+            case KeyboardNativeMethods.WM_RBUTTONUP:
+                virtualKey = VirtualKeys.MouseRight;
+                return true;
+            case KeyboardNativeMethods.WM_MBUTTONDOWN:
+            case KeyboardNativeMethods.WM_MBUTTONUP:
+                virtualKey = VirtualKeys.MouseMiddle;
+                return true;
+            case KeyboardNativeMethods.WM_XBUTTONDOWN:
+            case KeyboardNativeMethods.WM_XBUTTONUP:
+                // mouseData 高 16 位：1 = XBUTTON1、2 = XBUTTON2
+                var xButton = (int)((mouseData >> 16) & 0xFFFF);
+                virtualKey = xButton == 2 ? VirtualKeys.MouseX2 : VirtualKeys.MouseX1;
+                return true;
+            default:
+                virtualKey = 0;
+                return false;
+        }
+    }
+
+    private static bool MatcherUsesMouse(HotkeyMatcher? matcher) =>
+        matcher is not null
+        && (matcher.PushToTalkGesture?.IsMouseButton == true
+            || matcher.ToggleGesture?.IsMouseButton == true
+            || matcher.CancelGesture?.IsMouseButton == true);
 
     private void RaiseHotkeyTriggered(HotkeyEventArgs args)
     {

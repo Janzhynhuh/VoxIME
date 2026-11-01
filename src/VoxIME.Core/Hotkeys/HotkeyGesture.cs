@@ -17,8 +17,9 @@ public enum HotkeyModifiers
 /// 解析后的热键组合，例如 <c>Ctrl+Alt</c>（仅修饰键，按住说话）或 <c>Ctrl+Alt+M</c>（普通组合键）。
 /// </summary>
 /// <remarks>
-/// 支持的热键字符串：修饰键 Ctrl/Alt/Shift/Win 加单个按键（A-Z、0-9、F1-F24、Esc、Space、Enter、
-/// Tab、Backspace、Delete、方向键等），大小写不敏感、可用任意顺序书写。
+/// 支持的热键字符串：修饰键 Ctrl/Alt/Shift/Win 加单个键盘按键（A-Z、0-9、F1-F24、Esc、Space、Enter、
+/// Tab、Backspace、Delete、方向键等），也支持鼠标键 MouseX1 / MouseX2（鼠标侧键）、MouseMiddle（中键）、
+/// MouseLeft / MouseRight；大小写不敏感、可用任意顺序书写。
 /// 规范化输出顺序固定为 <c>Ctrl+Alt+Shift+Win+主键</c>。
 /// </remarks>
 public sealed class HotkeyGesture
@@ -68,6 +69,13 @@ public sealed class HotkeyGesture
     public string Display { get; }
 
     public bool IsModifierOnly => VirtualKey == 0;
+
+    /// <summary>主键是否为鼠标键（MouseX1/MouseX2/MouseMiddle/MouseLeft/MouseRight）。</summary>
+    public bool IsMouseButton => IsMouseVirtualKey(VirtualKey);
+
+    /// <summary>判断虚拟键码是否属于鼠标键（Windows VK_LBUTTON..VK_XBUTTON2 范围 0x01..0x06）。</summary>
+    public static bool IsMouseVirtualKey(int virtualKey) =>
+        virtualKey is >= VirtualKeys.MouseLeft and <= VirtualKeys.MouseX2;
 
     public bool HasControl => (Modifiers & HotkeyModifiers.Control) != 0;
 
@@ -305,6 +313,25 @@ public sealed class HotkeyGesture
         Add(map, "\\", VirtualKeys.OemBackslash, "\\");
         Add(map, "`", VirtualKeys.OemTilde, "`");
 
+        // 鼠标键：侧键（MouseX1/MouseX2）最常用，其次中键；左右键也允许但需谨慎使用。
+        Add(map, "MouseX1", VirtualKeys.MouseX1, "MouseX1");
+        Add(map, "XButton1", VirtualKeys.MouseX1, "MouseX1");
+        Add(map, "Mouse4", VirtualKeys.MouseX1, "MouseX1");
+        Add(map, "SideButton1", VirtualKeys.MouseX1, "MouseX1");
+        Add(map, "MouseX2", VirtualKeys.MouseX2, "MouseX2");
+        Add(map, "XButton2", VirtualKeys.MouseX2, "MouseX2");
+        Add(map, "Mouse5", VirtualKeys.MouseX2, "MouseX2");
+        Add(map, "SideButton2", VirtualKeys.MouseX2, "MouseX2");
+        Add(map, "MouseMiddle", VirtualKeys.MouseMiddle, "MouseMiddle");
+        Add(map, "Middle", VirtualKeys.MouseMiddle, "MouseMiddle");
+        Add(map, "Mouse3", VirtualKeys.MouseMiddle, "MouseMiddle");
+        Add(map, "MouseLeft", VirtualKeys.MouseLeft, "MouseLeft");
+        Add(map, "Mouse1", VirtualKeys.MouseLeft, "MouseLeft");
+        Add(map, "LeftButton", VirtualKeys.MouseLeft, "MouseLeft");
+        Add(map, "MouseRight", VirtualKeys.MouseRight, "MouseRight");
+        Add(map, "Mouse2", VirtualKeys.MouseRight, "MouseRight");
+        Add(map, "RightButton", VirtualKeys.MouseRight, "MouseRight");
+
         return map;
     }
 }
@@ -312,6 +339,11 @@ public sealed class HotkeyGesture
 /// <summary>用到的虚拟键码（Win32 VK_* 常量子集）。</summary>
 internal static class VirtualKeys
 {
+    public const int MouseLeft = 0x01;
+    public const int MouseRight = 0x02;
+    public const int MouseMiddle = 0x04;
+    public const int MouseX1 = 0x05;
+    public const int MouseX2 = 0x06;
     public const int Backspace = 0x08;
     public const int Tab = 0x09;
     public const int Enter = 0x0D;

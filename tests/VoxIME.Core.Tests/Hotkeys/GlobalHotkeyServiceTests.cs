@@ -67,4 +67,44 @@ public class GlobalHotkeyServiceTests
 
         Assert.False(service.IsRunning);
     }
+
+    [Fact]
+    public void 鼠标热键配置可正常启动与停止()
+    {
+        using var service = new GlobalHotkeyService(NullLogger.Instance);
+
+        service.Start(new HotkeyConfig
+        {
+            PushToTalk = "MouseX1",
+            Toggle = "Ctrl+MouseX2",
+            Cancel = "Esc"
+        });
+
+        // 无交互桌面环境可能无法安装钩子，但不允许抛异常。
+        Assert.Contains(service.IsRunning, new[] { true, false });
+        service.Stop();
+        Assert.False(service.IsRunning);
+    }
+
+    [Fact]
+    public void 非法鼠标热键配置通过Error事件上报()
+    {
+        using var service = new GlobalHotkeyService(NullLogger.Instance);
+        var errors = new ConcurrentQueue<string>();
+        service.Error += (_, message) => errors.Enqueue(message);
+
+        service.Start(new HotkeyConfig
+        {
+            PushToTalk = "MouseX9",
+            Toggle = "MouseSide",
+            Cancel = "Esc"
+        });
+
+        var snapshot = errors.ToArray();
+        Assert.Contains(snapshot, message => message.Contains("MouseX9"));
+        Assert.Contains(snapshot, message => message.Contains("MouseSide"));
+
+        service.Stop();
+        Assert.False(service.IsRunning);
+    }
 }

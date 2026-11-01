@@ -125,4 +125,41 @@ public class HotkeyGestureTests
         Assert.Equal("M", withKey.KeyName);
         Assert.Null(modifierOnly.KeyName);
     }
+
+    [Theory]
+    [InlineData("MouseX1", 0x05, "MouseX1")]
+    [InlineData("mousex1", 0x05, "MouseX1")]
+    [InlineData("XButton1", 0x05, "MouseX1")]
+    [InlineData("Mouse4", 0x05, "MouseX1")]
+    [InlineData("SideButton1", 0x05, "MouseX1")]
+    [InlineData("MouseX2", 0x06, "MouseX2")]
+    [InlineData("Mouse5", 0x06, "MouseX2")]
+    [InlineData("MouseMiddle", 0x04, "MouseMiddle")]
+    [InlineData("Middle", 0x04, "MouseMiddle")]
+    [InlineData("MouseLeft", 0x01, "MouseLeft")]
+    [InlineData("MouseRight", 0x02, "MouseRight")]
+    [InlineData("Ctrl+MouseX1", 0x05, "Ctrl+MouseX1")]
+    [InlineData("alt+xbutton2", 0x06, "Alt+MouseX2")]
+    [InlineData("Shift+MouseMiddle", 0x04, "Shift+MouseMiddle")]
+    public void 鼠标键解析与规范化(string input, int expectedVirtualKey, string expectedDisplay)
+    {
+        Assert.True(HotkeyGesture.TryParse(input, out var gesture));
+        Assert.NotNull(gesture);
+        Assert.Equal(expectedVirtualKey, gesture!.VirtualKey);
+        Assert.True(gesture.IsMouseButton);
+        Assert.False(gesture.IsModifierOnly);
+        Assert.Equal(expectedDisplay, gesture.Display);
+        Assert.Equal(expectedDisplay, HotkeyGesture.Normalize(input));
+    }
+
+    [Fact]
+    public void 键盘主键不会被误判为鼠标键()
+    {
+        Assert.False(HotkeyGesture.ParseOrNull("Ctrl+Alt")!.IsMouseButton);
+        Assert.False(HotkeyGesture.ParseOrNull("F2")!.IsMouseButton);
+        Assert.False(HotkeyGesture.ParseOrNull("Ctrl+Alt+M")!.IsMouseButton);
+        Assert.True(HotkeyGesture.ParseOrNull("MouseX2")!.IsMouseButton);
+        Assert.False(HotkeyGesture.IsMouseVirtualKey(0x41));
+        Assert.True(HotkeyGesture.IsMouseVirtualKey(0x05));
+    }
 }
