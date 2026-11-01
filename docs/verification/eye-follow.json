@@ -31,7 +31,7 @@
   ],
   "notes": [
     "修复前 C# 侧只在接口上支持 SetGaze，实际上没有轮询全局光标，因此眼动不会跟随鼠标。",
-    "本次修复后由 Live2DController 在 30Hz 合帧 tick 中读取 GetCursorPos 并换算到桌宠窗口中心，EyeFollow 关闭时归零。",
+    "本次修复后由 Live2DController 在合帧 tick 中读取 GetCursorPos 并换算到桌宠窗口中心；轮询帧率由 Live2DConfig.EyeFollowFps 控制（5–60Hz，默认 30，设置页“桌宠 → 眼动轮询帧率”滑动条可调）。",
     "同时修复：关闭“待机动画”时立即停止当前动作（此前只是不再随机下一个动作，当前动作会继续循环，可能遮挡眼动）。"
   ]
 }

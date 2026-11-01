@@ -24,7 +24,7 @@ public sealed class AppConfigTests
         var config = new AppConfig
         {
             Audio = new AudioConfig { MaxDurationSeconds = 9999, SilenceTimeoutMs = 1, VadThreshold = 42 },
-            Live2D = new Live2DConfig { Width = 10, Height = 9000, Opacity = 5, Scale = 0, MouthSensitivity = 100 },
+            Live2D = new Live2DConfig { Width = 10, Height = 9000, Opacity = 5, Scale = 0, MouthSensitivity = 100, EyeFollowFps = 999 },
             Tts = new TtsConfig { Rate = 99, Volume = -5 },
             Ui = new UiConfig { HistoryLimit = 0 },
             Logging = new LoggingConfig { RetainDays = 0, MaxFileSizeKb = 1 }
@@ -40,11 +40,28 @@ public sealed class AppConfigTests
         Assert.Equal(1.0, config.Live2D.Opacity);
         Assert.Equal(0.2, config.Live2D.Scale);
         Assert.Equal(5.0, config.Live2D.MouthSensitivity);
+        Assert.Equal(60, config.Live2D.EyeFollowFps);
         Assert.Equal(10, config.Tts.Rate);
         Assert.Equal(0, config.Tts.Volume);
         Assert.Equal(10, config.Ui.HistoryLimit);
         Assert.Equal(1, config.Logging.RetainDays);
         Assert.Equal(64, config.Logging.MaxFileSizeKb);
+    }
+
+    [Fact]
+    public void Normalize_ClampsEyeFollowFpsToValidRange()
+    {
+        var low = new AppConfig { Live2D = new Live2DConfig { EyeFollowFps = -3 } };
+        low.Normalize();
+        Assert.Equal(5, low.Live2D.EyeFollowFps);
+
+        var high = new AppConfig { Live2D = new Live2DConfig { EyeFollowFps = 1000 } };
+        high.Normalize();
+        Assert.Equal(60, high.Live2D.EyeFollowFps);
+
+        var normal = new AppConfig { Live2D = new Live2DConfig { EyeFollowFps = 45 } };
+        normal.Normalize();
+        Assert.Equal(45, normal.Live2D.EyeFollowFps);
     }
 
     [Fact]

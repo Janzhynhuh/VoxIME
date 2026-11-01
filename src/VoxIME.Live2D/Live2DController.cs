@@ -47,6 +47,7 @@ public sealed class Live2DController : ILive2DController
     private double _gazeY;
     private string? _bubbleText;
     private DateTime _bubbleSetAt = DateTime.MinValue;
+    private DateTime _lastGazePollAt = DateTime.MinValue;
     private string? _lastRaisedError;
     private DateTime _lastRaisedErrorAt = DateTime.MinValue;
 
@@ -307,6 +308,7 @@ public sealed class Live2DController : ILive2DController
             EnsureWindow();
             ApplyWindowConfiguration();
             _flushTimer?.Start();
+            ApplyFlushInterval();
 
             var config = GetConfig();
             if (config.Enabled)
@@ -388,6 +390,7 @@ public sealed class Live2DController : ILive2DController
         {
             var previousDirectory = GetConfig().ModelDirectory;
             ApplyWindowConfiguration();
+            ApplyFlushInterval();
 
             if (_window is not null)
             {
@@ -460,6 +463,7 @@ public sealed class Live2DController : ILive2DController
             _window!.Show();
             _visible = true;
             _flushTimer?.Start();
+            ApplyFlushInterval();
             if (!_contentInitialized)
             {
                 // 注意：内容初始化（WebView2 EnsureCoreWebView2Async）期间绝对不能折叠 WebView 控件，
@@ -817,6 +821,32 @@ public sealed class Live2DController : ILive2DController
     // ------------------------------------------------------------------
     // 30Hz 合帧下发：状态 / 口型 / 眼动 / 气泡
     // ------------------------------------------------------------------
+
+    /// <summary>
+    /// 按 <see cref="Live2DConfig.EyeFollowFps"/> 调整合帧定时器频率：
+    /// 眼动可配 5–60Hz，定时器最快提到约 8ms/帧；其它状态/口型消息仍是"变化才下发"，提升帧率开销很小。
+    /// </summary>
+    private void ApplyFlushInterval()
+    {
+        var timer = _flushTimer;
+        if (timer is null)
+        {
+            return;
+        }
+
+        var config = GetConfig();
+        var eyeFollowFps = config.EyeFollow ? Math.Clamp(config.EyeFollowFps, 5, 60) : 30;
+        var intervalMs = Math.Max(8.0, Math.Min(FlushIntervalMilliseconds, 1000.0 / eyeFollowFps));
+        var interval = TimeSpan.FromMilliseconds(intervalMs);
+        if (timer.Interval != interval)
+        {
+            timer.Interval = interval;
+        }
+
+        _lastGazePollAt = DateTime.MinValue;
+        _logger.Debug($"[Live2D] 合帧间隔={intervalMs:0.0}ms（眼动轮询目标 {eyeFollowFps}fps）");
+    }
+
     private void OnFlushTick(object? sender, EventArgs e)
     {
         if (_disposed || _window is null)
@@ -872,12 +902,18 @@ public sealed class Live2DController : ILive2DController
                 _webHost?.SendMouth(Math.Round(effectiveMouth, 3));
             }
 
-            // 眼动跟随：EyeFollow 开启时，30Hz 轮询全局光标位置并换算成相对于桌宠窗口中心的归一化视线，
-            // 覆盖显式 SetGaze 的默认值（桌面宠物没有焦点，无法靠 WPF 鼠标事件拿到全局坐标）。
-            if (config.EyeFollow && _visible && _window.IsVisible
+            // 眼动跟随：EyeFollow 开启时按配置的 EyeFollowFps 轮询全局光标位置并换算成相对于桌宠窗口中心的
+            // 归一化视线，覆盖显式 SetGaze 的默认值（桌面宠物没有焦点，无法靠 WPF 鼠标事件拿到全局坐标）。
+            // 合帧定时器会按该帧率提速（最高 60fps），其它状态/口型消息仍是变化才下发，开销很小。
+            var eyeFollowFps = Math.Clamp(config.EyeFollowFps, 5, 60);
+            var gazePollIntervalMs = 1000.0 / eyeFollowFps;
+            var nowUtc = DateTime.UtcNow;
+            var gazePollDue = (nowUtc - _lastGazePollAt).TotalMilliseconds >= gazePollIntervalMs - 1.0;
+            if (config.EyeFollow && _visible && _window.IsVisible && gazePollDue
                 && WindowInterop.TryGetCursorPosition(out var cursorX, out var cursorY)
                 && WindowInterop.TryGetWindowRect(_window.Handle, out var windowLeft, out var windowTop, out var windowWidth, out var windowHeight))
             {
+                _lastGazePollAt = nowUtc;
                 var centerX = windowLeft + windowWidth / 2.0;
                 var centerY = windowTop + windowHeight / 2.0;
                 // 鼠标距窗口中心约 1.8 倍窗口尺寸时达到最大偏转，全屏范围内不会过于夸张。

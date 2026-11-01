@@ -168,6 +168,7 @@ public sealed class AppConfig
         Live2D.Opacity = Math.Clamp(Live2D.Opacity, 0.2, 1.0);
         Live2D.Scale = Math.Clamp(Live2D.Scale, 0.2, 3.0);
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
+        Live2D.EyeFollowFps = Math.Clamp(Live2D.EyeFollowFps, 5, 60);
         Live2D.IdleMotionGroup = string.IsNullOrWhiteSpace(Live2D.IdleMotionGroup) ? "Idle" : Live2D.IdleMotionGroup.Trim();
 
         Tts ??= new TtsConfig();
@@ -283,6 +284,8 @@ public sealed class Live2DConfig
     public bool ClickThrough { get; set; } = true;
     public bool AlwaysOnTop { get; set; } = true;
     public bool EyeFollow { get; set; } = true;
+    /// <summary>眼动跟随的轮询帧率（Hz，5–60，默认 30）；越高越跟手，略增 CPU/GPU 占用。</summary>
+    public int EyeFollowFps { get; set; } = 30;
     public bool IdleMotion { get; set; } = true;
     public bool MouthSync { get; set; } = true;
     public double MouthSensitivity { get; set; } = 1.0;

@@ -89,7 +89,7 @@ dotnet run --project src/VoxIME.App
 - **鼠标侧键**：设置 → 录音 → 把光标放进热键输入框后按鼠标侧键/中键，即可录成 `MouseX1` / `MouseX2` / `MouseMiddle`（也支持 `Ctrl+MouseX1` 等组合）。鼠标侧键命中已配置热键时 VoxIME 会拦截该键，避免同时触发浏览器前进/后退。
 - **HUD**：屏幕底部状态条显示聆听/识别状态；开启「预览确认」时可先编辑再按回车插入。
 - **托盘菜单**：显示/隐藏桌宠、暂停热键、设置、历史记录、打开日志目录、退出。
-- **桌宠**：右键托盘可显示/隐藏；`设置 → 桌宠` 可设置点击穿透、置顶、缩放、口型灵敏度与各状态表情映射。
+- **桌宠**：右键托盘可显示/隐藏；`设置 → 桌宠` 可设置点击穿透、置顶、缩放、口型灵敏度、**眼动跟随轮询帧率（5–60 FPS，默认 30）**与各状态表情映射。
 - 对**以管理员身份运行**的程序，普通权限的 VoxIME 无法模拟按键/粘贴（Windows UIPI 限制）；此时请右键以管理员身份运行 VoxIME，识别结果仍会复制到剪贴板。
 
 ## 🧩 Live2D 模型
@@ -144,7 +144,7 @@ flowchart LR
 
 ```powershell
 dotnet build VoxIME.sln          # 全量构建（0 warning / 0 error）
-dotnet test                       # 306 个离线单元测试
+dotnet test                       # 307 个离线单元测试
 .\scripts\publish-x64.ps1         # 发布 x64 自包含包
 .\scripts\run.ps1                 # 开发模式运行
 .\scripts\e2e-smoke.ps1           # 端到端自检：录音→Mock 识别→上屏到前台文本框，结果写 %TEMP%\voxime-e2e-result.json

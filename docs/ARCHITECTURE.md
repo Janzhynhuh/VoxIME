@@ -176,7 +176,7 @@ sequenceDiagram
 - 渲染：`WebView2CompositionControl`（WPF 合成，支持透明）承载本地网页；网页用 pixi.js + pixi-live2d-display（Cubism 4 Core）渲染 `.model3.json`；`renderer.backgroundAlpha=0` 保证透明。
 - 降级链：WebView2 不可用 / 模型加载失败 / 未配置模型 → WPF 内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画）。
 - 状态映射：Idle（待机动作循环 + 随机眨眼）、Listening（表情 + 口型跟随麦克风）、Thinking（思考动作/表情）、Speaking（口型跟随 TTS 音量）、Error（抖动/红色提示）。
-- 眼动：C# 30Hz 轮询全局光标位置，归一化为 `-1..1` 后推送；`EyeFollow=false` 时停止。
+- 眼动：C# 合帧定时器按 `Live2DConfig.EyeFollowFps`（5–60Hz，默认 30）节流轮询全局光标位置，归一化为 `-1..1` 后推送；帧率高于 30 时定时器自动提速（最快约 8ms/帧），其它状态/口型消息仍是变化才下发；`EyeFollow=false` 时停止轮询并归零。
 
 ### 5.7 主控制器（`VoxIME.Core.Services.VoiceInputController`）
 
@@ -241,7 +241,7 @@ sequenceDiagram
 
 | 层级 | 方式 | 命令/产物 |
 |---|---|---|
-| 单元测试 | 306 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
+| 单元测试 | 307 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
 | 窗口级自检 | 构造并显示欢迎/设置/历史/关于/HUD 五个窗口后退出 | `VoxIME.exe --tray --selftest`（日志 `SELFTEST` 行，退出码 0/2） |
 | 端到端 | 真实启动应用 → 录音 3 秒 → 识别 → 上屏到一个真实前台 WinForms 文本框；结果写 JSON；支持 `-ForceAudioWav` 用指定 WAV 走真实厂商接口 | `scripts/e2e-smoke.ps1` → `%TEMP%\voxime-e2e-result.json` |
 | 真实厂商联调 | Windows SAPI 合成中文语音 → 应用完整链路（强制 WAV）→ 小米 MiMo ASR → 上屏；HTTP 200，识别结果与原文逐字一致，上屏内容与识别结果一致 | `docs/verification/e2e-mimo-real-asr.json` |

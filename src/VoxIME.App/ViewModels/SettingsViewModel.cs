@@ -79,6 +79,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private bool _clickThrough;
     private bool _alwaysOnTop;
     private bool _eyeFollow;
+    private int _eyeFollowFps = 30;
     private bool _idleMotion;
     private bool _mouthSync;
     private bool _showBubble;
@@ -787,6 +788,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _eyeFollow, value);
     }
 
+    /// <summary>眼动跟随轮询帧率（Hz，5–60）。</summary>
+    public int EyeFollowFps
+    {
+        get => _eyeFollowFps;
+        set => SetProperty(ref _eyeFollowFps, Math.Clamp(value, 5, 60));
+    }
+
     public bool IdleMotion
     {
         get => _idleMotion;
@@ -1029,6 +1037,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ClickThrough = config.Live2D.ClickThrough;
         AlwaysOnTop = config.Live2D.AlwaysOnTop;
         EyeFollow = config.Live2D.EyeFollow;
+        EyeFollowFps = config.Live2D.EyeFollowFps;
         IdleMotion = config.Live2D.IdleMotion;
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
@@ -1563,6 +1572,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ClickThrough = ClickThrough,
             AlwaysOnTop = AlwaysOnTop,
             EyeFollow = EyeFollow,
+            EyeFollowFps = EyeFollowFps,
             IdleMotion = IdleMotion,
             MouthSync = MouthSync,
             MouthSensitivity = MouthSensitivity,
