@@ -168,10 +168,23 @@
     return pixiApp;
   }
 
+  function applyRendererResolution() {
+    if (!pixiApp) return;
+    // 放大模型时提高画布后备分辨率，避免把画面“拉大”后发糊；
+    // 缩放只在 canvas 内完成，不再改 WebView2 ZoomFactor（否则 viewport 重排会让缩放几乎无效）。
+    var base = Math.min(window.devicePixelRatio || 1, 2);
+    var factor = Math.max(1, config.scale || 1);
+    var resolution = Math.min(3, base * factor);
+    if (Math.abs((pixiApp.renderer.resolution || 1) - resolution) > 0.01) {
+      pixiApp.renderer.resolution = resolution;
+    }
+  }
+
   function resizePixi() {
     if (!pixiApp) return;
     var w = Math.max(1, stageEl.clientWidth);
     var h = Math.max(1, stageEl.clientHeight);
+    applyRendererResolution();
     try { pixiApp.renderer.resize(w, h); } catch (e) { log('resize 失败', e); }
     layoutModel();
   }
@@ -408,7 +421,8 @@
       model.internalModel.on('beforeModelUpdate', applyMouthOverride);
       setupMouthParameters();
       modelGroups = setupIdleGroup() || [];
-      layoutModel();
+      // 初始化时应用缩放与对应的后备分辨率（模型自带尺寸可能很大）。
+      resizePixi();
 
       demoActive = false;
       if (demo) demo.stop();
@@ -531,6 +545,8 @@
   function applyConfig(msg) {
     if (!msg || typeof msg !== 'object') return;
     var idleMotionChanged = msg.idleMotion !== undefined && !!msg.idleMotion !== config.idleMotion;
+    var scaleChanged = typeof msg.scale === 'number' && isFinite(msg.scale)
+      && Math.abs(Math.min(3, Math.max(0.2, msg.scale)) - config.scale) > 0.0001;
     if (msg.eyeFollow !== undefined) config.eyeFollow = !!msg.eyeFollow;
     if (msg.idleMotion !== undefined) config.idleMotion = !!msg.idleMotion;
     if (msg.mouthSync !== undefined) config.mouthSync = !!msg.mouthSync;
@@ -554,7 +570,11 @@
         }
       }
       setupIdleGroup();
-      layoutModel();
+      if (scaleChanged) {
+        resizePixi();
+      } else {
+        layoutModel();
+      }
     }
     syncConfigCheckboxes();
     if (isPreview) updateDebugStatus();

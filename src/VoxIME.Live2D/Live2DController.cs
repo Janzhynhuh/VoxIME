@@ -758,11 +758,13 @@ public sealed class Live2DController : ILive2DController
             config.EyeFollow,
             config.IdleMotion,
             config.MouthSync,
-            1.0,
+            config.Scale,
             string.IsNullOrWhiteSpace(config.IdleMotionGroup) ? "Idle" : config.IdleMotionGroup,
             config.ShowBubble,
             expressions);
-        _webHost?.SetZoom(config.Scale);
+        // 缩放不再改 WebView2 ZoomFactor：ZoomFactor 会让页面 viewport 重排，JS 重新适配后视觉尺寸
+        // 几乎不变且会被拉伸发糊。统一交给页面在 canvas 内缩放，并随缩放提高渲染分辨率。
+        _webHost?.SetZoom(1.0);
 
         if (_window is not null)
         {
