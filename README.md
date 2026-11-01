@@ -1,13 +1,14 @@
 # VoxIME 声语 · Windows 桌面语音输入法
 
 [![CI](https://github.com/Janzhynhuh/VoxIME/actions/workflows/ci.yml/badge.svg)](https://github.com/Janzhynhuh/VoxIME/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Janzhynhuh/VoxIME?label=release)](https://github.com/Janzhynhuh/VoxIME/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
 
 > 按住一个键说话，文字自动出现在任何输入框里；桌面上还有一个可自定义的 Live2D 形象在听你说话。
 > 多厂商语音识别可插拔：OpenAI 兼容接口、小米 MiMo、阿里云 DashScope、腾讯云、科大讯飞、本地 whisper.cpp / FunASR / sherpa-onnx……
 
-仓库：<https://github.com/Janzhynhuh/VoxIME>（私有；需要权限请联系仓库所有者）
+仓库：<https://github.com/Janzhynhuh/VoxIME>（MIT，欢迎 Star / Issue / PR）
 
 - 平台：Windows 10/11 x64（.NET 10）
 - 形态：悬浮语音助手 + 全局热键 + 透明置顶 Live2D 桌宠
@@ -40,7 +41,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 解压 `VoxIME-win-x64-v0.1.0.zip` 到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
+1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.1.0.zip`，解压到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
 2. 双击 `VoxIME.exe` 启动，托盘出现声语图标。
 3. 托盘右键 → **设置**：
    - 「服务」页点击 **新增服务**，选择你的识别厂商，填入 BaseUrl / Model / API Key，点 **测试识别** 验证。
