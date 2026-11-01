@@ -1,0 +1,37 @@
+{
+  "description": "眼动跟随鼠标验证：C# 侧 30Hz 轮询全局光标 → 归一化 gaze → JS focusController 驱动 Cubism 参数",
+  "date": "2026-11-01",
+  "app": "VoxIME 0.1.1+ (main)",
+  "tests": [
+    {
+      "name": "Hiyori 模型（真实 WebView2 桌宠）",
+      "method": "应用运行中，把系统光标分别移到屏幕左侧 (150,760) 与右侧 (2500,760)，各等待 2s 后截取桌宠窗口区域并做像素对比",
+      "result": {
+        "headRegionChangedPercent": 7.2,
+        "irisRegionBBoxShiftPx": 9,
+        "direction": "光标右移时头部/眼睛向右转，左移时向左转"
+      }
+    },
+    {
+      "name": "内置 WPF 兜底形象",
+      "method": "VOXIME_LIVE2D_DISABLE_WEBVIEW=1 强制兜底，同样左右移动光标并对比瞳孔位置",
+      "result": {
+        "avatarRegionChangedPercent": 18.9,
+        "pupils": "左图瞳孔偏左下、右图偏右上，跟随明显"
+      }
+    },
+    {
+      "name": "JS focusController 参数回读（Edge headless + CDP）",
+      "method": "preview 页 ?gaze=1,0 与 ?gaze=-1,0，读取更新帧参数",
+      "result": {
+        "gaze_1_0": { "ParamAngleX": 25.16, "ParamEyeBallX": 1.0 },
+        "gaze_-1_0": { "ParamAngleX": -23.79, "ParamEyeBallX": -0.71 }
+      }
+    }
+  ],
+  "notes": [
+    "修复前 C# 侧只在接口上支持 SetGaze，实际上没有轮询全局光标，因此眼动不会跟随鼠标。",
+    "本次修复后由 Live2DController 在 30Hz 合帧 tick 中读取 GetCursorPos 并换算到桌宠窗口中心，EyeFollow 关闭时归零。",
+    "同时修复：关闭“待机动画”时立即停止当前动作（此前只是不再随机下一个动作，当前动作会继续循环，可能遮挡眼动）。"
+  ]
+}

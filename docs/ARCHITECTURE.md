@@ -246,6 +246,7 @@ sequenceDiagram
 | 端到端 | 真实启动应用 → 录音 3 秒 → 识别 → 上屏到一个真实前台 WinForms 文本框；结果写 JSON；支持 `-ForceAudioWav` 用指定 WAV 走真实厂商接口 | `scripts/e2e-smoke.ps1` → `%TEMP%\voxime-e2e-result.json` |
 | 真实厂商联调 | Windows SAPI 合成中文语音 → 应用完整链路（强制 WAV）→ 小米 MiMo ASR → 上屏；HTTP 200，识别结果与原文逐字一致，上屏内容与识别结果一致 | `docs/verification/e2e-mimo-real-asr.json` |
 | 桌宠透明性 | 棋盘格底窗 + 隐藏/显示桌宠前后像素对比，四角 cornerMaxDiff=0；`WS_EX_TRANSPARENT`/`WM_NCHITTEST` 校验 | `docs/verification/live2d-desktop-pet.json` |
+| 眼动跟随 | 光标移到屏幕左右两侧各截一张桌宠窗口图：头部区域像素变化 7.2%、虹膜 bbox 平移 9px；兜底形象瞳孔区域变化 18.9%；预览页 gaze=±1 回读 `ParamAngleX` 25.2/-23.8 | `docs/verification/eye-follow.json` |
 | 网页渲染 | Edge headless + CDP 读取 `ParamMouthOpenY`/`EyeBallX` 等参数，fps 统计 | `docs/screenshots/live2d-preview.png` |
 
 ### 11.2 两个真实踩坑（复现与修复）

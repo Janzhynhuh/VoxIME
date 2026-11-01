@@ -28,6 +28,9 @@ internal static class WindowInterop
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
 
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out NativePoint point);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect
     {
@@ -35,6 +38,27 @@ internal static class WindowInterop
         public int Top;
         public int Right;
         public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    /// <summary>读取当前鼠标指针的屏幕物理像素坐标（用于眼动跟随）。</summary>
+    public static bool TryGetCursorPosition(out int x, out int y)
+    {
+        x = y = 0;
+        if (!GetCursorPos(out var point))
+        {
+            return false;
+        }
+
+        x = point.X;
+        y = point.Y;
+        return true;
     }
 
     /// <summary>读取窗口在屏幕上的物理像素矩形（用于开发期截图验证）。</summary>

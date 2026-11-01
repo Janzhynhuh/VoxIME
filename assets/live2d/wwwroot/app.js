@@ -525,6 +525,7 @@
 
   function applyConfig(msg) {
     if (!msg || typeof msg !== 'object') return;
+    var idleMotionChanged = msg.idleMotion !== undefined && !!msg.idleMotion !== config.idleMotion;
     if (msg.eyeFollow !== undefined) config.eyeFollow = !!msg.eyeFollow;
     if (msg.idleMotion !== undefined) config.idleMotion = !!msg.idleMotion;
     if (msg.mouthSync !== undefined) config.mouthSync = !!msg.mouthSync;
@@ -538,6 +539,15 @@
     }
     if (!config.mouthSync) live.mouth = 0;
     if (model) {
+      // 待机动画开关切换时：关闭要立即停掉正在播放的动作，否则“关闭待机动画”只是不再随机下一个，
+      // 当前动作会一直循环，导致眼动/表情被动作覆盖、看起来像没有生效。
+      if (idleMotionChanged && !config.idleMotion) {
+        try {
+          model.internalModel.motionManager.stopAllMotions();
+        } catch (e) {
+          log('停止待机动作失败（忽略）', e);
+        }
+      }
       setupIdleGroup();
       layoutModel();
     }

@@ -872,6 +872,19 @@ public sealed class Live2DController : ILive2DController
                 _webHost?.SendMouth(Math.Round(effectiveMouth, 3));
             }
 
+            // 眼动跟随：EyeFollow 开启时，30Hz 轮询全局光标位置并换算成相对于桌宠窗口中心的归一化视线，
+            // 覆盖显式 SetGaze 的默认值（桌面宠物没有焦点，无法靠 WPF 鼠标事件拿到全局坐标）。
+            if (config.EyeFollow && _visible && _window.IsVisible
+                && WindowInterop.TryGetCursorPosition(out var cursorX, out var cursorY)
+                && WindowInterop.TryGetWindowRect(_window.Handle, out var windowLeft, out var windowTop, out var windowWidth, out var windowHeight))
+            {
+                var centerX = windowLeft + windowWidth / 2.0;
+                var centerY = windowTop + windowHeight / 2.0;
+                // 鼠标距窗口中心约 1.8 倍窗口尺寸时达到最大偏转，全屏范围内不会过于夸张。
+                gazeX = Math.Clamp((cursorX - centerX) / Math.Max(1.0, windowWidth * 1.8), -1, 1);
+                gazeY = Math.Clamp((centerY - cursorY) / Math.Max(1.0, windowHeight * 1.8), -1, 1);
+            }
+
             var effectiveGazeX = config.EyeFollow ? gazeX : 0;
             var effectiveGazeY = config.EyeFollow ? gazeY : 0;
             if (!NearlyEqual(effectiveGazeX, _lastSentGazeX, 0.01) || !NearlyEqual(effectiveGazeY, _lastSentGazeY, 0.01))
@@ -881,6 +894,7 @@ public sealed class Live2DController : ILive2DController
                 avatar.GazeX = effectiveGazeX;
                 avatar.GazeY = effectiveGazeY;
                 _webHost?.SendGaze(Math.Round(effectiveGazeX, 3), Math.Round(effectiveGazeY, 3));
+                _logger.Debug($"[Live2D] 眼动下发 gaze=({effectiveGazeX:0.00},{effectiveGazeY:0.00})");
             }
 
             var bubbleVisible = config.ShowBubble && !string.IsNullOrEmpty(bubble);
