@@ -132,6 +132,35 @@
                     <TextBlock Style="{StaticResource HintText}" Margin="150,2,0,8"
                                Text="缩放 &gt;1 会放大模型并裁剪超出窗口部分；想要更大更清晰的显示区域，请调大上面的「窗口宽度 / 高度」。画面按窗口像素尺寸与缩放实时提高渲染分辨率。" />
 
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="74" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="模型水平偏移" Style="{StaticResource ValueText}" />
+                        <Slider Grid.Column="1" Minimum="-1" Maximum="1" TickFrequency="0.01"
+                                IsSnapToTickEnabled="True" Value="{Binding ModelOffsetX, Mode=TwoWay}" />
+                        <TextBlock Grid.Column="2" Text="{Binding ModelOffsetX, StringFormat={}{0:P0}}"
+                                   Style="{StaticResource MutedText}" HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="74" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="模型垂直偏移" Style="{StaticResource ValueText}" />
+                        <Slider Grid.Column="1" Minimum="-1" Maximum="1" TickFrequency="0.01"
+                                IsSnapToTickEnabled="True" Value="{Binding ModelOffsetY, Mode=TwoWay}" />
+                        <TextBlock Grid.Column="2" Text="{Binding ModelOffsetY, StringFormat={}{0:P0}}"
+                                   Style="{StaticResource MutedText}" HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource HintText}" Margin="150,2,0,8"
+                               Text="偏移按窗口宽/高的百分比计算（正值 = 右 / 下）；放大后可把模型移到想显示的位置，0%,0% 为默认居中贴底。" />
+
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="150" />

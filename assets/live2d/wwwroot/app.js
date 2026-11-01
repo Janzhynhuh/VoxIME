@@ -39,6 +39,8 @@
     idleMotion: true,
     mouthSync: true,
     scale: 1.0,
+    offsetX: 0.0,
+    offsetY: 0.0,
     idleMotionGroup: 'Idle',
     showBubble: true,
     bubbleInPage: isPreview // 嵌入时气泡由 WPF 层渲染，避免重复
@@ -198,11 +200,15 @@
     var modelH = model.internalModel.height || 1;
     var fill = 0.95;
     var scale = Math.min(w / modelW, h / modelH) * fill * (config.scale || 1);
+    var offsetX = Math.min(1, Math.max(-1, config.offsetX || 0));
+    var offsetY = Math.min(1, Math.max(-1, config.offsetY || 0));
     model.anchor.set(0.5, 1);
     model.scale.set(scale);
-    model.position.set(w / 2, h - Math.min(14, h * 0.02));
+    model.position.set(
+      w / 2 + offsetX * w,
+      h - Math.min(14, h * 0.02) + offsetY * h);
     log('布局: 画布 ' + w + 'x' + h + ', 模型 ' + fmt(modelW, 0) + 'x' + fmt(modelH, 0) +
-      ', scale=' + fmt(scale, 3));
+      ', scale=' + fmt(scale, 3) + ', offset=' + fmt(offsetX, 2) + ',' + fmt(offsetY, 2));
   }
 
   function onTick() {
@@ -556,6 +562,8 @@
     if (msg.idleMotion !== undefined) config.idleMotion = !!msg.idleMotion;
     if (msg.mouthSync !== undefined) config.mouthSync = !!msg.mouthSync;
     if (typeof msg.scale === 'number' && isFinite(msg.scale)) config.scale = Math.min(3, Math.max(0.2, msg.scale));
+    if (typeof msg.offsetX === 'number' && isFinite(msg.offsetX)) config.offsetX = Math.min(1, Math.max(-1, msg.offsetX));
+    if (typeof msg.offsetY === 'number' && isFinite(msg.offsetY)) config.offsetY = Math.min(1, Math.max(-1, msg.offsetY));
     if (msg.idleMotionGroup) config.idleMotionGroup = String(msg.idleMotionGroup);
     if (msg.showBubble !== undefined) config.showBubble = !!msg.showBubble;
     if (msg.expressions && typeof msg.expressions === 'object') {

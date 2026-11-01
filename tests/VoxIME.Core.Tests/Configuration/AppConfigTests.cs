@@ -24,7 +24,7 @@ public sealed class AppConfigTests
         var config = new AppConfig
         {
             Audio = new AudioConfig { MaxDurationSeconds = 9999, SilenceTimeoutMs = 1, VadThreshold = 42 },
-            Live2D = new Live2DConfig { Width = 10, Height = 9000, Opacity = 5, Scale = 0, MouthSensitivity = 100, EyeFollowFps = 999 },
+            Live2D = new Live2DConfig { Width = 10, Height = 9000, Opacity = 5, Scale = 0, MouthSensitivity = 100, EyeFollowFps = 999, ModelOffsetX = 5, ModelOffsetY = -9 },
             Tts = new TtsConfig { Rate = 99, Volume = -5 },
             Ui = new UiConfig { HistoryLimit = 0 },
             Logging = new LoggingConfig { RetainDays = 0, MaxFileSizeKb = 1 }
@@ -39,6 +39,8 @@ public sealed class AppConfigTests
         Assert.Equal(1600, config.Live2D.Height);
         Assert.Equal(1.0, config.Live2D.Opacity);
         Assert.Equal(0.2, config.Live2D.Scale);
+        Assert.Equal(1.0, config.Live2D.ModelOffsetX);
+        Assert.Equal(-1.0, config.Live2D.ModelOffsetY);
         Assert.Equal(5.0, config.Live2D.MouthSensitivity);
         Assert.Equal(300, config.Live2D.EyeFollowFps);
         Assert.Equal(10, config.Tts.Rate);

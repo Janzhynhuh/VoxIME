@@ -25,6 +25,9 @@ internal sealed class PetWindow : Window
     private FrameworkElement? _webView;
     private IntPtr _hwnd;
     private bool _clickThrough = true;
+    private double _avatarScale = 1.0;
+    private double _avatarOffsetX;
+    private double _avatarOffsetY;
 
     public PetWindow()
     {
@@ -71,7 +74,11 @@ internal sealed class PetWindow : Window
         _root.Children.Add(_bubble);
         Content = _root;
 
-        SizeChanged += (_, _) => _bubble.UpdateMaxWidth(Width);
+        SizeChanged += (_, _) =>
+        {
+            _bubble.UpdateMaxWidth(Width);
+            ApplyAvatarTransform();
+        };
         SourceInitialized += OnSourceInitialized;
     }
 
@@ -138,10 +145,23 @@ internal sealed class PetWindow : Window
         _avatar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    public void SetAvatarScale(double scale)
+    /// <summary>应用兜底形象缩放与窗口内偏移（偏移按窗口宽/高比例，正值=右/下）。</summary>
+    public void SetAvatarTransform(double scale, double offsetX, double offsetY)
     {
-        var clamped = Math.Clamp(scale, 0.2, 3.0);
-        _avatar.RenderTransform = new ScaleTransform(clamped, clamped);
+        _avatarScale = Math.Clamp(scale, 0.2, 3.0);
+        _avatarOffsetX = Math.Clamp(offsetX, -1.0, 1.0);
+        _avatarOffsetY = Math.Clamp(offsetY, -1.0, 1.0);
+        ApplyAvatarTransform();
+    }
+
+    private void ApplyAvatarTransform()
+    {
+        var transform = new TransformGroup();
+        transform.Children.Add(new ScaleTransform(_avatarScale, _avatarScale));
+        transform.Children.Add(new TranslateTransform(
+            _avatarOffsetX * ActualWidth,
+            _avatarOffsetY * ActualHeight));
+        _avatar.RenderTransform = transform;
     }
 
     /// <summary>应用尺寸/位置/透明度/置顶/穿透。left/top 为负时自动吸附屏幕右下角。</summary>

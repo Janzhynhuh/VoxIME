@@ -252,6 +252,8 @@ internal sealed class Live2DWebHost : IDisposable
         bool idleMotion,
         bool mouthSync,
         double scale,
+        double offsetX,
+        double offsetY,
         string idleMotionGroup,
         bool showBubble,
         IReadOnlyDictionary<string, string?> expressions)
@@ -263,6 +265,8 @@ internal sealed class Live2DWebHost : IDisposable
             idleMotion,
             mouthSync,
             scale,
+            offsetX,
+            offsetY,
             idleMotionGroup,
             showBubble,
             expressions

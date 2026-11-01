@@ -155,6 +155,7 @@ Hiyori/
 | `Left`/`Top` | -1/-1 | 窗口左上角（DIP）；-1 → 自动吸附主屏工作区右下角；用户拖动后位置会保留 |
 | `Opacity` | 0.96 | 整窗透明度（0.2..1.0） |
 | `Scale` | 1.0 | 模型缩放（0.2..3.0）：JS 在 canvas 内缩放模型并随缩放提高渲染分辨率，兜底形象用 `RenderTransform`；不再使用 WebView2 `ZoomFactor`（会重排 viewport 导致缩放无效/发糊） |
+| `ModelOffsetX` / `ModelOffsetY` | 0 / 0 | 模型在窗口内的偏移（-1..1，按窗口宽/高比例；正值=右/下），用于放大后把模型移进想显示的位置；兜底形象同样生效 |
 | `ClickThrough` | true | 点击穿透（`WS_EX_TRANSPARENT` + `WM_NCHITTEST=HTTRANSPARENT`）；false 时可拖动窗口 |
 | `AlwaysOnTop` | true | 置顶（`WS_EX_TOPMOST`） |
 | `EyeFollow` | true | 眼动跟随开关（`SetGaze` 是否驱动眼球/头部） |

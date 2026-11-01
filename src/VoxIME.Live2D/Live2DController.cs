@@ -393,7 +393,7 @@ public sealed class Live2DController : ILive2DController
             config.Opacity,
             config.AlwaysOnTop,
             config.ClickThrough);
-        _window.SetAvatarScale(config.Scale);
+        _window.SetAvatarTransform(config.Scale, config.ModelOffsetX, config.ModelOffsetY);
         _window.Avatar.Theme = string.IsNullOrWhiteSpace(config.FallbackAvatarTheme)
             ? "violet"
             : config.FallbackAvatarTheme;
@@ -765,6 +765,8 @@ public sealed class Live2DController : ILive2DController
             config.IdleMotion,
             config.MouthSync,
             config.Scale,
+            config.ModelOffsetX,
+            config.ModelOffsetY,
             string.IsNullOrWhiteSpace(config.IdleMotionGroup) ? "Idle" : config.IdleMotionGroup,
             config.ShowBubble,
             expressions);
@@ -774,7 +776,7 @@ public sealed class Live2DController : ILive2DController
 
         if (_window is not null)
         {
-            _window.SetAvatarScale(config.Scale);
+            _window.SetAvatarTransform(config.Scale, config.ModelOffsetX, config.ModelOffsetY);
         }
     }
 

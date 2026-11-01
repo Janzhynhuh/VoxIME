@@ -91,6 +91,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _live2DHeight;
     private bool _autoFitWindow = true;
     private double _live2DScale;
+    private double _modelOffsetX;
+    private double _modelOffsetY;
     private double _live2DOpacity;
     private double _mouthSensitivity;
     private string _idleMotionGroup = "Idle";
@@ -776,6 +778,20 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _live2DScale, Math.Clamp(value, 0.2, 3.0));
     }
 
+    /// <summary>模型水平偏移（-1..1，按窗口宽度比例；正=向右）。</summary>
+    public double ModelOffsetX
+    {
+        get => _modelOffsetX;
+        set => SetProperty(ref _modelOffsetX, Math.Clamp(value, -1.0, 1.0));
+    }
+
+    /// <summary>模型垂直偏移（-1..1，按窗口高度比例；正=向下）。</summary>
+    public double ModelOffsetY
+    {
+        get => _modelOffsetY;
+        set => SetProperty(ref _modelOffsetY, Math.Clamp(value, -1.0, 1.0));
+    }
+
     public double Live2DOpacity
     {
         get => _live2DOpacity;
@@ -1125,6 +1141,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         Live2DHeight = config.Live2D.Height;
         AutoFitWindow = config.Live2D.AutoFitWindow;
         Live2DScale = config.Live2D.Scale;
+        ModelOffsetX = config.Live2D.ModelOffsetX;
+        ModelOffsetY = config.Live2D.ModelOffsetY;
         Live2DOpacity = config.Live2D.Opacity;
         MouthSensitivity = config.Live2D.MouthSensitivity;
         ClickThrough = config.Live2D.ClickThrough;
@@ -1952,6 +1970,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             Height = Live2DHeight,
             AutoFitWindow = AutoFitWindow,
             Scale = Live2DScale,
+            ModelOffsetX = ModelOffsetX,
+            ModelOffsetY = ModelOffsetY,
             Opacity = Live2DOpacity,
             ClickThrough = ClickThrough,
             AlwaysOnTop = AlwaysOnTop,

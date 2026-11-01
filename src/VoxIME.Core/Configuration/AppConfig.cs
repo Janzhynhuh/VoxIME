@@ -200,6 +200,8 @@ public sealed class AppConfig
         Live2D.Height = Math.Clamp(Live2D.Height, 160, 1600);
         Live2D.Opacity = Math.Clamp(Live2D.Opacity, 0.2, 1.0);
         Live2D.Scale = Math.Clamp(Live2D.Scale, 0.2, 3.0);
+        Live2D.ModelOffsetX = Math.Clamp(Live2D.ModelOffsetX, -1.0, 1.0);
+        Live2D.ModelOffsetY = Math.Clamp(Live2D.ModelOffsetY, -1.0, 1.0);
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
         Live2D.EyeFollowFps = Math.Clamp(Live2D.EyeFollowFps, 5, 300);
         Live2D.EyeFollowInvertYByModel ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
@@ -321,6 +323,10 @@ public sealed class Live2DConfig
     public double Height { get; set; } = 560;
     /// <summary>切换模型时按模型原始宽高比自动调整窗口尺寸（以当前高度为基准）。</summary>
     public bool AutoFitWindow { get; set; } = true;
+    /// <summary>模型在窗口内的水平偏移（-1..1，按窗口宽度比例；正=向右）。</summary>
+    public double ModelOffsetX { get; set; }
+    /// <summary>模型在窗口内的垂直偏移（-1..1，按窗口高度比例；正=向下）。</summary>
+    public double ModelOffsetY { get; set; }
     /// <summary>-1 表示自动吸附屏幕右下角。</summary>
     public double Left { get; set; } = -1;
     public double Top { get; set; } = -1;
