@@ -29,6 +29,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private SettingsPage _currentPage;
     private int _selectedPageIndex;
     private string _statusText = "";
+    private string _saveStatusText = "";
+    private int _saveStatusVersion;
 
     // ---- 服务 ----
     private ProviderItemViewModel? _selectedProvider;
@@ -271,6 +273,37 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     }
 
     public bool HasStatus => !string.IsNullOrEmpty(_statusText);
+
+    /// <summary>保存按钮旁的短暂反馈（几秒后清空），不弹托盘通知。</summary>
+    public string SaveStatusText
+    {
+        get => _saveStatusText;
+        private set
+        {
+            if (SetProperty(ref _saveStatusText, value))
+            {
+                OnPropertyChanged(nameof(HasSaveStatus));
+            }
+        }
+    }
+
+    public bool HasSaveStatus => !string.IsNullOrEmpty(_saveStatusText);
+
+    private void ShowSaveStatus(string text)
+    {
+        SaveStatusText = text;
+        var version = ++_saveStatusVersion;
+        _ = HideSaveStatusLaterAsync(version);
+    }
+
+    private async Task HideSaveStatusLaterAsync(int version)
+    {
+        await Task.Delay(3500).ConfigureAwait(true);
+        if (!_disposed && version == _saveStatusVersion)
+        {
+            SaveStatusText = "";
+        }
+    }
 
     public string VersionText => $"{AppInfo.GetVersionLabel()}";
 
@@ -1854,13 +1887,14 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             _configStore.Save(config);
             _controller.ApplyConfig(_configStore.Current);
 
+            StatusText = "";
             if (!StartupRegistration.SetEnabled(config.Ui.StartWithWindows))
             {
-                StatusText = "配置已保存，但写入开机自启注册表失败（权限不足）。";
+                ShowSaveStatus("已保存（开机自启写入失败）");
             }
             else
             {
-                StatusText = "配置已保存，热键与各项设置已立即生效。";
+                ShowSaveStatus("已保存");
             }
 
             _working = ConfigJson.CloneAppConfig(_configStore.Current);

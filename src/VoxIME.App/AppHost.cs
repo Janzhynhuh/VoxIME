@@ -362,7 +362,7 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
                 Tray.IsVisible = config.Ui.ShowTrayIcon;
             }
 
-            Tray?.ShowBalloon("VoxIME 声语", "设置已保存，热键与各项参数已立即生效。");
+            // 保存反馈由设置窗口在“保存”按钮旁内联显示，不再弹托盘气泡。
             _logger.Info("设置已保存并应用");
         }
         catch (Exception ex)
