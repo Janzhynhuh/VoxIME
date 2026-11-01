@@ -1320,15 +1320,17 @@ public sealed class Live2DController : ILive2DController
 
     private void OnWindowPositionChanged(object? sender, Live2DPositionChangedEventArgs e)
     {
+        var previousTop = _userTop;
         _userLeft = e.Left;
         _userTop = e.Top;
         try
         {
             var config = GetConfig();
-            if (config.SnapToEdge && _window is not null)
+            // 只做下边吸附；向上拖动时不再把窗口往下拽，用户可以自由移到上半屏。
+            var movingUp = previousTop.HasValue && e.Top < previousTop.Value - 0.5;
+            if (config.SnapToEdge && !movingUp && _window is not null
+                && _window.TrySnapToBottomEdge(config.KeepAboveTaskbar))
             {
-                // 拖动结束后贴到最近的屏幕边缘；这样拖到顶部就贴顶部，不会被强制拉回右下角。
-                _window.SnapToNearestEdge(config.KeepAboveTaskbar);
                 _userLeft = _window.Left;
                 _userTop = _window.Top;
                 e = new Live2DPositionChangedEventArgs(_window.Left, _window.Top);

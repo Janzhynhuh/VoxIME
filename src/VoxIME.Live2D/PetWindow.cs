@@ -17,7 +17,6 @@ internal sealed class PetWindow : Window
     private const int WmNcHitTest = 0x0084;
     private const int HtTransparent = -1;
     private const double AutoPositionMarginRight = 28;
-    private const double AutoPositionMarginBottom = 18;
     private const uint MonitorDefaultToNearest = 2;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -203,7 +202,7 @@ internal sealed class PetWindow : Window
         _avatar.RenderTransform = transform;
     }
 
-    /// <summary>应用尺寸/位置/透明度/置顶/穿透。snapToEdge=true 时吸附主屏工作区右下角。</summary>
+    /// <summary>应用尺寸/位置/透明度/置顶/穿透。snapToEdge=true 时只处理“下边吸附”。</summary>
     public void ApplyGeometry(
         double width,
         double height,
@@ -227,17 +226,13 @@ internal sealed class PetWindow : Window
         {
             if (hasSavedPosition && IsFinite(left) && IsFinite(top))
             {
-                // 记住用户上次贴近的边（顶部/左侧等），而不是每次都强制回右下角。
                 Left = left;
                 Top = top;
-                SnapToNearestEdge(keepAboveTaskbar);
+                TrySnapToBottomEdge(keepAboveTaskbar);
             }
             else
             {
                 MoveToAutoPosition(keepAboveTaskbar);
-                // 自动贴边时位置由下边界反推，不能再做通用“把顶部拉回屏幕”的纵向钳制；
-                // 否则窗口越高越会被推到底部以下（表现为模型只剩半个头、穿到屏幕外）。
-                ClampToVirtualScreen(horizontalOnly: true);
             }
         }
         else if (hasSavedPosition && IsFinite(left) && IsFinite(top))
@@ -365,23 +360,20 @@ internal sealed class PetWindow : Window
             ? workArea.Bottom
             : monitorBounds.Bottom;
 
-        // 贴边时窗口必须完整落在目标边界内：否则窗口比屏幕还高，
-        // 顶部会被裁掉一截，用户看到的就是“只剩半个头”。
         var maxWidth = Math.Max(160, workArea.Width - AutoPositionMarginRight);
-        var maxHeight = Math.Max(160, bottom - workArea.Top - AutoPositionMarginBottom);
+        var maxHeight = Math.Max(160, bottom - workArea.Top);
         Width = Math.Min(Width, maxWidth);
         Height = Math.Min(Height, maxHeight);
 
         Left = workArea.Right - Width - AutoPositionMarginRight;
-        Top = bottom - Height - AutoPositionMarginBottom;
+        Top = bottom - Height;
     }
 
     /// <summary>
-    /// 拖到所在显示器边缘附近（默认 60 DIP 内）时吸附到该显示器最近的边缘；
-    /// 不在边缘附近则保持用户放下时的位置，避免“随便拖也被强制拉回边上”。
-    /// keepAboveTaskbar 只影响底边。返回是否发生了吸附。
+    /// 只做“下边吸附”：窗口底边距离当前显示器底部（任务栏上沿/屏幕底边）在阈值内时，
+    /// 把底边贴到边界；上/左/右方向不吸附、不强制移动。返回是否发生吸附。
     /// </summary>
-    public bool SnapToNearestEdge(bool keepAboveTaskbar = true, double threshold = 60)
+    public bool TrySnapToBottomEdge(bool keepAboveTaskbar = true, double threshold = 100)
     {
         var workArea = GetWorkAreaForRect(Left, Top, Width, Height);
         var monitorBounds = GetMonitorBoundsForRect(Left, Top, Width, Height);
@@ -389,43 +381,22 @@ internal sealed class PetWindow : Window
             ? workArea.Bottom
             : monitorBounds.Bottom;
 
-        var right = workArea.Right;
-        var leftDistance = Math.Abs(Left - workArea.Left);
-        var rightDistance = Math.Abs(right - (Left + Width));
-        var topDistance = Math.Abs(Top - workArea.Top);
-        var bottomDistance = Math.Abs(bottom - (Top + Height));
-
-        var min = Math.Min(Math.Min(leftDistance, rightDistance), Math.Min(topDistance, bottomDistance));
-        if (min > threshold)
+        var distance = Math.Abs(bottom - (Top + Height));
+        if (distance > threshold)
         {
             return false;
         }
 
-        // 只在真正吸附时压缩到可用区域，避免“窗口比屏幕高/宽”时无论贴哪边都会被裁掉。
-        var maxWidth = Math.Max(160, workArea.Width - AutoPositionMarginRight);
-        var maxHeight = Math.Max(160, bottom - workArea.Top - AutoPositionMarginBottom);
-        Width = Math.Min(Width, maxWidth);
+        // 窗口比该显示器可用高度还高时压到刚好放得下，避免贴底后顶部被裁掉。
+        var maxHeight = Math.Max(160, bottom - workArea.Top);
         Height = Math.Min(Height, maxHeight);
+        Top = bottom - Height;
 
-        if (min == bottomDistance)
+        // 只做水平防丢边界，不改变 X 的摆放意图。
+        var left = Math.Min(Math.Max(Left, workArea.Left), Math.Max(workArea.Left, workArea.Right - Width));
+        if (Math.Abs(left - Left) > 0.5)
         {
-            Top = bottom - Height - AutoPositionMarginBottom;
-            Left = Math.Min(Math.Max(Left, workArea.Left), Math.Max(workArea.Left, right - Width));
-        }
-        else if (min == rightDistance)
-        {
-            Left = right - Width - AutoPositionMarginRight;
-            Top = Math.Min(Math.Max(Top, workArea.Top), Math.Max(workArea.Top, bottom - Height));
-        }
-        else if (min == topDistance)
-        {
-            Top = workArea.Top;
-            Left = Math.Min(Math.Max(Left, workArea.Left), Math.Max(workArea.Left, right - Width));
-        }
-        else
-        {
-            Left = workArea.Left;
-            Top = Math.Min(Math.Max(Top, workArea.Top), Math.Max(workArea.Top, bottom - Height));
+            Left = left;
         }
 
         return true;
@@ -439,12 +410,8 @@ internal sealed class PetWindow : Window
         Top = workArea.Top + (workArea.Height - Height) / 2;
     }
 
-    /// <summary>
-    /// 把窗口限制在虚拟桌面范围内（避免拖到屏幕外再也找不回来）。
-    /// preserveBottomAboveTaskbar=true 时优先保证窗口底边在任务栏上方，允许顶部超出屏幕。
-    /// horizontalOnly=true 时只做水平钳制（自动贴边由下边界决定纵向位置）。
-    /// </summary>
-    public void ClampToVirtualScreen(bool preserveBottomAboveTaskbar = false, bool horizontalOnly = false)
+    /// <summary>把窗口限制在虚拟桌面范围内（避免拖到屏幕外再也找不回来）。</summary>
+    public void ClampToVirtualScreen()
     {
         var virtualLeft = SystemParameters.VirtualScreenLeft;
         var virtualTop = SystemParameters.VirtualScreenTop;
@@ -453,28 +420,11 @@ internal sealed class PetWindow : Window
 
         var visibleMargin = 60.0;
         var left = Math.Min(Math.Max(Left, virtualLeft - Width + visibleMargin), virtualRight - visibleMargin);
+        var top = Math.Min(Math.Max(Top, virtualTop - 10), virtualBottom - visibleMargin);
+
         if (Math.Abs(left - Left) > 0.5)
         {
             Left = left;
-        }
-
-        if (horizontalOnly)
-        {
-            return;
-        }
-
-        double top;
-        if (preserveBottomAboveTaskbar)
-        {
-            // 窗口可能比工作区还高：此时只限制“底边不超过任务栏顶部”，
-            // 不再把顶部强行拉回屏幕内，否则会把底边重新推回任务栏区域。
-            var workArea = SystemParameters.WorkArea;
-            var maxTop = workArea.Bottom - Height - AutoPositionMarginBottom;
-            top = Math.Min(Top, maxTop);
-        }
-        else
-        {
-            top = Math.Min(Math.Max(Top, virtualTop - 10), virtualBottom - visibleMargin);
         }
 
         if (Math.Abs(top - Top) > 0.5)
