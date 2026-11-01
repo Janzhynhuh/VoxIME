@@ -40,6 +40,9 @@ public sealed class WasapiAudioCaptureService : IAudioCaptureService
     private double _levelSumSquares;
     private int _levelSampleCount;
 
+    /// <summary>整段录音中出现过的最大窗口 RMS 电平（与 VadThreshold 同量纲）。</summary>
+    private double _peakLevel;
+
     /// <summary>已写入缓冲区的 16kHz 采样数（用音频时间而非墙钟判定超时，避免设备启动延迟造成误差）。</summary>
     private long _capturedSamples;
 
@@ -189,6 +192,7 @@ public sealed class WasapiAudioCaptureService : IAudioCaptureService
         try
         {
             device = ResolveDevice(options.DeviceId);
+            var deviceName = device.FriendlyName;
             var captureInstance = new WasapiCapture(device, useEventSync: true, audioBufferMillisecondsLength: CaptureBufferMs);
             capture = captureInstance;
             var pipelineInstance = new CapturePipeline(captureInstance.WaveFormat, OutputSampleRate);
@@ -211,6 +215,7 @@ public sealed class WasapiAudioCaptureService : IAudioCaptureService
                 _options = options;
                 _levelSumSquares = 0;
                 _levelSampleCount = 0;
+                _peakLevel = 0;
                 _capturedSamples = 0;
                 _lastVoiceAtSamples = -1;
                 _autoStopRaised = false;
@@ -224,8 +229,9 @@ public sealed class WasapiAudioCaptureService : IAudioCaptureService
 
             // 状态先置为 Capturing 再开始采集，避免设备立刻回调时丢掉第一块数据。
             captureInstance.StartRecording();
-            _logger.Info($"开始录音：设备={options.DeviceId ?? "默认"}，最大时长={options.MaxDurationSeconds}s，" +
-                         $"静音自动停止={options.AutoStopOnSilence}");
+            _logger.Info($"开始录音：设备={deviceName}（{(options.DeviceId is null ? "默认" : "指定")}），" +
+                         $"格式={captureInstance.WaveFormat}，最大时长={options.MaxDurationSeconds}s，" +
+                         $"静音自动停止={options.AutoStopOnSilence}，语音阈值={options.VadThreshold:0.000}");
         }
         catch (Exception ex)
         {
@@ -263,11 +269,22 @@ public sealed class WasapiAudioCaptureService : IAudioCaptureService
 
         try
         {
+            // 优先使用 Windows「默认设备（Console 角色）」；Communications 角色可能被远程/虚拟音频
+            // 软件（如 UU 远程、语音软件）改成无声的虚拟麦克风，导致"没有检测到语音"。
+            return enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn("获取默认录音设备失败，尝试通信默认设备：" + ex.Message);
+        }
+
+        try
+        {
             return enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications);
         }
         catch (Exception ex)
         {
-            _logger.Warn("获取默认录音设备失败，尝试多媒体默认设备：" + ex.Message);
+            _logger.Warn("获取通信默认录音设备失败，尝试多媒体默认设备：" + ex.Message);
         }
 
         try
@@ -323,6 +340,7 @@ public sealed class WasapiAudioCaptureService : IAudioCaptureService
                 if (_levelSampleCount >= LevelWindowSamples)
                 {
                     var rms = Math.Sqrt(_levelSumSquares / _levelSampleCount);
+                    _peakLevel = Math.Max(_peakLevel, rms);
                     level = (float)Math.Clamp(rms, 0d, 1d);
                     _levelSumSquares = 0;
                     _levelSampleCount = 0;
@@ -448,7 +466,8 @@ public sealed class WasapiAudioCaptureService : IAudioCaptureService
 
         DisposeQuietly(cap, dev, pipe, stream);
         _logger.Info($"录音结束：时长 {result.RecordingDuration.TotalSeconds:0.00}s，" +
-                     $"语音 {result.SpeechDuration.TotalSeconds:0.00}s，含有语音={result.HasSpeech}");
+                     $"语音 {result.SpeechDuration.TotalSeconds:0.00}s，含有语音={result.HasSpeech}，" +
+                     $"输入峰值={result.PeakLevel:P1}");
         return result;
     }
 
@@ -487,7 +506,8 @@ public sealed class WasapiAudioCaptureService : IAudioCaptureService
             Clip = clip,
             HasSpeech = vad?.HasSpeech ?? false,
             RecordingDuration = clip.Duration,
-            SpeechDuration = vad?.SpeechDuration ?? TimeSpan.Zero
+            SpeechDuration = vad?.SpeechDuration ?? TimeSpan.Zero,
+            PeakLevel = Math.Clamp(_peakLevel, 0d, 1d)
         };
     }
 

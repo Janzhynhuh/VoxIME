@@ -104,7 +104,7 @@ public sealed class RecordingOptions
     public bool AutoStopOnSilence { get; set; } = true;
     public int SilenceTimeoutMs { get; set; } = 1200;
     public int MinSpeechMs { get; set; } = 300;
-    public double VadThreshold { get; set; } = 0.014;
+    public double VadThreshold { get; set; } = 0.003;
 }
 
 public sealed class RecordingResult
@@ -113,6 +113,9 @@ public sealed class RecordingResult
     public bool HasSpeech { get; init; }
     public TimeSpan RecordingDuration { get; init; }
     public TimeSpan SpeechDuration { get; init; }
+
+    /// <summary>整段录音中最大的窗口 RMS 电平（0..1，与 VadThreshold 同一量纲），用于诊断输入太低/无声。</summary>
+    public double PeakLevel { get; init; }
 }
 
 /// <summary>WASAPI 麦克风采集服务。Start 后持续采集并通过 LevelChanged 上报音量；StopAsync 返回整段 PCM。</summary>

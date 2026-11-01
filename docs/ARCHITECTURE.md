@@ -108,9 +108,9 @@ sequenceDiagram
 
 ### 5.1 音频（`VoxIME.Core.Audio`）
 
-- `WasapiAudioCaptureService`：`WasapiCapture` 采集默认/指定设备 → `MediaFoundationResampler`/`WdlResamplingSampleProvider` 转 16kHz 单声道 → 缓存 PCM16 → 25Hz 计算 RMS 触发 `LevelChanged`。
-- `VoiceActivityDetector`（public，可单测）：能量阈值 + 噪声底自适应；静音帧持续计数触发结束判断。
-- 结束流程：`StopAsync` 停止采集、返回 `RecordingResult`（含是否检测到语音）；`Cancel` 丢弃缓冲。
+- `WasapiAudioCaptureService`：`WasapiCapture` 采集默认/指定设备 → `MediaFoundationResampler`/`WdlResamplingSampleProvider` 转 16kHz 单声道 → 缓存 PCM16 → 25Hz 计算 RMS 触发 `LevelChanged`；默认设备优先取 Windows「默认设备（Console 角色）」，避免 Communications 角色被 UU 远程等虚拟麦克风占用导致无声。
+- `VoiceActivityDetector`（public，可单测）：能量阈值 + 噪声底自适应；静音帧持续计数触发结束判断。默认绝对阈值 0.003（旧默认 0.014 会在 Normalize 时迁移），适配笔记本内置麦克风/远场输入。
+- 结束流程：`StopAsync` 停止采集、返回 `RecordingResult`（含是否检测到语音、输入峰值 RMS；无语音时状态提示会带峰值与阈值，便于判断是设备没声音还是阈值偏高）；`Cancel` 丢弃缓冲。
 
 ### 5.2 热键（`VoxIME.Core.Hotkeys`）
 
@@ -242,7 +242,7 @@ sequenceDiagram
 
 | 层级 | 方式 | 命令/产物 |
 |---|---|---|
-| 单元测试 | 316 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
+| 单元测试 | 318 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
 | 窗口级自检 | 构造并显示欢迎/设置/历史/关于/HUD 五个窗口后退出 | `VoxIME.exe --tray --selftest`（日志 `SELFTEST` 行，退出码 0/2） |
 | 端到端 | 真实启动应用 → 录音 3 秒 → 识别 → 上屏到一个真实前台 WinForms 文本框；结果写 JSON；支持 `-ForceAudioWav` 用指定 WAV 走真实厂商接口 | `scripts/e2e-smoke.ps1` → `%TEMP%\voxime-e2e-result.json` |
 | 真实厂商联调 | Windows SAPI 合成中文语音 → 应用完整链路（强制 WAV）→ 小米 MiMo ASR → 上屏；HTTP 200，识别结果与原文逐字一致，上屏内容与识别结果一致 | `docs/verification/e2e-mimo-real-asr.json` |

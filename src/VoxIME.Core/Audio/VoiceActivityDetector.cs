@@ -46,12 +46,12 @@ public sealed class VoiceActivityDetector
     /// <param name="vadThreshold">绝对能量阈值（RMS，0..1），低于该值的帧一定不是语音。</param>
     /// <param name="minSpeechMs">判定"有语音"所需的最短累积语音时长（毫秒）。</param>
     /// <param name="sampleRate">采样率，默认 16000。</param>
-    public VoiceActivityDetector(double vadThreshold = 0.014, int minSpeechMs = 300, int sampleRate = DefaultSampleRate)
+    public VoiceActivityDetector(double vadThreshold = 0.003, int minSpeechMs = 300, int sampleRate = DefaultSampleRate)
     {
         _sampleRate = Math.Clamp(sampleRate, 8000, 48000);
         _frameMs = DefaultFrameMs;
         _frameSamples = Math.Max(1, _sampleRate * _frameMs / 1000);
-        _absoluteThreshold = double.IsFinite(vadThreshold) && vadThreshold > 0 ? vadThreshold : 0.014;
+        _absoluteThreshold = double.IsFinite(vadThreshold) && vadThreshold > 0 ? vadThreshold : 0.003;
         _minSpeechMs = Math.Clamp(minSpeechMs, 0, 60_000);
     }
 

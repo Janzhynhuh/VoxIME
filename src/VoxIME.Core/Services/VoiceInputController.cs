@@ -328,7 +328,10 @@ public sealed class VoiceInputController : IVoiceInputController
 
         if (!recording.HasSpeech)
         {
-            SetState(AppState.Idle, "没有检测到语音，请靠近麦克风再试");
+            var threshold = Config.Audio.VadThreshold;
+            SetState(AppState.Idle,
+                $"没有检测到语音（输入峰值 {recording.PeakLevel:P1}，检测阈值 {threshold:P1}）；" +
+                "请靠近麦克风再试，或在 设置 → 录音 里降低「语音检测阈值」");
             return null;
         }
 

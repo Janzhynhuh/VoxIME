@@ -36,6 +36,18 @@ public class VoiceActivityDetectorTests
     }
 
     [Fact]
+    public void 默认阈值能识别较低音量的语音()
+    {
+        // 默认阈值 0.003：振幅 0.012 的正弦 RMS≈0.0085，旧默认 0.014 会判成静音。
+        var vad = new VoiceActivityDetector();
+
+        var speaking = FeedTone(vad, frames: 30, amplitude: 0.012);
+
+        Assert.True(speaking);
+        Assert.True(vad.HasSpeech);
+    }
+
+    [Fact]
     public void 最短语音时长边界精确生效()
     {
         var vad = new VoiceActivityDetector(0.014, minSpeechMs: 300);

@@ -54,11 +54,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private int _maxDurationSeconds;
     private int _silenceTimeoutMs;
     private int _minSpeechMs;
-    private double _vadThreshold;
+    private double _vadThreshold = 0.003;
     private bool _autoStopOnSilence;
     private bool _playCues;
     private bool _isMicTesting;
     private double _micTestLevel;
+    private double _micTestMaxLevel;
     private string _micTestStatus = "";
 
     // ---- 上屏 ----
@@ -1407,6 +1408,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
             IsMicTesting = true;
             MicTestLevel = 0;
+            _micTestMaxLevel = 0;
             MicTestStatus = "正在录音 3 秒，请对着麦克风说话…";
 
             try
@@ -1418,7 +1420,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 _controller.Cancel();
             }
 
-            MicTestStatus = "录音测试完成：电平有波动说明麦克风工作正常。";
+            MicTestStatus = _micTestMaxLevel > 0.001
+                ? $"录音测试完成：本次最大电平 {_micTestMaxLevel:P1}；电平有波动说明麦克风工作正常。"
+                : "录音测试完成：几乎没有采集到电平。请检查 Windows 麦克风权限/设备选择，或在 设置 → 录音 里换一个麦克风。";
         }
         catch (Exception ex)
         {
@@ -1434,7 +1438,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private void OnMicrophoneLevelChanged(object? sender, AudioLevelEventArgs e)
     {
-        WindowHelper.RunOnUi(() => MicTestLevel = Math.Clamp(e.Level * 9.0, 0, 1));
+        WindowHelper.RunOnUi(() =>
+        {
+            _micTestMaxLevel = Math.Max(_micTestMaxLevel, e.Level);
+            MicTestLevel = Math.Clamp(e.Level * 9.0, 0, 1);
+        });
     }
 
     // ==================== 桌宠页逻辑 ====================

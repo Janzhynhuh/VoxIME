@@ -95,6 +95,18 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void Normalize_MigratesLegacyVadThresholdAndKeepsCustomValue()
+    {
+        var legacy = new AppConfig { Audio = new AudioConfig { VadThreshold = 0.014 } };
+        legacy.Normalize();
+        Assert.Equal(0.003, legacy.Audio.VadThreshold);
+
+        var custom = new AppConfig { Audio = new AudioConfig { VadThreshold = 0.02 } };
+        custom.Normalize();
+        Assert.Equal(0.02, custom.Audio.VadThreshold);
+    }
+
+    [Fact]
     public void Normalize_DeduplicatesProfileIds_AndFixesMissingActiveProfile()
     {
         var config = new AppConfig

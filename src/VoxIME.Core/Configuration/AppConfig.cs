@@ -152,6 +152,12 @@ public sealed class AppConfig
         Audio.SilenceTimeoutMs = Math.Clamp(Audio.SilenceTimeoutMs, 200, 5000);
         Audio.MinSpeechMs = Math.Clamp(Audio.MinSpeechMs, 100, 3000);
         Audio.VadThreshold = Math.Clamp(Audio.VadThreshold, 0.001, 0.2);
+        // 旧版本默认 0.014 对笔记本内置麦克风偏高；仅在仍是旧默认值时迁移到新的 0.003，
+        // 用户手动调过的其它值保持不变。
+        if (Math.Abs(Audio.VadThreshold - 0.014) < 1e-9)
+        {
+            Audio.VadThreshold = 0.003;
+        }
 
         Insertion ??= new InsertionConfig();
         Insertion.PasteDelayMs = Math.Clamp(Insertion.PasteDelayMs, 0, 2000);
@@ -255,7 +261,11 @@ public sealed class AudioConfig
     public bool AutoStopOnSilence { get; set; } = true;
     public int SilenceTimeoutMs { get; set; } = 1800;
     public int MinSpeechMs { get; set; } = 300;
-    public double VadThreshold { get; set; } = 0.014;
+    /// <summary>
+    /// 语音检测绝对阈值（RMS，0.001–0.2）。默认 0.003：笔记本内置麦克风/远场输入通常较安静，
+    /// 旧默认 0.014 容易把正常说话判成"没有检测到语音"。
+    /// </summary>
+    public double VadThreshold { get; set; } = 0.003;
     public bool PlayCues { get; set; } = true;
 }
 
