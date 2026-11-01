@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows;
 using Microsoft.Win32;
 using VoxIME.App.Infrastructure;
@@ -7,6 +8,7 @@ using VoxIME.Core.Abstractions;
 using VoxIME.Core.Configuration;
 using VoxIME.Core.History;
 using VoxIME.Core.Logging;
+using VoxIME.Core.Services;
 
 namespace VoxIME.App.ViewModels;
 
@@ -21,6 +23,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private readonly IAsrProviderRegistry? _registry;
     private readonly IHistoryStore _historyStore;
     private readonly IAppLogger _logger;
+    private readonly Live2DModelLibrary _live2DModelLibrary = new(AppInfo.DefaultModelDirectory);
 
     private AppConfig _working;
     private bool _disposed;
@@ -96,6 +99,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string _errorExpression = "";
     private string _fallbackAvatarTheme = "violet";
     private string _live2DStatusText = "";
+    private Live2DModelInfo? _selectedLive2DModel;
 
     // ---- 朗读 ----
     private bool _ttsEnabled;
@@ -156,6 +160,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         TestMicCommand = new AsyncRelayCommand(TestMicrophoneAsync, () => !IsMicTesting);
         BrowseModelDirectoryCommand = new RelayCommand(BrowseModelDirectory);
+        ImportLive2DModelCommand = new RelayCommand(ImportLive2DModel);
+        ImportLive2DModelZipCommand = new RelayCommand(ImportLive2DModelZip);
+        DeleteLive2DModelCommand = new RelayCommand(DeleteLive2DModel, () => SelectedLive2DModel is not null);
+        RefreshLive2DModelsCommand = new RelayCommand(RefreshLive2DModelLibrary);
+        OpenLive2DModelsFolderCommand = new RelayCommand(OpenLive2DModelsFolder);
         ShowLive2DCommand = new RelayCommand(() => SetLive2DVisible(true));
         HideLive2DCommand = new RelayCommand(() => SetLive2DVisible(false));
         TestTtsCommand = new AsyncRelayCommand(TestTtsAsync, () => !_ttsEnabledTesting);
@@ -855,7 +864,35 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _live2DStatusText, value);
     }
 
+    /// <summary>模型库里已导入的 Live2D 模型，设置页下拉框选择。</summary>
+    public ObservableCollection<Live2DModelInfo> AvailableLive2DModels { get; } = new();
+
+    public Live2DModelInfo? SelectedLive2DModel
+    {
+        get => _selectedLive2DModel;
+        set
+        {
+            if (!SetProperty(ref _selectedLive2DModel, value))
+            {
+                return;
+            }
+
+            if (value is not null && !string.Equals(ModelDirectory, value.Directory, StringComparison.OrdinalIgnoreCase))
+            {
+                ModelDirectory = value.Directory;
+                StatusText = $"已选择模型“{value.Name}”，点击“保存”后生效。";
+            }
+
+            DeleteLive2DModelCommand.RaiseCanExecuteChanged();
+        }
+    }
+
     public RelayCommand BrowseModelDirectoryCommand { get; }
+    public RelayCommand ImportLive2DModelCommand { get; }
+    public RelayCommand ImportLive2DModelZipCommand { get; }
+    public RelayCommand DeleteLive2DModelCommand { get; }
+    public RelayCommand RefreshLive2DModelsCommand { get; }
+    public RelayCommand OpenLive2DModelsFolderCommand { get; }
     public RelayCommand ShowLive2DCommand { get; }
     public RelayCommand HideLive2DCommand { get; }
 
@@ -1048,6 +1085,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ErrorExpression = config.Live2D.ErrorExpression ?? "";
         FallbackAvatarTheme = config.Live2D.FallbackAvatarTheme;
         RefreshLive2DStatus();
+        RefreshLive2DModelLibrary();
 
         // 朗读
         TtsEnabled = config.Tts.Enabled;
@@ -1363,6 +1401,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             if (dialog.ShowDialog() == true)
             {
                 ModelDirectory = dialog.FolderName;
+                SyncSelectedLive2DModelFromDirectory();
                 StatusText = "已选择模型目录，点击“保存”后生效。";
             }
         }
@@ -1370,6 +1409,154 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             _logger.Warn($"选择模型目录失败：{ex.Message}");
             Ui.Warn("无法打开目录选择框：" + ex.Message);
+        }
+    }
+
+    private void RefreshLive2DModelLibrary()
+    {
+        try
+        {
+            var models = _live2DModelLibrary.Scan();
+            AvailableLive2DModels.Clear();
+            foreach (var model in models)
+            {
+                AvailableLive2DModels.Add(model);
+            }
+
+            SyncSelectedLive2DModelFromDirectory();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"扫描 Live2D 模型库失败：{ex.Message}");
+        }
+    }
+
+    private void SyncSelectedLive2DModelFromDirectory()
+    {
+        var directory = (ModelDirectory ?? "").Trim();
+        var match = AvailableLive2DModels.FirstOrDefault(
+            m => string.Equals(m.Directory, directory, StringComparison.OrdinalIgnoreCase));
+        _selectedLive2DModel = match;
+        OnPropertyChanged(nameof(SelectedLive2DModel));
+        DeleteLive2DModelCommand.RaiseCanExecuteChanged();
+    }
+
+    private void ImportLive2DModel()
+    {
+        try
+        {
+            var dialog = new OpenFolderDialog
+            {
+                Title = "选择要导入的 Live2D 模型文件夹（包含 *.model3.json）",
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            var imported = _live2DModelLibrary.Import(dialog.FolderName);
+            RefreshLive2DModelLibrary();
+            SelectImportedModel(imported);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"导入 Live2D 模型失败：{ex.Message}");
+            Ui.Warn("导入模型失败：" + ex.Message, "Live2D 模型导入");
+        }
+    }
+
+    private void ImportLive2DModelZip()
+    {
+        try
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "选择要导入的 Live2D 模型压缩包",
+                Filter = "Live2D 模型包 (*.zip)|*.zip|所有文件 (*.*)|*.*",
+                CheckFileExists = true,
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            var imported = _live2DModelLibrary.ImportZip(dialog.FileName);
+            RefreshLive2DModelLibrary();
+            SelectImportedModel(imported);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"导入 Live2D 压缩包失败：{ex.Message}");
+            Ui.Warn("导入模型压缩包失败：" + ex.Message, "Live2D 模型导入");
+        }
+    }
+
+    private void SelectImportedModel(Live2DModelInfo imported)
+    {
+        var model = AvailableLive2DModels.FirstOrDefault(
+            m => string.Equals(m.Directory, imported.Directory, StringComparison.OrdinalIgnoreCase));
+        if (model is not null)
+        {
+            SelectedLive2DModel = model;
+        }
+        else
+        {
+            ModelDirectory = imported.Directory;
+        }
+
+        StatusText = $"已导入模型“{imported.Name}”，点击“保存”后生效。";
+    }
+
+    private void DeleteLive2DModel()
+    {
+        var selected = SelectedLive2DModel;
+        if (selected is null)
+        {
+            return;
+        }
+
+        if (!Ui.Confirm(
+                $"确定从模型库删除“{selected.Name}”吗？\n只会删除模型库中的副本，原文件夹不受影响。",
+                "删除 Live2D 模型",
+                "删除",
+                "取消"))
+        {
+            return;
+        }
+
+        try
+        {
+            _live2DModelLibrary.Delete(selected.Directory);
+            if (string.Equals((ModelDirectory ?? "").Trim(), selected.Directory, StringComparison.OrdinalIgnoreCase))
+            {
+                ModelDirectory = "";
+            }
+
+            RefreshLive2DModelLibrary();
+            StatusText = $"已删除模型“{selected.Name}”，点击“保存”后生效。";
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"删除 Live2D 模型失败：{ex.Message}");
+            Ui.Warn("删除模型失败：" + ex.Message, "Live2D 模型库");
+        }
+    }
+
+    private void OpenLive2DModelsFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(_live2DModelLibrary.RootDirectory);
+            WindowHelper.OpenFolder(_live2DModelLibrary.RootDirectory);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"打开模型库目录失败：{ex.Message}");
+            Ui.Warn("无法打开模型库目录：" + ex.Message, "Live2D 模型库");
         }
     }
 

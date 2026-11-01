@@ -11,11 +11,42 @@
                 <StackPanel>
                     <TextBlock Text="桌宠模型" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10"
-                               Text="模型目录需要包含 *.model3.json；留空时使用内置 WPF 兜底形象（不会白屏）。" />
+                               Text="从模型库选择，或导入新的 Live2D 模型（文件夹或 zip）。留空/未选择时使用内置 WPF 兜底形象（不会白屏）。" />
 
                     <CheckBox Content="启用 Live2D 桌宠" IsChecked="{Binding Live2DEnabled, Mode=TwoWay}" />
 
-                    <TextBlock Text="模型目录" Style="{StaticResource FieldLabel}" Margin="0,12,0,5" />
+                    <TextBlock Text="已导入的模型" Style="{StaticResource FieldLabel}" Margin="0,12,0,5" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0"
+                                  ItemsSource="{Binding AvailableLive2DModels}"
+                                  SelectedItem="{Binding SelectedLive2DModel, Mode=TwoWay}"
+                                  DisplayMemberPath="Name"
+                                  ToolTip="模型库中的模型；选择后点击“保存”生效" />
+                        <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="导入文件夹…"
+                                Margin="8,0,0,0" Padding="14,7"
+                                Command="{Binding ImportLive2DModelCommand}" />
+                        <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="导入 ZIP…"
+                                Margin="8,0,0,0" Padding="14,7"
+                                Command="{Binding ImportLive2DModelZipCommand}" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,6,0,0"
+                               Text="导入会把模型复制到 %APPDATA%\VoxIME\models（原文件夹保留），重名自动加序号；支持完整 Cubism 3/4 模型目录或 zip。" />
+
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Style="{StaticResource SmallButton}" Content="打开模型库目录"
+                                Command="{Binding OpenLive2DModelsFolderCommand}" />
+                        <Button Style="{StaticResource SmallButton}" Content="刷新列表" Margin="8,0,0,0"
+                                Command="{Binding RefreshLive2DModelsCommand}" />
+                        <Button Style="{StaticResource SmallButton}" Content="删除选中模型" Margin="8,0,0,0"
+                                Command="{Binding DeleteLive2DModelCommand}" />
+                    </StackPanel>
+
+                    <TextBlock Text="自定义模型目录（可选，直接使用现成目录）" Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -23,7 +54,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0"
                                  Text="{Binding ModelDirectory, UpdateSourceTrigger=PropertyChanged}"
-                                 ToolTip="例如 %APPDATA%\VoxIME\models\Hiyori" />
+                                 ToolTip="例如 %APPDATA%\VoxIME\models\Hiyori，或任意包含 *.model3.json 的目录" />
                         <Button Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="浏览…"
                                 Margin="8,0,0,0" Padding="14,7"
                                 Command="{Binding BrowseModelDirectoryCommand}" />

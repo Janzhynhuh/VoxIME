@@ -31,6 +31,7 @@ public static class AppInfo
         Directory.CreateDirectory(AppDataDirectory);
         Directory.CreateDirectory(DefaultLogDirectory);
         Directory.CreateDirectory(DefaultAudioCacheDirectory);
+        Directory.CreateDirectory(DefaultModelDirectory);
     }
 
     public static string GetVersionLabel() => $"{EnglishName} {Version}";

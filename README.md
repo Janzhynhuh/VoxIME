@@ -95,6 +95,7 @@ dotnet run --project src/VoxIME.App
 ## 🧩 Live2D 模型
 
 - 支持 Live2D **Cubism 3 / Cubism 4** 模型目录：选择包含 `.model3.json` 的文件夹即可（需包含 `.moc3`、贴图、动作/物理文件）。
+- **模型库导入**：设置 → 桌宠 → 「导入文件夹…」/「导入 ZIP…」，模型会复制到 `%APPDATA%\VoxIME\models`，之后可在下拉框里随时切换不同模型（原文件夹保留；重名自动加序号；可打开模型库目录或删除副本）。
 - 没有模型也能用：内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画）。
 - 官方示例模型（Hiyori / Haru 等）可从 Live2D 官方 CubismWebSamples 获取：
   ```powershell
@@ -144,7 +145,7 @@ flowchart LR
 
 ```powershell
 dotnet build VoxIME.sln          # 全量构建（0 warning / 0 error）
-dotnet test                       # 307 个离线单元测试
+dotnet test                       # 314 个离线单元测试
 .\scripts\publish-x64.ps1         # 发布 x64 自包含包
 .\scripts\run.ps1                 # 开发模式运行
 .\scripts\e2e-smoke.ps1           # 端到端自检：录音→Mock 识别→上屏到前台文本框，结果写 %TEMP%\voxime-e2e-result.json
