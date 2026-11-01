@@ -11,14 +11,13 @@
 仓库：<https://github.com/Janzhynhuh/VoxIME>（MIT，欢迎 Star / Issue / PR）
 
 - 平台：Windows 10/11 x64（.NET 10）
-- 形态：悬浮语音助手 + 全局热键 + 透明置顶 Live2D 桌宠
-- 数据：全部本地保存；API Key 使用 Windows DPAPI 加密；不上传任何遥测
+- 形态：悬浮语音助手 + 全局热键 + 透明置顶桌宠（Live2D 模型 / 内置矢量兜底形象）
 
-![Live2D 桌宠](docs/screenshots/live2d-desktop-pet.png)
+![内置矢量兜底桌宠](docs/screenshots/live2d-builtin-desktop-pet.png)
 
-| 设置中心（服务页） | 真实桌面上的透明桌宠 | 无模型时的内置兜底形象 |
+| 设置中心（服务页） | 桌面上的透明桌宠（内置兜底形象） | 内置兜底形象的五种状态 |
 |---|---|---|
-| ![设置](docs/screenshots/app-settings.png) | ![桌宠](docs/screenshots/live2d-desktop-pet.png) | ![兜底](docs/screenshots/live2d-wpf-fallback-states.png) |
+| ![设置](docs/screenshots/app-settings.png) | ![内置兜底桌宠](docs/screenshots/live2d-builtin-desktop-pet.png) | ![兜底状态](docs/screenshots/live2d-wpf-fallback-states.png) |
 
 > 截图均由本仓库代码在 Windows 11 真机运行产生；真实厂商联调记录（小米 MiMo，识别结果与合成语音原文逐字一致）见 [docs/verification/e2e-mimo-real-asr.json](docs/verification/e2e-mimo-real-asr.json)，更多材料见 [docs/screenshots](docs/screenshots) 与 [docs/verification](docs/verification)。
 
