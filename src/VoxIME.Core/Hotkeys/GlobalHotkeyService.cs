@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using VoxIME.Core.Abstractions;
 using VoxIME.Core.Configuration;
@@ -38,6 +39,13 @@ public sealed class GlobalHotkeyService : IHotkeyService
     private ManualResetEventSlim? _hookReady;
     private KeyboardNativeMethods.LowLevelKeyboardProc? _hookProc;
     private KeyboardNativeMethods.LowLevelMouseProc? _mouseHookProc;
+
+    /// <summary>
+    /// 热键事件分发队列：钩子回调绝不能直接执行业务逻辑（StartRecording 等可能开设备/写日志，
+    /// 一旦阻塞低级鼠标钩子超过系统超时，整台电脑的鼠标都会卡住）。钩子只入队，专用后台线程顺序消费。
+    /// </summary>
+    private BlockingCollection<HotkeyEventArgs>? _eventQueue;
+    private Thread? _eventDispatchThread;
     private bool _disposed;
 
     public GlobalHotkeyService(IAppLogger logger)
@@ -115,6 +123,7 @@ public sealed class GlobalHotkeyService : IHotkeyService
         _hookHandle = IntPtr.Zero;
         _mouseHookHandle = IntPtr.Zero;
         _mouseHookProc = MouseHookCallback;
+        StartEventDispatcher();
 
         var ready = new ManualResetEventSlim(false);
         _hookReady = ready;
@@ -200,6 +209,7 @@ public sealed class GlobalHotkeyService : IHotkeyService
         var ready = _hookReady;
         _hookReady = null;
         ready?.Dispose();
+        StopEventDispatcher();
         _logger.Debug("全局热键监听已停止。");
     }
 
@@ -460,22 +470,109 @@ public sealed class GlobalHotkeyService : IHotkeyService
 
     private void RaiseHotkeyTriggered(HotkeyEventArgs args)
     {
-        var handler = HotkeyTriggered;
-        if (handler is null)
+        // 只入队，绝不在这里执行业务逻辑：低级鼠标/键盘钩子回调阻塞会导致系统输入卡顿。
+        var queue = _eventQueue;
+        if (queue is null)
         {
             return;
         }
 
-        foreach (var target in handler.GetInvocationList())
+        try
+        {
+            if (!queue.TryAdd(args))
+            {
+                _logger.Warn($"热键事件队列已满，丢弃事件：{args.Action}");
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            // 服务已停止。
+        }
+    }
+
+    private void StartEventDispatcher()
+    {
+        var queue = new BlockingCollection<HotkeyEventArgs>(new ConcurrentQueue<HotkeyEventArgs>(), 128);
+        _eventQueue = queue;
+        var thread = new Thread(() => EventDispatchLoop(queue))
+        {
+            IsBackground = true,
+            Name = "VoxIME.HotkeyDispatch"
+        };
+        _eventDispatchThread = thread;
+        thread.Start();
+    }
+
+    private void StopEventDispatcher()
+    {
+        var queue = _eventQueue;
+        _eventQueue = null;
+        if (queue is null)
+        {
+            return;
+        }
+
+        try
+        {
+            queue.CompleteAdding();
+        }
+        catch (ObjectDisposedException)
+        {
+            // 忽略。
+        }
+
+        var thread = _eventDispatchThread;
+        _eventDispatchThread = null;
+        if (thread is not null && thread != Thread.CurrentThread)
         {
             try
             {
-                ((EventHandler<HotkeyEventArgs>)target)(this, args);
+                thread.Join(1000);
             }
             catch (Exception ex)
             {
-                _logger.Error("热键事件处理器抛出异常", ex);
+                _logger.Debug("等待热键事件分发线程退出失败：" + ex.Message);
             }
+        }
+
+        try
+        {
+            queue.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+            // 忽略。
+        }
+    }
+
+    private void EventDispatchLoop(BlockingCollection<HotkeyEventArgs> queue)
+    {
+        try
+        {
+            foreach (var args in queue.GetConsumingEnumerable())
+            {
+                var handler = HotkeyTriggered;
+                if (handler is null)
+                {
+                    continue;
+                }
+
+                foreach (var target in handler.GetInvocationList())
+                {
+                    try
+                    {
+                        ((EventHandler<HotkeyEventArgs>)target)(this, args);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error("热键事件处理器抛出异常", ex);
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+        {
+            // 服务停止时队列被释放，正常退出。
         }
     }
 

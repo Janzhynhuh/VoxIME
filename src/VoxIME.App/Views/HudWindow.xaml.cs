@@ -431,10 +431,11 @@ public partial class HudWindow : Window
 
     /// <summary>
     /// 命中测试：除按钮 / 文本框 / 拖动把手外，其余区域鼠标穿透到下层窗口。
+    /// 预览模式同样按元素命中，避免透明边距挡住下方窗口点击。
     /// </summary>
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg != NativeMethods.WmNcHitTest || _viewModel.IsPreviewVisible)
+        if (msg != NativeMethods.WmNcHitTest)
         {
             return IntPtr.Zero;
         }

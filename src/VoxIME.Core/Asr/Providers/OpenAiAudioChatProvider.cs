@@ -72,6 +72,16 @@ public sealed class OpenAiAudioChatProvider : IAsrProvider
         cancellationToken.ThrowIfCancellationRequested();
 
         options ??= new AsrCallOptions();
+
+        // 配置/调试过程中如果加密的 Key 丢失，提前给出明确提示，而不是把空 Bearer 发给服务器换回 401。
+        if (string.IsNullOrWhiteSpace(_profile.ApiKey))
+        {
+            throw new AsrException(
+                "未配置 API Key：请在 设置 → 服务 → 该服务中粘贴 API Key 后重试" +
+                "（Key 会用 Windows DPAPI 加密保存；重置配置后需要重新填写）。",
+                AsrProviderTypeIds.OpenAiAudioChat);
+        }
+
         var language = AsrHttpSupport.LanguageOrNull(
             AsrHttpSupport.ResolveLanguage(options.Language, _profile.Language));
         var wav = clip.ToWav();

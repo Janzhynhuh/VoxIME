@@ -117,6 +117,7 @@ sequenceDiagram
 - `GlobalHotkeyService`：同时安装 `SetWindowsHookEx(WH_KEYBOARD_LL)` 与 `WH_MOUSE_LL`，运行在独立后台线程（自带消息循环），不吞键盘按键；`HotkeyGesture`/`HotkeyMatcher`（public）负责解析 `"Ctrl+Alt"`、`"Ctrl+Shift+Space"`、`"F2"`、`"MouseX1"`、`"Ctrl+MouseX2"` 等手势并驱动"按住说话"状态机：组合键全部按下 → Pressed；任一键抬起 → Released；无自动重复。
 - 支持 `Ctrl/Alt/Shift/Win` + 单个键盘主键（最多 4 键组合），也支持鼠标键：`MouseX1`/`MouseX2`（侧键）、`MouseMiddle`、`MouseLeft`、`MouseRight`；`Esc` 作为取消键。
 - 鼠标键通过低级鼠标钩子映射为虚拟键码（0x01..0x06）后复用同一个匹配器；**只有命中已配置热键的鼠标事件会被吞掉**（避免浏览器前进/后退等默认行为同时触发），其余鼠标/键盘事件照常传递。
+- **钩子回调只入队、不执行业务逻辑**：专用 `VoxIME.HotkeyDispatch` 后台线程按序处理事件。低级鼠标/键盘钩子被阻塞会导致整机输入卡顿（表现为鼠标突然点不动屏幕），因此 `StartRecording` 等重活绝不能跑在钩子线程上。
 - 失败（如钩子被占用）通过 `Error` 事件上报，界面提示但应用不崩溃；鼠标钩子安装失败但未配置鼠标热键时只记录警告，不影响键盘热键。
 
 ### 5.3 语音识别（`VoxIME.Core.Asr`）
