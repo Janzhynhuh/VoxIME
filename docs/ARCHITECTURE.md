@@ -179,7 +179,7 @@ sequenceDiagram
 - 状态映射：Idle（待机动作循环 + 随机眨眼）、Listening（表情 + 口型跟随麦克风）、Thinking（思考动作/表情）、Speaking（口型跟随 TTS 音量）、Error（抖动/红色提示）。
 - 眼动：独立后台线程按 `Live2DConfig.EyeFollowFps`（5–300Hz，默认 30）采样全局光标位置，归一化为 `-1..1`（上下方向已修正）；UI 渲染帧（`CompositionTarget.Rendering`，通常等于显示器刷新率）再把最新值下发给模型，避免高频 DispatcherTimer 挤占 UI 线程导致抖动；`EyeFollow=false` 时停止采样并归零。部分模型骨骼绑定把上下方向做反，提供 `EyeFollowInvertY`（按模型目录记忆于 `EyeFollowInvertYByModel`），只反转下发给 WebView2 模型的 Y，WPF 兜底形象不受影响。
 - 模型库：`VoxIME.Core.Services.Live2DModelLibrary` 负责扫描/导入/删除模型库目录（默认 `%APPDATA%\VoxIME\models`，可由 `Live2DConfig.ModelLibraryDirectory` 改到其它磁盘；支持文件夹与 zip，重名自动编号，禁止删除库外目录）；设置页「选择模型」下拉框包含「内置兜底形象」+ 已导入模型（旧配置的外部目录会显示为「当前模型（外部目录）」），选择后只把 `Live2DConfig.ModelDirectory` 写入配置，桌宠加载逻辑不变。
-- 窗口自适应：模型加载成功后由 `VoiceInputController` 收到 `ILive2DController.ModelSizeAvailable`，按模型原始宽高比（`Live2DWindowSizing`，以当前窗口高度为基准）计算尺寸并保存到 `Live2DConfig.Width/Height`，可在设置页关闭 `AutoFitWindow`；模型尺寸由页面 `modelLoaded` 消息上报。
+- 窗口自适应：模型加载成功后由 `VoiceInputController` 收到 `ILive2DController.ModelSizeAvailable`，用 `Live2DWindowSizing` 以当前高度和渲染缩放反推模型显示宽度，窗口宽度 = 模型显示宽度 + 左右各 5 DIP padding；高度不变，结果保存到 `Live2DConfig.Width/Height`。缩放/高度/开关变化后也会重新计算，可在设置页关闭 `AutoFitWindow`；模型尺寸由页面 `modelLoaded` 消息上报。
 
 ### 5.7 主控制器（`VoxIME.Core.Services.VoiceInputController`）
 

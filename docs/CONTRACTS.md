@@ -109,7 +109,7 @@ public sealed class Live2DController : ILive2DController
     public Live2DController(IAppLogger logger);
 }
 ```
-必须实现：透明置顶无边框窗口（不出现在任务栏）、模型目录加载（递归找 `*.model3.json`）、状态联动、口型、眼动、气泡、ClickThrough、AlwaysOnTop、Position/Size/Scale/Opacity、`ApplyConfig` 热切换、异常降级、**无模型/无 WebView2 时内置 WPF 兜底形象**；模型加载成功后通过 `ModelSizeAvailable` 上报原始宽高（`VoiceInputController` 据此按比例自适应窗口，`Live2DConfig.AutoFitWindow` 可关闭）。
+必须实现：透明置顶无边框窗口（不出现在任务栏）、模型目录加载（递归找 `*.model3.json`）、状态联动、口型、眼动、气泡、ClickThrough、AlwaysOnTop、Position/Size/Scale/Opacity、`ApplyConfig` 热切换、异常降级、**无模型/无 WebView2 时内置 WPF 兜底形象**；模型加载成功后通过 `ModelSizeAvailable` 上报原始宽高（`VoiceInputController` 据此把窗口宽度收紧到模型显示宽度 + 5 DIP padding，`Live2DConfig.AutoFitWindow` 可关闭）。
 
 ### Lead
 ```csharp

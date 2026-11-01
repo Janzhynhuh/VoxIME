@@ -33,6 +33,8 @@ public sealed class VoiceInputController : IVoiceInputController
     private bool _initialized;
     private bool _disposed;
     private bool _isPaused;
+    private double _lastModelWidth;
+    private double _lastModelHeight;
 
     public VoiceInputController(
         IConfigStore configStore,
@@ -197,6 +199,7 @@ public sealed class VoiceInputController : IVoiceInputController
     {
         ArgumentNullException.ThrowIfNull(config);
         config.Normalize();
+        ApplyAutoFitWidth(config);
 
         try
         {
@@ -754,8 +757,8 @@ public sealed class VoiceInputController : IVoiceInputController
     }
 
     /// <summary>
-    /// 模型加载后按原始宽高比自动调整桌宠窗口（以当前高度为基准，可通过开关关闭）。
-    /// 保存到配置并立即应用到窗口，重启后保持一致。
+    /// 模型加载后把窗口宽度收紧到模型显示宽度 + 左右各 5 DIP padding，
+    /// 高度沿用当前配置（可通过开关关闭）。保存到配置并立即应用到窗口，重启后保持一致。
     /// </summary>
     private void OnLive2DModelSizeAvailable(object? sender, Live2DModelSizeEventArgs e)
     {
@@ -766,6 +769,8 @@ public sealed class VoiceInputController : IVoiceInputController
 
         try
         {
+            _lastModelWidth = e.Width;
+            _lastModelHeight = e.Height;
             var config = _configStore.Current;
             if (!config.Live2D.AutoFitWindow)
             {
@@ -774,7 +779,12 @@ public sealed class VoiceInputController : IVoiceInputController
 
             var currentWidth = (int)Math.Round(config.Live2D.Width);
             var currentHeight = (int)Math.Round(config.Live2D.Height);
-            var (width, height) = Live2DWindowSizing.FitToModel(currentWidth, currentHeight, e.Width, e.Height);
+            var (width, height) = Live2DWindowSizing.FitToModel(
+                currentWidth,
+                currentHeight,
+                e.Width,
+                e.Height,
+                config.Live2D.Scale);
             if (width == currentWidth && height == currentHeight)
             {
                 return;
@@ -784,11 +794,45 @@ public sealed class VoiceInputController : IVoiceInputController
             config.Live2D.Height = height;
             _configStore.Save(config);
             _live2d.ApplyConfig(config.Live2D);
-            _logger.Info($"[Live2D] 已按模型比例自适应窗口：{width}×{height}（模型原始 {e.Width:0}×{e.Height:0}）");
+            _logger.Info($"[Live2D] 已按模型紧贴窗口宽度：{width}×{height}（模型原始 {e.Width:0}×{e.Height:0}，缩放 {config.Live2D.Scale:0.##}）");
         }
         catch (Exception ex)
         {
-            _logger.Warn($"[Live2D] 按模型比例自适应窗口失败：{ex.Message}");
+            _logger.Warn($"[Live2D] 按模型紧贴窗口宽度失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>配置变化（高度/缩放/开关）时，按上次模型尺寸重新收紧窗口宽度。</summary>
+    private void ApplyAutoFitWidth(AppConfig config)
+    {
+        if (!config.Live2D.AutoFitWindow || _lastModelWidth <= 0 || _lastModelHeight <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var currentWidth = (int)Math.Round(config.Live2D.Width);
+            var currentHeight = (int)Math.Round(config.Live2D.Height);
+            var (width, height) = Live2DWindowSizing.FitToModel(
+                currentWidth,
+                currentHeight,
+                _lastModelWidth,
+                _lastModelHeight,
+                config.Live2D.Scale);
+            if (width == currentWidth && height == currentHeight)
+            {
+                return;
+            }
+
+            config.Live2D.Width = width;
+            config.Live2D.Height = height;
+            _configStore.Save(config);
+            _logger.Info($"[Live2D] 高度/缩放变化后重新收紧窗口宽度：{width}×{height}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[Live2D] 重新收紧窗口宽度失败：{ex.Message}");
         }
     }
 

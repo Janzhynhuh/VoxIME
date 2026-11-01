@@ -48,9 +48,9 @@ public sealed class VoiceInputControllerTests
 
         _live2d.RaiseModelSize("tall-model", 1000, 2000);
 
-        Assert.Equal(280, _configStore.Current.Live2D.Width);
+        Assert.Equal(276, _configStore.Current.Live2D.Width);
         Assert.Equal(560, _configStore.Current.Live2D.Height);
-        Assert.Equal(280, _live2d.Config!.Width);
+        Assert.Equal(276, _live2d.Config!.Width);
         Assert.Equal(560, _live2d.Config.Height);
     }
 
@@ -66,6 +66,24 @@ public sealed class VoiceInputControllerTests
 
         Assert.Equal(380, _configStore.Current.Live2D.Width);
         Assert.Equal(560, _configStore.Current.Live2D.Height);
+    }
+
+    [Fact]
+    public void ApplyConfig_RecomputesWidth_WhenScaleChanges()
+    {
+        _controller.Initialize();
+        _configStore.Current.Live2D.Width = 380;
+        _configStore.Current.Live2D.Height = 560;
+        _configStore.Current.Live2D.AutoFitWindow = true;
+        _live2d.RaiseModelSize("tall-model", 1000, 2000);
+        Assert.Equal(276, _configStore.Current.Live2D.Width);
+
+        _configStore.Current.Live2D.Scale = 1.5;
+        _controller.ApplyConfig(_configStore.Current);
+
+        Assert.Equal(409, _configStore.Current.Live2D.Width); // 1000 * (560/2000 * 0.95 * 1.5) + 10
+        Assert.Equal(560, _configStore.Current.Live2D.Height);
+        Assert.Equal(409, _live2d.Config!.Width);
     }
 
     [Fact]
