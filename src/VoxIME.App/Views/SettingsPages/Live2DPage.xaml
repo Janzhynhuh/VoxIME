@@ -122,7 +122,7 @@
                               Margin="24,0,0,10" IsChecked="{Binding KeepAboveTaskbar, Mode=TwoWay}"
                               IsEnabled="{Binding SnapToEdge}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,-4,0,10"
-                               Text="拖动到屏幕边缘约 60px 内会自动吸附；中间位置不会强制贴边。关闭自动贴边后使用你上次拖动保存的位置，首次没有位置时屏幕居中。贴边时若窗口宽高超过屏幕可用区域，会自动压缩到屏幕内。" />
+                               Text="拖动到所在屏幕边缘约 60px 内会自动吸附；中间位置不会强制贴边。关闭自动贴边后使用你上次拖动保存的位置，首次没有位置时屏幕居中。贴边时窗口宽高超过该屏幕可用区域会自动压缩。" />
 
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>

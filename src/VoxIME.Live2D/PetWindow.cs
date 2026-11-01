@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Runtime.InteropServices;
 
 namespace VoxIME.Live2D;
 
@@ -17,6 +18,44 @@ internal sealed class PetWindow : Window
     private const int HtTransparent = -1;
     private const double AutoPositionMarginRight = 28;
     private const double AutoPositionMarginBottom = 18;
+    private const uint MonitorDefaultToNearest = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
 
     private readonly Grid _contentHost;
     private readonly FallbackAvatar _avatar;
@@ -215,6 +254,96 @@ internal sealed class PetWindow : Window
         }
     }
 
+    private double GetWindowScale()
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                var dpi = GetDpiForWindow(hwnd);
+                if (dpi > 0)
+                {
+                    return dpi / 96.0;
+                }
+            }
+
+            return VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        }
+        catch (Exception)
+        {
+            return 1.0;
+        }
+    }
+
+    /// <summary>取指定窗口矩形中心所在的显示器工作区/完整区域（WPF DIP）。</summary>
+    private bool TryGetMonitorRects(double left, double top, double width, double height, out Rect workArea, out Rect monitorBounds)
+    {
+        workArea = SystemParameters.WorkArea;
+        monitorBounds = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
+        try
+        {
+            var scale = GetWindowScale();
+            if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale))
+            {
+                scale = 1.0;
+            }
+
+            var point = new POINT
+            {
+                X = (int)Math.Round((left + width / 2) * scale),
+                Y = (int)Math.Round((top + height / 2) * scale)
+            };
+            var monitor = MonitorFromPoint(point, MonitorDefaultToNearest);
+            if (monitor == IntPtr.Zero)
+            {
+                var hwnd = new WindowInteropHelper(this).Handle;
+                monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+            }
+
+            if (monitor == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            if (!GetMonitorInfo(monitor, ref info))
+            {
+                return false;
+            }
+
+            workArea = new Rect(
+                info.rcWork.Left / scale,
+                info.rcWork.Top / scale,
+                (info.rcWork.Right - info.rcWork.Left) / scale,
+                (info.rcWork.Bottom - info.rcWork.Top) / scale);
+            monitorBounds = new Rect(
+                info.rcMonitor.Left / scale,
+                info.rcMonitor.Top / scale,
+                (info.rcMonitor.Right - info.rcMonitor.Left) / scale,
+                (info.rcMonitor.Bottom - info.rcMonitor.Top) / scale);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private Rect GetWorkAreaForRect(double left, double top, double width, double height)
+    {
+        return TryGetMonitorRects(left, top, width, height, out var workArea, out _)
+            ? workArea
+            : SystemParameters.WorkArea;
+    }
+
+    private Rect GetMonitorBoundsForRect(double left, double top, double width, double height)
+    {
+        return TryGetMonitorRects(left, top, width, height, out _, out var monitorBounds)
+            ? monitorBounds
+            : new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
+    }
+
     public void MoveTo(double left, double top)
     {
         if (!IsFinite(left) || !IsFinite(top))
@@ -229,12 +358,12 @@ internal sealed class PetWindow : Window
 
     public void MoveToAutoPosition(bool keepAboveTaskbar = true)
     {
-        var workArea = SystemParameters.WorkArea;
-        // 关闭“任务栏之上”时允许窗口压到任务栏区域；开启时用工作区底部作为下边界。
-        // 注意：不能用 VirtualScreenBottom（多显示器时可能是副屏底部），这里用主屏高度。
+        // 使用当前窗口所在显示器（而不是固定主屏），否则副屏上的自动贴边会算错坐标。
+        var workArea = GetWorkAreaForRect(Left, Top, Width, Height);
+        var monitorBounds = GetMonitorBoundsForRect(Left, Top, Width, Height);
         var bottom = keepAboveTaskbar
             ? workArea.Bottom
-            : SystemParameters.PrimaryScreenHeight;
+            : monitorBounds.Bottom;
 
         // 贴边时窗口必须完整落在目标边界内：否则窗口比屏幕还高，
         // 顶部会被裁掉一截，用户看到的就是“只剩半个头”。
@@ -248,16 +377,17 @@ internal sealed class PetWindow : Window
     }
 
     /// <summary>
-    /// 拖到屏幕边缘附近（默认 60 DIP 内）时吸附到最近的主屏工作区边缘；
+    /// 拖到所在显示器边缘附近（默认 60 DIP 内）时吸附到该显示器最近的边缘；
     /// 不在边缘附近则保持用户放下时的位置，避免“随便拖也被强制拉回边上”。
     /// keepAboveTaskbar 只影响底边。返回是否发生了吸附。
     /// </summary>
     public bool SnapToNearestEdge(bool keepAboveTaskbar = true, double threshold = 60)
     {
-        var workArea = SystemParameters.WorkArea;
+        var workArea = GetWorkAreaForRect(Left, Top, Width, Height);
+        var monitorBounds = GetMonitorBoundsForRect(Left, Top, Width, Height);
         var bottom = keepAboveTaskbar
             ? workArea.Bottom
-            : SystemParameters.PrimaryScreenHeight;
+            : monitorBounds.Bottom;
 
         var right = workArea.Right;
         var leftDistance = Math.Abs(Left - workArea.Left);
@@ -301,10 +431,10 @@ internal sealed class PetWindow : Window
         return true;
     }
 
-    /// <summary>没有保存位置且未开启自动贴边时，居中显示在主屏工作区。</summary>
+    /// <summary>没有保存位置时，居中显示在当前所在显示器的工作区。</summary>
     public void MoveToCenter()
     {
-        var workArea = SystemParameters.WorkArea;
+        var workArea = GetWorkAreaForRect(Left, Top, Width, Height);
         Left = workArea.Left + (workArea.Width - Width) / 2;
         Top = workArea.Top + (workArea.Height - Height) / 2;
     }
