@@ -192,6 +192,7 @@ sequenceDiagram
 - `AppConfig` 全部字段带默认值，`Normalize()` 负责钳制范围、修复空 ID/重复 ID、补齐默认服务（Mock）。
 - `JsonConfigStore`：原子写入（临时文件 + `File.Replace`）；损坏文件自动备份为 `config.bad.json` 并回退默认；`ConfigChanged` 通知 UI。
 - 敏感字段：`ProviderProfile.ApiKey/ApiSecret/SecretId` 标 `[JsonIgnore]`，落盘写 `*Protected`（DPAPI CurrentUser），加载时解密；跨用户复制配置时自动失效为无凭据。
+- 凭据保持：`ConfigJson.CloneAppConfig` 克隆后按 Id 回填内存明文凭据（普通 JSON 克隆会丢 `[JsonIgnore]` 字段）；`EncryptSecrets` 在明文为空时保留已有 `*Protected`；设置页 PasswordBox 用代码同步（Password 不能直接绑定）写回 ViewModel。避免“保存热键/桌宠等设置时把 API Key 清空”。
 - 历史：JSONL 追加写，最多保留 1000 条，读取跳过损坏行。
 
 ## 7. 错误处理与降级

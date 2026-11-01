@@ -1,7 +1,6 @@
 <UserControl x:Class="VoxIME.App.Views.SettingsPages.ProvidersPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:infra="clr-namespace:VoxIME.App.Infrastructure">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Grid>
         <Grid.ColumnDefinitions>
@@ -207,17 +206,17 @@
 
                             <StackPanel Visibility="{Binding SelectedProvider.UsesApiKey, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="{Binding SelectedProvider.ApiKeyLabel}" Style="{StaticResource FieldLabel}" />
-                                <PasswordBox infra:PasswordBoxAssist.BoundPassword="{Binding SelectedProvider.ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <PasswordBox x:Name="ApiKeyBox" PasswordChanged="ApiKeyBox_PasswordChanged" />
                             </StackPanel>
 
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding SelectedProvider.UsesSecretId, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="SecretId" Style="{StaticResource FieldLabel}" />
-                                <PasswordBox infra:PasswordBoxAssist.BoundPassword="{Binding SelectedProvider.SecretId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <PasswordBox x:Name="SecretIdBox" PasswordChanged="SecretIdBox_PasswordChanged" />
                             </StackPanel>
 
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding SelectedProvider.UsesApiSecret, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="ApiSecret / SecretKey" Style="{StaticResource FieldLabel}" />
-                                <PasswordBox infra:PasswordBoxAssist.BoundPassword="{Binding SelectedProvider.ApiSecret, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <PasswordBox x:Name="ApiSecretBox" PasswordChanged="ApiSecretBox_PasswordChanged" />
                             </StackPanel>
 
                             <StackPanel Margin="0,12,0,0" Visibility="{Binding SelectedProvider.UsesAppId, Converter={StaticResource BoolToVis}}">
