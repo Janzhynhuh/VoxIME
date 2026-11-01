@@ -40,7 +40,7 @@
 
 ### 方式一：使用发布包（推荐）
 
-1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.2.0.zip`，解压到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
+1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.3.0.zip`，解压到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
 2. 双击 `VoxIME.exe` 启动，托盘出现声语图标。
 3. 托盘右键 → **设置**：
    - 「服务」页点击 **新增服务**，选择你的识别厂商，填入 BaseUrl / Model / API Key，点 **测试识别** 验证。
@@ -58,7 +58,7 @@ dotnet run --project src/VoxIME.App
 
 # 发布自包含 x64 包（含 .NET 运行时，目标机器无需安装 SDK）
 .\scripts\publish-x64.ps1
-# 产物：deploy\VoxIME-win-x64\ 与 deploy\VoxIME-win-x64-v0.2.0.zip
+# 产物：deploy\VoxIME-win-x64\ 与 deploy\VoxIME-win-x64-v0.3.0.zip
 ```
 
 ## 🎙️ 支持的语音识别服务
