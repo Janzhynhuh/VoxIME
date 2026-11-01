@@ -158,25 +158,22 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Column="0" Text="{Binding StatusText}" Style="{StaticResource HintText}"
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,16,0" />
 
-                    <Button Grid.Column="1" Style="{StaticResource GhostButton}" Content="恢复默认"
-                            Padding="14,8" Margin="0,0,10,0" VerticalAlignment="Center"
-                            Command="{Binding ResetCommand}" />
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                                 Margin="0,0,10,0">
                         <TextBlock Text="{Binding SaveStatusText}" Style="{StaticResource HintText}"
                                    VerticalAlignment="Center" Margin="0,0,10,0"
                                    Visibility="{Binding HasSaveStatus, Converter={StaticResource BoolToVis}}" />
                         <Button Style="{StaticResource PrimaryButton}" Content="保存"
-                                MinWidth="104" Padding="22,9" Click="SaveButton_Click" />
+                                Width="104" Height="38" Padding="0" VerticalAlignment="Center"
+                                Click="SaveButton_Click" />
                     </StackPanel>
-                    <Button Grid.Column="3" Style="{StaticResource SecondaryButton}" Content="关闭"
-                            MinWidth="88" Padding="16,9" VerticalAlignment="Center"
+                    <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Content="关闭"
+                            Width="104" Height="38" Padding="0" VerticalAlignment="Center"
                             Click="CloseButton_Click" />
                 </Grid>
             </Border>
