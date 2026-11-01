@@ -2,7 +2,7 @@
  * VoxIME Live2D 桌宠页面（原生 JS，无构建）
  *
  * 职责：
- *  - 加载 Cubism 3/4 模型（.model3.json），居中自适应缩放、透明背景；
+ *  - 加载 Cubism 3/4/5 模型（.model3.json），居中自适应缩放、透明背景；
  *  - 自动待机动作（优先 Idle 动作组，缺失时退化为任意动作组）；
  *  - 眨眼由 Cubism EyeBlink 自动更新（model3.json 里 Groups 声明）；
  *  - 口型：setMouth 数值写入 LipSync 参数（Hiyori 为 ParamMouthOpenY）；
@@ -19,7 +19,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.1.0';
   var params = new URLSearchParams(location.search);
   var page = (document.body && document.body.dataset && document.body.dataset.page) || 'pet';
   var isPreview = page === 'preview';
@@ -59,12 +59,14 @@
   var stateExpressions = { listening: null, thinking: null, speaking: null, error: null };
 
   var pixiApp = null;
+  var pixiInitPromise = null;
   var model = null;
   var modelUrl = null;
   var modelName = '';
   var modelGroups = [];
   var idleGroup = null;
   var mouthParamIds = ['ParamMouthOpenY'];
+  var mouthParamHandles = [];
   var demo = null;
   var demoActive = false;
   var readySent = false;
@@ -146,8 +148,22 @@
   }
 
   // ---------------- 画布与布局 ----------------
-  function ensurePixi() {
+  function getPixiCanvas() {
+    return pixiApp ? (pixiApp.canvas || pixiApp.view || null) : null;
+  }
+
+  async function ensurePixi() {
     if (pixiApp) return pixiApp;
+    if (pixiInitPromise) return pixiInitPromise;
+    pixiInitPromise = createPixi();
+    try {
+      return await pixiInitPromise;
+    } finally {
+      pixiInitPromise = null;
+    }
+  }
+
+  async function createPixi() {
     var canvas = document.getElementById('live2d-canvas');
     if (!canvas) {
       canvas = document.createElement('canvas');
@@ -156,16 +172,25 @@
       // 放在 demo canvas 之后、气泡之前
       stageEl.insertBefore(canvas, bubbleEl);
     }
-    pixiApp = new PIXI.Application({
-      view: canvas,
+    if (!window.PIXI || !PIXI.extensions || !PIXI.live2d || !PIXI.live2d.Live2DPlugin) {
+      throw new Error('pixi-live2d-display（Cubism 5）未正确加载（vendor/cubism5.min.js）');
+    }
+
+    // Cubism 5 引擎使用 PixiJS v8 Render Pipe，必须在创建 renderer 前注册。
+    PIXI.extensions.add(PIXI.live2d.Live2DPlugin);
+
+    var app = new PIXI.Application();
+    await app.init({
+      canvas: canvas,
       width: Math.max(1, stageEl.clientWidth),
       height: Math.max(1, stageEl.clientHeight),
       backgroundAlpha: 0,
       antialias: true,
       autoDensity: true,
       resolution: Math.min(window.devicePixelRatio || 1, 2),
-      powerPreference: 'high-performance'
+      preference: 'webgl'
     });
+    pixiApp = app;
     pixiApp.ticker.add(onTick);
     return pixiApp;
   }
@@ -341,10 +366,25 @@
     return groups;
   }
 
+  // Cubism 5 引擎的 CubismModel 参数 API 需要 CubismIdHandle，而不是裸字符串；
+  // 直接传字符串会被当作“不存在的参数”静默忽略（口型/眼动回读全为空）。
+  function getCubismId(id) {
+    try {
+      var framework = window.PIXI && PIXI.live2d && PIXI.live2d.CubismFramework;
+      if (framework && typeof framework.getIdManager === 'function') {
+        return framework.getIdManager().getId(String(id));
+      }
+    } catch (e) { /* 回退到字符串，兼容旧 wrapper */ }
+    return id;
+  }
+
   function hasParameter(coreModel, id) {
     try {
       if (coreModel && typeof coreModel.getParameterIndex === 'function') {
-        return coreModel.getParameterIndex(id) >= 0;
+        var handle = getCubismId(id);
+        var index = coreModel.getParameterIndex(handle);
+        // 不存在的 ID 在 CubismModel 里会被登记为“虚拟参数”，index >= 真实参数数量。
+        return index >= 0 && index < coreModel.getParameterCount();
       }
     } catch (e) { /* ignore */ }
     return false;
@@ -360,6 +400,7 @@
     var valid = declared.filter(function (id) { return hasParameter(core, id); });
     if (!valid.length) valid = ['ParamMouthOpenY']; // 仅在无法判定/无参数时保留标准 ID，写入时 try/catch
     mouthParamIds = valid;
+    mouthParamHandles = valid.map(getCubismId);
     log('口型参数: ' + mouthParamIds.join(', '));
   }
 
@@ -371,17 +412,17 @@
     if (!model || !config.mouthSync) return;
     try {
       var core = model.internalModel.coreModel;
-      for (var i = 0; i < mouthParamIds.length; i++) {
-        core.setParameterValueById(mouthParamIds[i], live.mouth);
+      for (var i = 0; i < mouthParamHandles.length; i++) {
+        core.setParameterValueById(mouthParamHandles[i], live.mouth);
       }
       diag.mouthWrites++;
       try {
         diag.readback = {
-          mouth: core.getParameterValueById(mouthParamIds[0]),
-          angleX: core.getParameterValueById('ParamAngleX'),
-          angleY: core.getParameterValueById('ParamAngleY'),
-          eyeBallX: core.getParameterValueById('ParamEyeBallX'),
-          eyeBallY: core.getParameterValueById('ParamEyeBallY')
+          mouth: core.getParameterValueById(getCubismId(mouthParamIds[0])),
+          angleX: core.getParameterValueById(getCubismId('ParamAngleX')),
+          angleY: core.getParameterValueById(getCubismId('ParamAngleY')),
+          eyeBallX: core.getParameterValueById(getCubismId('ParamEyeBallX')),
+          eyeBallY: core.getParameterValueById(getCubismId('ParamEyeBallY'))
         };
       } catch (e) { /* 读参失败不影响渲染 */ }
     } catch (e) {
@@ -403,11 +444,11 @@
       if (!resolved) throw new Error('找不到模型文件（已尝试相对路径）: ' + raw);
       setStatus('加载模型中…<br>' + escapeHtml(resolved));
 
-      var app = ensurePixi();
+      var app = await ensurePixi();
       disposeModel();
 
       if (!window.PIXI || !PIXI.live2d || !PIXI.live2d.Live2DModel) {
-        throw new Error('pixi-live2d-display 未正确加载（vendor/cubism4.min.js）');
+        throw new Error('pixi-live2d-display（Cubism 5）未正确加载（vendor/cubism5.min.js）');
       }
       if (!window.Live2DCubismCore) {
         throw new Error('Cubism Core 未加载（vendor/live2dcubismcore.min.js）');
@@ -415,9 +456,13 @@
 
       log('开始加载模型: ' + resolved);
       var loaded = await PIXI.live2d.Live2DModel.from(resolved, {
-        autoInteract: false,
+        autoHitTest: false,
+        autoFocus: false,
         autoUpdate: true,
-        motionPreload: 'ALL' // 预加载全部动作：状态动作/待机动作即时可播
+        motionPreload: 'ALL', // 预加载全部动作：状态动作/待机动作即时可播
+        // 大贴图（4096/8192）默认会生成完整 mipmap 链，WebView2 下可能因显存/尺寸上传失败；
+        // 关掉纹理 LOD，保持原始贴图（与旧渲染器行为一致）。
+        textureOptions: { lod: false }
       });
 
       model = loaded;
@@ -433,7 +478,7 @@
       demoActive = false;
       if (demo) demo.stop();
       demoCanvas.classList.add('hidden');
-      app.view.classList.remove('hidden');
+      var pixiCanvas = getPixiCanvas(); if (pixiCanvas) pixiCanvas.classList.remove('hidden');
 
       applyModelState(live.state, true);
       setHint('');
@@ -476,7 +521,7 @@
       demoActive = false;
       if (demo) demo.stop();
       demoCanvas.classList.add('hidden');
-      if (pixiApp) pixiApp.view.classList.add('hidden');
+      if (pixiApp && getPixiCanvas()) getPixiCanvas().classList.add('hidden');
       setHint('');
     }
   }
@@ -1000,7 +1045,7 @@
     demo.setGaze(live.gazeX, live.gazeY);
     demoActive = true;
     demoCanvas.classList.remove('hidden');
-    if (pixiApp) pixiApp.view.classList.add('hidden');
+    if (pixiApp && getPixiCanvas()) getPixiCanvas().classList.add('hidden');
     demo.start();
     if (reason) {
       setHint(reason, false);
@@ -1125,7 +1170,7 @@
     if (demoButton) {
       demoButton.addEventListener('click', function () {
         disposeModel();
-        if (pixiApp) pixiApp.view.classList.add('hidden');
+        if (pixiApp && getPixiCanvas()) getPixiCanvas().classList.add('hidden');
         showDemo('已切换到 Canvas 兜底演示');
       });
     }
@@ -1217,6 +1262,43 @@
     setBubble: setBubble,
     setConfig: applyConfig,
     showDemo: showDemo,
+    layout: function () {
+      var canvas = getPixiCanvas();
+      var result = {
+        version: VERSION,
+        pixi: window.PIXI ? PIXI.VERSION : null,
+        engine: window.PIXI && PIXI.live2d ? PIXI.live2d.VERSION : null,
+        viewport: window.innerWidth + 'x' + window.innerHeight,
+        dpr: window.devicePixelRatio || 1,
+        stage: stageEl ? [stageEl.clientWidth, stageEl.clientHeight] : null,
+        canvas: canvas
+          ? {
+              width: canvas.width,
+              height: canvas.height,
+              styleWidth: canvas.style.width,
+              styleHeight: canvas.style.height,
+              rect: canvas.getBoundingClientRect().toJSON()
+            }
+          : null,
+        renderer: pixiApp
+          ? {
+              width: pixiApp.renderer.width,
+              height: pixiApp.renderer.height,
+              resolution: pixiApp.renderer.resolution
+            }
+          : null,
+        model: model
+          ? {
+              position: [model.position.x, model.position.y],
+              scale: [model.scale.x, model.scale.y],
+              anchor: [model.anchor.x, model.anchor.y],
+              internal: [model.internalModel.width, model.internalModel.height],
+              original: [model.internalModel.originalWidth, model.internalModel.originalHeight]
+            }
+          : null
+      };
+      return result;
+    },
     debug: function () {
       var result = {
         page: page,
@@ -1243,7 +1325,7 @@
           result.params = {};
           var ids = ['ParamMouthOpenY', 'ParamAngleX', 'ParamAngleY', 'ParamEyeBallX', 'ParamEyeBallY'];
           for (var i = 0; i < ids.length; i++) {
-            try { result.params[ids[i]] = model.internalModel.coreModel.getParameterValueById(ids[i]); } catch (e) { /* ignore */ }
+            try { result.params[ids[i]] = model.internalModel.coreModel.getParameterValueById(getCubismId(ids[i])); } catch (e) { /* ignore */ }
           }
           try {
             var mm = model.internalModel.motionManager;

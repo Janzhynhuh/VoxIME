@@ -18,8 +18,8 @@ VoxIME 代码以 MIT 许可发布（见根目录 `LICENSE`）。以下是运行�
 | 组件 | 许可 | 说明 |
 |---|---|---|
 | [Live2D Cubism Core](https://www.live2d.com/sdk/web/)（`live2dcubismcore.min.js`） | Live2D 专有许可 | 随网页运行时加载；**商业使用/再分发需遵守 Live2D Cubism SDK Release License**（个人/小规模通常免费，企业需授权） |
-| [pixi.js](https://pixijs.com/) 6.x | MIT | Live2D 渲染基础（WebGL） |
-| [pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) 0.4.x | MIT | pixi 的 Live2D 模型显示插件 |
+| [PixiJS](https://pixijs.com/) 8.22.0 | MIT | Live2D 渲染基础（WebGL） |
+| [untitled-pixi-live2d-engine](https://www.npmjs.com/package/untitled-pixi-live2d-engine) 1.4.0 | MIT | PixiJS v8 的 Cubism 2–5 渲染引擎（本仓库使用 Cubism 3/4/5 bundle；许可原文见 `assets/live2d/wwwroot/vendor/untitled-pixi-live2d-engine.LICENSE`） |
 | Live2D 官方示例模型（Hiyori 等） | Live2D 示例模型使用条款 | **仅用于开发/测试演示**，不随发布包分发；用户需自行从官方获取并遵守条款 |
 
 > 重要：Live2D 的模型数据（.moc3/.model3.json/贴图）版权归原作者所有。VoxIME 只提供加载能力，不提供任何模型下载；示例模型脚本仅用于本地开发验证，请勿将示例模型用于商业用途。

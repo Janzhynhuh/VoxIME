@@ -32,7 +32,7 @@
 | 本地离线 | 支持 whisper.cpp、FunASR、sherpa-onnx 命令行，无需联网与 API Key |
 | 编辑与历史 | HUD 显示识别结果，可先预览编辑再上屏；完整历史记录、可复制、可清空 |
 | 朗读 | Windows SAPI TTS 朗读识别结果（可选），语速/音色可配 |
-| Live2D 桌宠 | 透明置顶窗口，加载 Cubism 3/4 模型；待机动画、眨眼、眼动跟随鼠标、聆听/思考/朗读/出错状态联动、麦克风或 TTS 驱动口型、气泡字幕；无模型时内置矢量兜底形象 |
+| Live2D 桌宠 | 透明置顶窗口，加载 Cubism 3/4/5 模型（含 MOC3 v5）；待机动画、眨眼、眼动跟随鼠标、聆听/思考/朗读/出错状态联动、麦克风或 TTS 驱动口型、气泡字幕；无模型时内置矢量兜底形象 |
 | 托盘与设置 | 托盘菜单、开机自启、暂停热键、设备选择、VAD 静音自动停止、术语替换、深色主题设置中心 |
 | 隐私安全 | 配置/历史/日志在本机；API Key DPAPI 加密落盘；日志不打印密钥 |
 
@@ -212,6 +212,6 @@ A：安装 whisper.cpp（`whisper-cli.exe`）并下载 `ggml-*.bin` 模型；设
 
 本项目代码以 MIT 许可发布（见 `LICENSE`）。第三方组件与素材许可见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
-致谢：NAudio、Microsoft WebView2、PixiJS、pixi-live2d-display、Live2D Cubism SDK，以及所有语音识别服务厂商。
+致谢：NAudio、Microsoft WebView2、PixiJS、untitled-pixi-live2d-engine、Live2D Cubism SDK，以及所有语音识别服务厂商。
 
 > 本项目为个人/学习用途的语音输入工具，与任何厂商无隶属关系；使用各家 API 时请遵守其服务条款与计费规则。

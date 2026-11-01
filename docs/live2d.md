@@ -11,7 +11,7 @@
 │  Live2DController（ILive2DController 实现，任意线程安全）                            │
 │   ├─ PetWindow（透明 / 无边框 / 置顶 / 不占任务栏 / 点击穿透可配 / 可拖动）          │
 │   │   ├─ WebView2CompositionControl ──► 本地网页（assets/live2d/wwwroot）            │
-│   │   │      └─ pixi.js v6 + pixi-live2d-display(cubism4) + Live2D Cubism Core       │
+│   │   │      └─ PixiJS 8 + Cubism 5 引擎（untitled-pixi-live2d-engine）+ Live2D Cubism Core       │
 │   │   │      └─ 虚拟主机：https://voxime.live2d/（应用资源）                          │
 │   │   │                   https://voxime.models/（用户模型目录，Allow CORS）         │
 │   │   ├─ FallbackAvatar（WPF 矢量兜底形象，无模型/WebView2 不可用时显示）             │
@@ -79,8 +79,9 @@ assets/live2d/
 │  ├─ app.js                     # 页面主逻辑 + JS 桥 + Canvas 兜底形象
 │  ├─ styles.css
 │  └─ vendor/
-│     ├─ pixi.min.js             # pixi.js v6.5.10（MIT，UMD）
-│     ├─ cubism4.min.js          # pixi-live2d-display v0.4.0 cubism4 UMD（MIT）
+│     ├─ pixi.min.js             # PixiJS v8.22.0（MIT，UMD）
+│     ├─ cubism5.min.js          # untitled-pixi-live2d-engine v1.4.0 Cubism 5 UMD（MIT）
+│     ├─ untitled-pixi-live2d-engine.LICENSE # 引擎 MIT 许可原文
 │     └─ live2dcubismcore.min.js # Live2D Cubism Core（官方 CDN，专有许可）
 └─ models/                       # 用户/示例模型目录（.gitignore 忽略，不随源码分发）
    └─ Hiyori/                    # scripts/fetch-sample-model.ps1 下载的官方示例模型
@@ -445,8 +446,8 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 |---|---|---|---|
 | **Live2D Cubism Core** (`live2dcubismcore.min.js`) | 官方 CDN：`https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js`，已下载到 `vendor/` 本地化 | **Live2D Proprietary Software License Agreement（专有）** | 允许按 Cubism SDK 条款用于开发/发布 Cubism 兼容应用；**商业发布需遵守 Live2D Cubism SDK 发布许可**（按年收入规模适用小规模事业者/一般事业者等不同条款，具体以 Live2D 官方最新 EULA 为准）。不得单独再分发 Core 文件 |
 | **示例模型（Hiyori 等）** | GitHub `Live2D/CubismWebSamples`（由 `scripts/fetch-sample-model.ps1` 下载） | **Live2D Sample Model Data 条款（专有）** | 仅用于开发/测试/评估；**不得单独再分发模型数据**，商业使用需获得 Live2D 授权。VoxIME 不随源码/安装包分发示例模型（`assets/live2d/models/` 被 `.gitignore` 忽略，仅开发机本地存在） |
-| **pixi.js** | v6.5.10（`https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js`） | MIT | 可自由分发，保留版权声明 |
-| **pixi-live2d-display** | v0.4.0 cubism4 UMD（`https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js`） | MIT | 注意其 Cubism 4 支持依赖 Live2D Cubism Core，Core 的许可如上 |
+| **PixiJS** | v8.22.0（`https://cdn.jsdelivr.net/npm/pixi.js@8.22.0/dist/pixi.min.js`） | MIT | 可自由分发，保留版权声明；Cubism 5 引擎需要 Pixi 8（8.22 起内部纹理接口与引擎兼容） |
+| **untitled-pixi-live2d-engine** | v1.4.0 cubism UMD（`https://npmjs.com/package/untitled-pixi-live2d-engine`） | MIT | PixiJS v8 的 Cubism 2–5 渲染引擎；本仓库使用其 Modern（Cubism 3/4/5）bundle，许可证见 `vendor/untitled-pixi-live2d-engine.LICENSE` |
 | **Microsoft Edge WebView2** | Evergreen Runtime / `Microsoft.Web.WebView2` NuGet | Microsoft 许可 | 随应用分发 WebView2 Runtime 需遵循 Microsoft 的再分发条款（推荐引导用户安装 Evergreen Runtime） |
 
 用户自带模型：
@@ -495,7 +496,7 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
    `WM_NCHITTEST` 与拖动层代码审查间接覆盖。请 Lead 在真机手工验证「关闭点击穿透后拖动窗口」。
 2. **多屏幕/混合 DPI**：窗口位置/尺寸使用 WPF DIP（主屏工作区自动定位），多屏负坐标与
    逐屏 DPI 切换未做自动化验证；已限制窗口不被拖出虚拟桌面。
-3. **Cubism 2（.model.json）** 不支持（pixi-live2d-display cubism2 构建未引入）。
+3. **Cubism 2（.model.json）** 不支持（只引入 Modern bundle，覆盖 Cubism 3/4/5；旧模型需转换）。
 4. 状态→动作组使用**命名约定**（`Idle`/`Listening`/`Thinking`/`Speaking`/`Error`），
    若模型动作组命名不同则保持待机；表情通过配置的 `*Expression` 名称匹配。需要更复杂的
    每模型映射时可扩展 `setConfig.expressions`。
@@ -503,5 +504,8 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
    属模型美术表现，非参数未生效（可用 `preview.html` 状态栏的“更新帧参数”回读确认）。
 6. WebGL/透明合成在不同显卡驱动/远程桌面下可能有差异；远程桌面（RDP）场景建议回退
    `VOXIME_LIVE2D_DISABLE_WEBVIEW=1` 使用兜底形象。
-7. `assets/live2d/wwwroot/vendor/` 的第三方运行库体积约 0.8MB，已本地化以保证离线可用；
+7. `assets/live2d/wwwroot/vendor/` 的第三方运行库体积约 1.1MB，已本地化以保证离线可用；
    升级版本时需同步验证 UMD 全局名（`PIXI`、`PIXI.live2d`、`Live2DCubismCore`）不变。
+8. **Cubism 5 支持说明（2026-11-01 升级）**：旧版 `pixi-live2d-display 0.4.0`（Cubism 4 时代框架）遇到 MOC3 v5 模型会出现遮罩/局部贴图渲染错误（典型：鼻子/脸部小遮罩变黑块）；
+   现改为 PixiJS 8.22.0 + `untitled-pixi-live2d-engine 1.4.0`，并关闭大贴图 mipmap LOD（`textureOptions.lod=false`），已在用户 Cubism 5 模型（MOC3 v5、4096/8192 贴图、49 组遮罩）与 Hiyori（Cubism 3）上验证。
+   注意：PixiJS 8.13.1 的 `TextureSource` 内部没有引擎依赖的 `_gpuData` 字段，纹理上传会报 `Failed to upload Live2D texture`；必须使用 **8.22.0**（已本地化到 `vendor/pixi.min.js`）。

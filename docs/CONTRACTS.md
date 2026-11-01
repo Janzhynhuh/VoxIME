@@ -8,9 +8,9 @@
 Windows x64 语音输入法 **VoxIME 声语**：悬浮语音助手形态。
 
 - 全局热键（按住说话 / 按下切换）录音 → 可插拔多厂商 ASR 识别 → 文本自动插入当前焦点应用。
-- 透明置顶 Live2D 桌宠窗口：Cubism 3/4 模型、眼动跟随、待机动画、TTS 驱动口型、状态联动；无模型时用内置兜底形象。
+- 透明置顶 Live2D 桌宠窗口：Cubism 3/4/5 模型、眼动跟随、待机动画、TTS 驱动口型、状态联动；无模型时用内置兜底形象。
 - WPF 设置界面 + 托盘图标 + 历史记录 + 配置持久化（API Key 用 DPAPI 加密）。
-- 技术栈：.NET 10 / C# / WPF / NAudio / System.Speech / WebView2 / pixi-live2d-display。x64，Windows 11 环境已验证可构建。
+- 技术栈：.NET 10 / C# / WPF / NAudio / System.Speech / WebView2 / PixiJS 8 + untitled-pixi-live2d-engine。x64，Windows 11 环境已验证可构建。
 
 ## 2. 环境事实
 

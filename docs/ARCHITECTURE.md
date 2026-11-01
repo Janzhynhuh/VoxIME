@@ -174,7 +174,7 @@ sequenceDiagram
 ```
 
 - 窗口：无边框、透明、置顶、`ShowInTaskbar=false`；点击穿透通过 `WS_EX_TRANSPARENT` + `WM_NCHITTEST=HTTRANSPARENT` 实现；关闭穿透后支持拖动。
-- 渲染：`WebView2CompositionControl`（WPF 合成，支持透明）承载本地网页；网页用 pixi.js + pixi-live2d-display（Cubism 4 Core）渲染 `.model3.json`；`renderer.backgroundAlpha=0` 保证透明。
+- 渲染：`WebView2CompositionControl`（WPF 合成，支持透明）承载本地网页；网页用 PixiJS 8 + untitled-pixi-live2d-engine（Cubism 5 SDK）渲染 `.model3.json`；`renderer.backgroundAlpha=0` 保证透明。
 - 降级链：WebView2 不可用 / 模型加载失败 / 未配置模型 → WPF 内置矢量兜底形象（呼吸、眨眼、口型、聆听波纹、思考/出错动画）。
 - 状态映射：Idle（待机动作循环 + 随机眨眼）、Listening（表情 + 口型跟随麦克风）、Thinking（思考动作/表情）、Speaking（口型跟随 TTS 音量）、Error（抖动/红色提示）。
 - 眼动：独立后台线程按 `Live2DConfig.EyeFollowFps`（5–300Hz，默认 30）采样全局光标位置，归一化为 `-1..1`（上下方向已修正）；UI 渲染帧（`CompositionTarget.Rendering`，通常等于显示器刷新率）再把最新值下发给模型，避免高频 DispatcherTimer 挤占 UI 线程导致抖动；`EyeFollow=false` 时停止采样并归零。部分模型骨骼绑定把上下方向做反，提供 `EyeFollowInvertY`（按模型目录记忆于 `EyeFollowInvertYByModel`），只反转下发给 WebView2 模型的 Y，WPF 兜底形象不受影响。
@@ -235,7 +235,7 @@ sequenceDiagram
 
 - 非 TSF 输入法：无法出现在语言栏、无法在 UAC 提权窗口注入（受 UIPI 限制）。
 - 批量识别模式：当前是"录完整段再识别"，首字延迟取决于厂商接口；流式识别列入 v0.2。
-- Live2D 仅支持 Cubism 3/4；不支持 Cubism 2（旧模型需转换）。
+- Live2D 支持 Cubism 3/4/5（含 MOC3 v5）；不支持 Cubism 2（旧模型需转换）。
 - 未做自动更新与代码签名；SmartScreen 可能提示"未识别的应用"。
 - 仅 Windows；macOS/Linux 需重写 PDF/音频/UI 三部分。
 
