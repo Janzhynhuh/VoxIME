@@ -122,7 +122,7 @@
                               Margin="24,0,0,10" IsChecked="{Binding KeepAboveTaskbar, Mode=TwoWay}"
                               IsEnabled="{Binding SnapToEdge}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,-4,0,10"
-                               Text="关闭自动贴边后，窗口使用你上次拖动保存的位置；首次没有保存位置时在屏幕居中显示。" />
+                               Text="关闭自动贴边后，窗口使用你上次拖动保存的位置；首次没有保存位置时在屏幕居中显示。贴边时若窗口宽高超过屏幕可用区域，会自动压缩到屏幕内，避免模型被裁掉。" />
 
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>

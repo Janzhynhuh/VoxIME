@@ -186,18 +186,21 @@ internal sealed class PetWindow : Window
         if (snapToEdge)
         {
             MoveToAutoPosition(keepAboveTaskbar);
+            // 自动贴边时位置由下边界反推，不能再做通用“把顶部拉回屏幕”的纵向钳制；
+            // 否则窗口越高越会被推到底部以下（表现为模型只剩半个头、穿到屏幕外）。
+            ClampToVirtualScreen(horizontalOnly: true);
         }
         else if (left >= 0 && top >= 0 && IsFinite(left) && IsFinite(top))
         {
             Left = left;
             Top = top;
+            ClampToVirtualScreen();
         }
         else
         {
             MoveToCenter();
+            ClampToVirtualScreen();
         }
-
-        ClampToVirtualScreen(snapToEdge && keepAboveTaskbar);
     }
 
     public void MoveTo(double left, double top)
@@ -220,6 +223,14 @@ internal sealed class PetWindow : Window
         var bottom = keepAboveTaskbar
             ? workArea.Bottom
             : SystemParameters.PrimaryScreenHeight;
+
+        // 贴边时窗口必须完整落在目标边界内：否则窗口比屏幕还高，
+        // 顶部会被裁掉一截，用户看到的就是“只剩半个头”。
+        var maxWidth = Math.Max(160, workArea.Width - AutoPositionMarginRight);
+        var maxHeight = Math.Max(160, bottom - workArea.Top - AutoPositionMarginBottom);
+        Width = Math.Min(Width, maxWidth);
+        Height = Math.Min(Height, maxHeight);
+
         Left = workArea.Right - Width - AutoPositionMarginRight;
         Top = bottom - Height - AutoPositionMarginBottom;
     }
@@ -235,8 +246,9 @@ internal sealed class PetWindow : Window
     /// <summary>
     /// 把窗口限制在虚拟桌面范围内（避免拖到屏幕外再也找不回来）。
     /// preserveBottomAboveTaskbar=true 时优先保证窗口底边在任务栏上方，允许顶部超出屏幕。
+    /// horizontalOnly=true 时只做水平钳制（自动贴边由下边界决定纵向位置）。
     /// </summary>
-    public void ClampToVirtualScreen(bool preserveBottomAboveTaskbar = false)
+    public void ClampToVirtualScreen(bool preserveBottomAboveTaskbar = false, bool horizontalOnly = false)
     {
         var virtualLeft = SystemParameters.VirtualScreenLeft;
         var virtualTop = SystemParameters.VirtualScreenTop;
@@ -245,6 +257,16 @@ internal sealed class PetWindow : Window
 
         var visibleMargin = 60.0;
         var left = Math.Min(Math.Max(Left, virtualLeft - Width + visibleMargin), virtualRight - visibleMargin);
+        if (Math.Abs(left - Left) > 0.5)
+        {
+            Left = left;
+        }
+
+        if (horizontalOnly)
+        {
+            return;
+        }
+
         double top;
         if (preserveBottomAboveTaskbar)
         {
@@ -257,11 +279,6 @@ internal sealed class PetWindow : Window
         else
         {
             top = Math.Min(Math.Max(Top, virtualTop - 10), virtualBottom - visibleMargin);
-        }
-
-        if (Math.Abs(left - Left) > 0.5)
-        {
-            Left = left;
         }
 
         if (Math.Abs(top - Top) > 0.5)
