@@ -29,6 +29,33 @@ public static class ConfigJson
         return JsonSerializer.Deserialize<T>(json, Options)
                ?? throw new InvalidOperationException($"无法克隆类型 {typeof(T).Name}");
     }
+
+    /// <summary>
+    /// 克隆 AppConfig，并保留各 ProviderProfile 的内存明文凭据（<see cref="ProviderProfile.ApiKey"/> 等
+    /// 标记了 JsonIgnore，普通 Clone 会丢失；设置页/自动保存必须用这个，否则保存其它设置会把 Key 抹掉）。
+    /// </summary>
+    public static AppConfig CloneAppConfig(AppConfig source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var clone = Clone(source);
+        var originById = source.ProviderProfiles.ToDictionary(p => p.Id, StringComparer.Ordinal);
+        foreach (var target in clone.ProviderProfiles)
+        {
+            if (!originById.TryGetValue(target.Id, out var origin))
+            {
+                continue;
+            }
+
+            target.ApiKey = origin.ApiKey;
+            target.ApiSecret = origin.ApiSecret;
+            target.SecretId = origin.SecretId;
+            target.ApiKeyProtected ??= origin.ApiKeyProtected;
+            target.ApiSecretProtected ??= origin.ApiSecretProtected;
+            target.SecretIdProtected ??= origin.SecretIdProtected;
+        }
+
+        return clone;
+    }
 }
 
 public enum InsertionMode
@@ -96,7 +123,7 @@ public sealed class AppConfig
     }
 
     /// <summary>深拷贝（设置窗口编辑时避免直接改到运行中的配置）。</summary>
-    public AppConfig Clone() => ConfigJson.Clone(this);
+    public AppConfig Clone() => ConfigJson.CloneAppConfig(this);
 
     /// <summary>修正非法/缺失字段，保证配置可直接使用（幂等）。</summary>
     public void Normalize()

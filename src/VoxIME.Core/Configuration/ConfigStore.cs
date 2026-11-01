@@ -158,9 +158,22 @@ public sealed class JsonConfigStore : IConfigStore
     {
         foreach (var profile in config.ProviderProfiles)
         {
-            profile.ApiKeyProtected = string.IsNullOrEmpty(profile.ApiKey) ? null : _protector.Protect(profile.ApiKey);
-            profile.ApiSecretProtected = string.IsNullOrEmpty(profile.ApiSecret) ? null : _protector.Protect(profile.ApiSecret);
-            profile.SecretIdProtected = string.IsNullOrEmpty(profile.SecretId) ? null : _protector.Protect(profile.SecretId);
+            // 明文存在时重新加密；明文为空但已有加密值时必须保留，否则“保存其它设置”会把凭据清空
+            // （ConfigJson.Clone 会丢掉 JsonIgnore 的明文，但保留 ApiKeyProtected）。
+            if (!string.IsNullOrEmpty(profile.ApiKey))
+            {
+                profile.ApiKeyProtected = _protector.Protect(profile.ApiKey);
+            }
+
+            if (!string.IsNullOrEmpty(profile.ApiSecret))
+            {
+                profile.ApiSecretProtected = _protector.Protect(profile.ApiSecret);
+            }
+
+            if (!string.IsNullOrEmpty(profile.SecretId))
+            {
+                profile.SecretIdProtected = _protector.Protect(profile.SecretId);
+            }
         }
     }
 

@@ -64,6 +64,19 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void CloneAppConfig_PreservesInMemorySecrets()
+    {
+        var config = AppConfig.CreateDefault();
+        config.ProviderProfiles[0].ApiKey = "sk-keep-me";
+        config.ProviderProfiles[0].ApiSecret = "secret-keep-me";
+
+        var clone = ConfigJson.CloneAppConfig(config);
+
+        Assert.Equal("sk-keep-me", clone.ProviderProfiles[0].ApiKey);
+        Assert.Equal("secret-keep-me", clone.ProviderProfiles[0].ApiSecret);
+    }
+
+    [Fact]
     public void Normalize_InitializesEyeFollowInvertMap()
     {
         var config = new AppConfig

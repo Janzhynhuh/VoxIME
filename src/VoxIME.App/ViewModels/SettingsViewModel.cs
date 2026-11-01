@@ -131,7 +131,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _registry = registry;
         _historyStore = historyStore;
         _logger = logger;
-        _working = ConfigJson.Clone(configStore.Current);
+        _working = ConfigJson.CloneAppConfig(configStore.Current);
 
         Descriptors = new ObservableCollection<AsrProviderDescriptor>(
             registry?.Descriptors ?? Array.Empty<AsrProviderDescriptor>());
@@ -1031,7 +1031,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private void InitializeFrom(AppConfig config)
     {
-        _working = ConfigJson.Clone(config);
+        _working = ConfigJson.CloneAppConfig(config);
 
         // 服务
         Providers.Clear();
@@ -1809,7 +1809,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 StatusText = "配置已保存，热键与各项设置已立即生效。";
             }
 
-            _working = ConfigJson.Clone(_configStore.Current);
+            _working = ConfigJson.CloneAppConfig(_configStore.Current);
             Saved?.Invoke(this, _configStore.Current);
             RefreshLive2DStatus();
         }
@@ -1823,12 +1823,41 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private AppConfig CollectConfig()
     {
-        var config = ConfigJson.Clone(_working);
+        var config = ConfigJson.CloneAppConfig(_working);
 
         config.ProviderProfiles = Providers.Select(p => p.ToProfile()).ToList();
         if (config.ProviderProfiles.Count == 0)
         {
             throw new InvalidOperationException("没有可用的识别服务配置");
+        }
+
+        // 兜底：UI 未携带明文凭据时，保留已保存的加密凭据，避免保存热键/桌宠等其它设置把 API Key 清空。
+        var persistedProfiles = _configStore.Current.ProviderProfiles
+            .ToDictionary(p => p.Id, StringComparer.Ordinal);
+        foreach (var profile in config.ProviderProfiles)
+        {
+            if (!persistedProfiles.TryGetValue(profile.Id, out var persisted))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(profile.ApiKey))
+            {
+                profile.ApiKey = persisted.ApiKey;
+                profile.ApiKeyProtected ??= persisted.ApiKeyProtected;
+            }
+
+            if (string.IsNullOrEmpty(profile.ApiSecret))
+            {
+                profile.ApiSecret = persisted.ApiSecret;
+                profile.ApiSecretProtected ??= persisted.ApiSecretProtected;
+            }
+
+            if (string.IsNullOrEmpty(profile.SecretId))
+            {
+                profile.SecretId = persisted.SecretId;
+                profile.SecretIdProtected ??= persisted.SecretIdProtected;
+            }
         }
 
         var defaultId = _defaultProviderId;

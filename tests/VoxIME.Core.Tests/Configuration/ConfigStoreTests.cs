@@ -57,6 +57,26 @@ public sealed class ConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void Save_WithoutPlaintextSecrets_PreservesPreviouslyEncryptedKey()
+    {
+        var store = new JsonConfigStore(_path, new NullSecretProtector());
+        var config = AppConfig.CreateDefault();
+        config.ProviderProfiles[0].ApiKey = "sk-must-survive";
+        store.Save(config);
+
+        // 模拟设置页逻辑：克隆后明文 ApiKey 丢失（[JsonIgnore]），只保留 ApiKeyProtected；再保存其它修改。
+        var clone = ConfigJson.Clone(store.Current);
+        Assert.Equal("", clone.ProviderProfiles[0].ApiKey);
+        clone.ProviderProfiles[0].Name = "改名后";
+
+        store.Save(clone);
+
+        var loaded = new JsonConfigStore(_path, new NullSecretProtector()).Load();
+        Assert.Equal("sk-must-survive", loaded.ProviderProfiles[0].ApiKey);
+        Assert.Equal("改名后", loaded.ProviderProfiles[0].Name);
+    }
+
+    [Fact]
     public void Load_MissingFile_CreatesDefaults()
     {
         var store = new JsonConfigStore(_path, new NullSecretProtector());
