@@ -93,7 +93,8 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="窗口宽度" Style="{StaticResource ValueText}" />
                         <Slider Grid.Column="1" Minimum="160" Maximum="1600" TickFrequency="20"
-                                IsSnapToTickEnabled="True" Value="{Binding Live2DWidth, Mode=TwoWay}" />
+                                IsSnapToTickEnabled="True" Value="{Binding Live2DWidth, Mode=TwoWay}"
+                                IsEnabled="{Binding IsManualWindowWidthEnabled}" />
                         <TextBlock Grid.Column="2" Text="{Binding Live2DWidth, StringFormat={}{0:0} px}"
                                    Style="{StaticResource MutedText}" HorizontalAlignment="Right"
                                    VerticalAlignment="Center" />
@@ -114,7 +115,9 @@
                     </Grid>
 
                     <CheckBox Content="窗口宽度随模型自动收紧（高度不变，左右各留约 5px padding）"
-                              Margin="0,0,0,10" IsChecked="{Binding AutoFitWindow, Mode=TwoWay}" />
+                              Margin="0,0,0,2" IsChecked="{Binding AutoFitWindow, Mode=TwoWay}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="24,-2,0,10"
+                               Text="开启后宽度由模型自动计算，宽度滑块会置灰不可手动调整；关闭后可手动调宽。" />
 
                     <CheckBox Content="窗口下边自动吸附（拖到当前屏幕底部时贴底；首次显示在右下角）"
                               Margin="0,0,0,4" IsChecked="{Binding SnapToEdge, Mode=TwoWay}" />

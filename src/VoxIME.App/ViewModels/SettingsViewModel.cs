@@ -767,12 +767,21 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _live2DHeight, Math.Clamp(value, 160, 1600));
     }
 
-    /// <summary>切换模型时按模型宽高比自动调整窗口尺寸（以当前高度为基准）。</summary>
+    /// <summary>宽度随模型自动收紧（高度不变，左右各留约 5px padding）；开启时宽度滑块置灰。</summary>
     public bool AutoFitWindow
     {
         get => _autoFitWindow;
-        set => SetProperty(ref _autoFitWindow, value);
+        set
+        {
+            if (SetProperty(ref _autoFitWindow, value))
+            {
+                OnPropertyChanged(nameof(IsManualWindowWidthEnabled));
+            }
+        }
     }
+
+    /// <summary>自动收紧宽度时，宽度滑块不可手动调整。</summary>
+    public bool IsManualWindowWidthEnabled => !AutoFitWindow;
 
     /// <summary>启动/切换模型时自动吸附到屏幕右下角。</summary>
     public bool SnapToEdge

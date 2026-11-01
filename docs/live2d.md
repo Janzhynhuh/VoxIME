@@ -152,7 +152,7 @@ Hiyori/
 | `ModelDirectory` | null | 当前模型的目录（由「选择模型」下拉框写入）；null/空 → 内置兜底形象 |
 | `ModelLibraryDirectory` | null | 模型库根目录（导入目标）；null/空 → `%APPDATA%\VoxIME\models`；可改到其它磁盘 |
 | `Width`/`Height` | 380/560 | 桌宠窗口尺寸（DIP，clamp 160..1600） |
-| `AutoFitWindow` | true | 模型加载/缩放/高度变化时保持高度，把窗口宽度收紧到模型显示宽度 + 左右各 5 DIP padding（结果持久化） |
+| `AutoFitWindow` | true | 模型加载/缩放/高度变化时保持高度，把窗口宽度收紧到模型显示宽度 + 左右各 5 DIP padding（结果持久化）；开启时设置页宽度滑块置灰 |
 | `SnapToEdge` | true | **只做下边吸附**：拖到窗口所在显示器底部约 100 DIP 内时贴底（按该显示器工作区/完整屏底边，支持多屏）；向上拖动不强制回弹，左右上方向不吸附。关闭后使用拖动保存的位置，首次无位置则居中 |
 | `KeepAboveTaskbar` | true | 贴边时窗口下边缘保持在任务栏上方（工作区内）；关闭后允许压住任务栏 |
 | `Left`/`Top` | -1/-1 | 窗口左上角（DIP）；-1 → 自动吸附主屏工作区右下角；用户拖动后位置会保留 |
