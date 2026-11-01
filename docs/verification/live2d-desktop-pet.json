@@ -1,0 +1,44 @@
+{
+  "wallpaperChangedRatio": 0.2692,
+  "changedPixelRatio": 0.1729,
+  "changedPixels": 68095,
+  "cornerTransparent": true,
+  "cornerMaxDiff": 0,
+  "changedBounds": {
+    "x": 142,
+    "y": 12,
+    "width": 240,
+    "height": 706
+  },
+  "transparencyCheckScreenshot": "<repo>\\docs\\screenshots\\live2d-desktop-pet.transparency.png",
+  "windowHandleFound": true,
+  "clickThroughCheck": {
+    "wsExTransparent": true,
+    "wsExToolWindow": true,
+    "wsExTopmost": true,
+    "hitTestResult": -1,
+    "hitTestIsTransparent": true
+  },
+  "afterDisableClickThrough": {
+    "wsExTransparent": false,
+    "hitTestResult": 1,
+    "mouseEventsReachable": true
+  },
+  "mode": "pet",
+  "ready": true,
+  "readyEventCount": 1,
+  "isAvailable": true,
+  "usingFallbackAvatar": false,
+  "lastError": null,
+  "errors": [],
+  "modelDirectory": "<repo>\\assets\\live2d\\models\\Hiyori",
+  "screenshot": "<repo>\\docs\\screenshots\\live2d-desktop-pet.png",
+  "windowPixelBounds": {
+    "x": 244,
+    "y": 113,
+    "width": 525,
+    "height": 750
+  },
+  "pass": true,
+  "success": true
+}

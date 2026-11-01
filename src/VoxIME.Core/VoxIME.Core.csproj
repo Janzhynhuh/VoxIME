@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>VoxIME.Core</RootNamespace>
+    <AssemblyName>VoxIME.Core</AssemblyName>
+    <!-- Core 不依赖 WPF，只依赖 Windows 桌面 API（音频/剪贴板/热键/TTS/DPAPI） -->
+    <UseWPF>false</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <PackageReference Include="System.Speech" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

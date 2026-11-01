@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore VoxIME.sln
+
+      - name: Build (Release)
+        run: dotnet build VoxIME.sln -c Release --no-restore --nologo
+
+      - name: Test
+        run: dotnet test VoxIME.sln -c Release --no-build --nologo
+
+      - name: Publish artifact
+        run: dotnet publish src/VoxIME.App/VoxIME.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o artifacts/VoxIME-win-x64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoxIME-win-x64
+          path: artifacts/VoxIME-win-x64
+          retention-days: 7

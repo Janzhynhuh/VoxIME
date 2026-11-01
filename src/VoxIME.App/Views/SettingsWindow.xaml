@@ -1,0 +1,177 @@
+<Window x:Class="VoxIME.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:pages="clr-namespace:VoxIME.App.Views.SettingsPages"
+        Title="VoxIME 声语 · 设置"
+        Width="980"
+        Height="700"
+        MinWidth="980"
+        MinHeight="700"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        KeyDown="Window_KeyDown">
+
+    <Border x:Name="RootBorder" Margin="20" Background="{StaticResource BgBrush}"
+            BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+            CornerRadius="16" Effect="{StaticResource WindowShadow}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="54" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="64" />
+            </Grid.RowDefinitions>
+
+            <!-- ===== 标题栏 ===== -->
+            <Border x:Name="TitleBar" Grid.Row="0" Background="Transparent" Padding="18,0,10,0"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Width="26" Height="26" CornerRadius="8"
+                            Background="{StaticResource AccentGradient}" VerticalAlignment="Center">
+                        <TextBlock Text="V" FontSize="14" FontWeight="Bold" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="VoxIME 声语" FontSize="13.5" FontWeight="SemiBold" />
+                        <TextBlock Text="设置" Style="{StaticResource MutedText}" Margin="8,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding VersionText}" Style="{StaticResource MutedText}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE921;"
+                            Click="MinimizeButton_Click" ToolTip="最小化" />
+                    <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="&#xE711;"
+                            Click="CloseButton_Click" ToolTip="关闭（设置会保留到下次打开）" />
+                </Grid>
+            </Border>
+
+            <!-- ===== 主体 ===== -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="216" />
+                    <ColumnDefinition Width="1" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 左侧导航 -->
+                <Grid Grid.Column="0" Margin="12,2,10,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <ListBox Grid.Row="0" SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}"
+                             ItemContainerStyle="{StaticResource NavItemStyle}"
+                             BorderThickness="0" Background="Transparent"
+                             ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                        <ListBoxItem>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource NavIconText}" Text="&#xE753;" />
+                                <TextBlock Style="{StaticResource NavLabelText}" Text="服务" Margin="12,0,0,0" />
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource NavIconText}" Text="&#xE720;" />
+                                <TextBlock Style="{StaticResource NavLabelText}" Text="录音" Margin="12,0,0,0" />
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource NavIconText}" Text="&#xE765;" />
+                                <TextBlock Style="{StaticResource NavLabelText}" Text="上屏" Margin="12,0,0,0" />
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource NavIconText}" Text="&#xE899;" />
+                                <TextBlock Style="{StaticResource NavLabelText}" Text="桌宠" Margin="12,0,0,0" />
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource NavIconText}" Text="&#xE767;" />
+                                <TextBlock Style="{StaticResource NavLabelText}" Text="朗读" Margin="12,0,0,0" />
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource NavIconText}" Text="&#xE713;" />
+                                <TextBlock Style="{StaticResource NavLabelText}" Text="通用" Margin="12,0,0,0" />
+                            </StackPanel>
+                        </ListBoxItem>
+                    </ListBox>
+
+                    <StackPanel Grid.Row="1" Margin="6,12,6,0">
+                        <Button Style="{StaticResource LinkButton}" Content="打开配置目录"
+                                HorizontalAlignment="Left" Command="{Binding OpenConfigFolderCommand}" />
+                        <Button Style="{StaticResource LinkButton}" Content="打开日志目录"
+                                HorizontalAlignment="Left" Margin="0,2,0,0"
+                                Command="{Binding OpenLogsFolderCommand}" />
+                        <TextBlock Text="{Binding DataDirectory}" Style="{StaticResource MonoText}"
+                                   Margin="4,6,4,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Column="1" Background="{StaticResource BorderBrush}" Margin="0,8,0,8" />
+
+                <!-- 右侧页面 -->
+                <Grid Grid.Column="2" Margin="26,6,26,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,4,0,16">
+                        <TextBlock Text="{Binding PageTitle}" Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="{Binding PageSubtitle}" Style="{StaticResource PageSubtitle}" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <pages:ProvidersPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=Providers}" />
+                        <pages:AudioPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=Audio}" />
+                        <pages:InsertionPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=Insertion}" />
+                        <pages:Live2DPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=Live2D}" />
+                        <pages:TtsPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=Tts}" />
+                        <pages:GeneralPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=General}" />
+                    </Grid>
+                </Grid>
+            </Grid>
+
+            <!-- ===== 底部操作栏 ===== -->
+            <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
+                    Padding="26,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="{Binding StatusText}" Style="{StaticResource HintText}"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,16,0" />
+
+                    <Button Grid.Column="1" Style="{StaticResource GhostButton}" Content="恢复默认"
+                            Padding="14,8" Margin="0,0,10,0" Command="{Binding ResetCommand}" />
+                    <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Content="保存"
+                            MinWidth="104" Padding="22,9" Margin="0,0,10,0" Click="SaveButton_Click" />
+                    <Button Grid.Column="3" Style="{StaticResource SecondaryButton}" Content="关闭"
+                            MinWidth="88" Padding="16,9" Click="CloseButton_Click" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -1,0 +1,140 @@
+<Window x:Class="VoxIME.App.Views.WelcomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="欢迎使用 VoxIME 声语"
+        Width="600"
+        SizeToContent="Height"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True">
+
+    <Border Margin="18" Background="{StaticResource BgBrush}"
+            BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+            CornerRadius="16" Effect="{StaticResource WindowShadow}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- 顶部渐变横幅 -->
+            <Border Grid.Row="0" CornerRadius="15,15,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown"
+                    Padding="28,26,20,24">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Offset="0" Color="#FF2A2350" />
+                        <GradientStop Offset="0.6" Color="#FF1C1C2B" />
+                        <GradientStop Offset="1" Color="#FF151522" />
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Width="56" Height="56" CornerRadius="18" Background="{StaticResource AccentGradient}"
+                            Effect="{StaticResource AccentGlow}" VerticalAlignment="Center">
+                        <TextBlock Text="V" FontSize="28" FontWeight="Bold" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="欢迎使用 VoxIME 声语" FontSize="21" FontWeight="Bold" />
+                        <TextBlock Text="按住说一句话，松开就出现在光标处。" Style="{StaticResource PageSubtitle}"
+                                   Margin="0,6,0,0" />
+                    </StackPanel>
+
+                    <Button Grid.Column="2" Style="{StaticResource IconButton}" Content="&#xE711;"
+                            Click="LaterButton_Click" ToolTip="稍后再说" VerticalAlignment="Top" />
+                </Grid>
+            </Border>
+
+            <!-- 内容 -->
+            <StackPanel Grid.Row="1" Margin="28,20,28,24">
+                <!-- 三步引导 -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource AccentSoftBrush}"
+                            VerticalAlignment="Top">
+                        <TextBlock Text="1" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="8,1,0,0">
+                        <TextBlock Text="按住热键说话" FontSize="13.5" FontWeight="SemiBold" />
+                        <TextBlock x:Name="HotkeyHint" Style="{StaticResource HintText}" Margin="0,3,0,0" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource AccentSoftBrush}"
+                            VerticalAlignment="Top">
+                        <TextBlock Text="2" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="8,1,0,0">
+                        <TextBlock Text="识别结果自动上屏" FontSize="13.5" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource HintText}" Margin="0,3,0,0"
+                                   Text="识别的文字会写入当前光标位置；也可以在设置中开启“先确认再插入”，在悬浮窗里编辑后再插入。" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource AccentSoftBrush}"
+                            VerticalAlignment="Top">
+                        <TextBlock Text="3" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="8,1,0,0">
+                        <TextBlock Text="添加一个识别服务" FontSize="13.5" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource HintText}" Margin="0,3,0,0"
+                                   Text="云端服务（OpenAI Whisper / 硅基流动 / 小米 MiMo / 阿里 DashScope / 腾讯云 / 讯飞）需要 API Key；也可以使用本地 CLI（whisper.cpp 等）或内置 Mock 离线演示。" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Style="{StaticResource InnerCard}" Margin="0,0,0,18">
+                    <StackPanel>
+                        <TextBlock Text="可以先使用内置的 Mock 离线演示服务体验界面，稍后在设置中切换为真实服务。"
+                                   Style="{StaticResource HintText}" />
+                        <TextBlock Text="识别结果默认会自动插入到当前输入框；如果开启了预览确认，将显示在悬浮窗中。"
+                                   Style="{StaticResource HintText}" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 按钮 -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" Style="{StaticResource GhostButton}" Content="以后再说"
+                            HorizontalAlignment="Left" Padding="12,7" Click="LaterButton_Click" />
+                    <Button Grid.Column="1" Style="{StaticResource SecondaryButton}"
+                            Content="添加本地离线服务" Padding="16,9" Margin="0,0,10,0"
+                            Click="AddLocalButton_Click" />
+                    <Button Grid.Column="2" Style="{StaticResource PrimaryButton}"
+                            Content="去设置添加服务" Padding="20,9" Click="SettingsButton_Click" />
+                </Grid>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

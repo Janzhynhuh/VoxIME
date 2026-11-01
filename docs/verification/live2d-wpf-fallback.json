@@ -1,0 +1,45 @@
+{
+  "wallpaperChangedRatio": 0.2786,
+  "changedPixelRatio": 0.135,
+  "changedPixels": 53145,
+  "cornerTransparent": true,
+  "cornerMaxDiff": 0,
+  "changedBounds": {
+    "x": 121,
+    "y": 12,
+    "width": 283,
+    "height": 486
+  },
+  "transparencyCheckScreenshot": "<repo>\\docs\\screenshots\\live2d-wpf-fallback.transparency.png",
+  "windowHandleFound": true,
+  "clickThroughCheck": {
+    "wsExTransparent": true,
+    "wsExToolWindow": true,
+    "wsExTopmost": true,
+    "hitTestResult": -1,
+    "hitTestIsTransparent": true
+  },
+  "afterDisableClickThrough": {
+    "wsExTransparent": false,
+    "hitTestResult": 1,
+    "mouseEventsReachable": true
+  },
+  "mode": "fallback",
+  "ready": true,
+  "readyEventCount": 1,
+  "isAvailable": true,
+  "usingFallbackAvatar": true,
+  "lastError": null,
+  "errors": [],
+  "modelDirectory": null,
+  "screenshot": "<repo>\\docs\\screenshots\\live2d-wpf-fallback.png",
+  "windowPixelBounds": {
+    "x": 244,
+    "y": 113,
+    "width": 525,
+    "height": 750
+  },
+  "expectedError": false,
+  "pass": true,
+  "success": true
+}

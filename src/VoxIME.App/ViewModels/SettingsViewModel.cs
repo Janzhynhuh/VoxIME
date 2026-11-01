@@ -1,0 +1,1657 @@
+using System.Collections.ObjectModel;
+using System.Windows;
+using Microsoft.Win32;
+using VoxIME.App.Infrastructure;
+using VoxIME.Core;
+using VoxIME.Core.Abstractions;
+using VoxIME.Core.Configuration;
+using VoxIME.Core.History;
+using VoxIME.Core.Logging;
+
+namespace VoxIME.App.ViewModels;
+
+/// <summary>
+/// 设置窗口 ViewModel：持有配置草稿（克隆），保存时收集为 AppConfig → configStore.Save → controller.ApplyConfig。
+/// UI 只依赖 Core 的接口与配置模型，不直接引用具体实现类。
+/// </summary>
+public sealed class SettingsViewModel : ObservableObject, IDisposable
+{
+    private readonly IConfigStore _configStore;
+    private readonly IVoiceInputController _controller;
+    private readonly IAsrProviderRegistry? _registry;
+    private readonly IHistoryStore _historyStore;
+    private readonly IAppLogger _logger;
+
+    private AppConfig _working;
+    private bool _disposed;
+
+    private SettingsPage _currentPage;
+    private int _selectedPageIndex;
+    private string _statusText = "";
+
+    // ---- 服务 ----
+    private ProviderItemViewModel? _selectedProvider;
+    private AsrProviderDescriptor? _newDescriptor;
+    private AsrProviderPreset? _newPreset;
+    private string _defaultProviderId = "";
+    private string _testResultText = "";
+    private bool _hasTestResult;
+    private bool _isTestSuccess;
+    private bool _isTesting;
+
+    // ---- 录音 ----
+    private AudioDeviceInfo? _selectedAudioDevice;
+    private string _pushToTalkHotkey = "";
+    private string _toggleHotkey = "";
+    private string _cancelHotkey = "";
+    private string? _pushToTalkError;
+    private string? _toggleHotkeyError;
+    private string? _cancelHotkeyError;
+    private bool _enablePushToTalk;
+    private bool _enableToggle;
+    private RecordingMode _recordingMode;
+    private int _maxDurationSeconds;
+    private int _silenceTimeoutMs;
+    private int _minSpeechMs;
+    private double _vadThreshold;
+    private bool _autoStopOnSilence;
+    private bool _playCues;
+    private bool _isMicTesting;
+    private double _micTestLevel;
+    private string _micTestStatus = "";
+
+    // ---- 上屏 ----
+    private InsertionMode _insertionMode;
+    private bool _autoInsert;
+    private bool _previewBeforeInsert;
+    private bool _restoreClipboard;
+    private bool _trimWhitespace;
+    private bool _appendSpace;
+    private bool _pressEnterAfterInsert;
+    private int _pasteDelayMs;
+    private bool _showHud;
+    private bool _showLiveTranscript;
+    private bool _overlayAutoInsert;
+    private int _overlayAutoHideMs;
+
+    // ---- 桌宠 ----
+    private bool _live2DEnabled;
+    private bool _clickThrough;
+    private bool _alwaysOnTop;
+    private bool _eyeFollow;
+    private bool _idleMotion;
+    private bool _mouthSync;
+    private bool _showBubble;
+    private string _modelDirectory = "";
+    private double _live2DWidth;
+    private double _live2DHeight;
+    private double _live2DScale;
+    private double _live2DOpacity;
+    private double _mouthSensitivity;
+    private string _idleMotionGroup = "Idle";
+    private string _listeningExpression = "";
+    private string _thinkingExpression = "";
+    private string _speakingExpression = "";
+    private string _errorExpression = "";
+    private string _fallbackAvatarTheme = "violet";
+    private string _live2DStatusText = "";
+
+    // ---- 朗读 ----
+    private bool _ttsEnabled;
+    private bool _autoSpeakResult;
+    private bool _ttsMouthSync;
+    private string? _selectedTtsVoice;
+    private int _ttsRate;
+    private int _ttsVolume;
+    private string _ttsStatusText = "";
+
+    // ---- 通用 ----
+    private bool _startWithWindows;
+    private bool _minimizeToTray;
+    private bool _showTrayIcon;
+    private bool _showWelcomeOnStartup;
+    private int _historyLimit;
+    private Choice? _selectedLogLevel;
+
+    public SettingsViewModel(
+        IConfigStore configStore,
+        IVoiceInputController controller,
+        IAsrProviderRegistry? registry,
+        IHistoryStore historyStore,
+        IAppLogger logger)
+    {
+        _configStore = configStore;
+        _controller = controller;
+        _registry = registry;
+        _historyStore = historyStore;
+        _logger = logger;
+        _working = ConfigJson.Clone(configStore.Current);
+
+        Descriptors = new ObservableCollection<AsrProviderDescriptor>(
+            registry?.Descriptors ?? Array.Empty<AsrProviderDescriptor>());
+        LogLevels = new ObservableCollection<Choice>
+        {
+            new("详细信息（调试）", "trace"),
+            new("调试", "debug"),
+            new("信息（推荐）", "info"),
+            new("警告", "warn"),
+            new("仅错误", "error")
+        };
+
+        SaveCommand = new RelayCommand(Save);
+        ResetCommand = new RelayCommand(ResetToDefaults);
+        OpenConfigFolderCommand = new RelayCommand(() => WindowHelper.OpenFolder(AppInfo.AppDataDirectory));
+        OpenLogsFolderCommand = new RelayCommand(() => WindowHelper.OpenFolder(AppInfo.DefaultLogDirectory));
+        OpenHistoryCommand = new RelayCommand(() => HistoryRequested?.Invoke(this, EventArgs.Empty));
+        OpenAboutCommand = new RelayCommand(() => AboutRequested?.Invoke(this, EventArgs.Empty));
+
+        AddProviderCommand = new RelayCommand(AddProvider, () => NewDescriptor is not null);
+        RemoveProviderCommand = new RelayCommand(RemoveProvider,
+            () => SelectedProvider is not null && Providers.Count > 1);
+        SetDefaultProviderCommand = new RelayCommand(SetDefaultProvider, () => SelectedProvider is not null);
+        TestProviderCommand = new AsyncRelayCommand(TestProviderAsync, () => SelectedProvider is not null && !IsTesting);
+        OpenProviderDocsCommand = new RelayCommand(OpenProviderDocs,
+            () => !string.IsNullOrWhiteSpace(SelectedProvider?.Descriptor?.DocsUrl));
+
+        TestMicCommand = new AsyncRelayCommand(TestMicrophoneAsync, () => !IsMicTesting);
+        BrowseModelDirectoryCommand = new RelayCommand(BrowseModelDirectory);
+        ShowLive2DCommand = new RelayCommand(() => SetLive2DVisible(true));
+        HideLive2DCommand = new RelayCommand(() => SetLive2DVisible(false));
+        TestTtsCommand = new AsyncRelayCommand(TestTtsAsync, () => !_ttsEnabledTesting);
+        AddReplacementCommand = new RelayCommand(() => Replacements.Add(new ReplacementItemViewModel("", "")));
+        RemoveReplacementCommand = new RelayCommand(param =>
+        {
+            if (param is ReplacementItemViewModel item)
+            {
+                Replacements.Remove(item);
+            }
+        });
+        ResetOverlayPositionCommand = new RelayCommand(() =>
+        {
+            OverlayPositionResetRequested?.Invoke(this, EventArgs.Empty);
+            StatusText = "已重置悬浮窗位置，将在下次显示时回到屏幕底部居中";
+        });
+
+        InitializeFrom(_working);
+        _controller.MicrophoneLevelChanged += OnMicrophoneLevelChanged;
+        SelectedPageIndex = 0;
+    }
+
+    // ==================== 事件 ====================
+
+    /// <summary>配置已保存（AppHost 用于刷新 HUD / 托盘可见性等）。</summary>
+    public event EventHandler<AppConfig>? Saved;
+
+    /// <summary>请求打开历史窗口。</summary>
+    public event EventHandler? HistoryRequested;
+
+    /// <summary>请求打开关于窗口。</summary>
+    public event EventHandler? AboutRequested;
+
+    /// <summary>请求重置 HUD 位置（由 AppHost 交给 HudWindow 处理）。</summary>
+    public event EventHandler? OverlayPositionResetRequested;
+
+    // ==================== 导航 ====================
+
+    public SettingsPage CurrentPage
+    {
+        get => _currentPage;
+        private set
+        {
+            if (SetProperty(ref _currentPage, value))
+            {
+                OnPropertiesChanged(nameof(PageTitle), nameof(PageSubtitle));
+            }
+        }
+    }
+
+    public int SelectedPageIndex
+    {
+        get => _selectedPageIndex;
+        set
+        {
+            if (value < 0)
+            {
+                return;
+            }
+
+            if (SetProperty(ref _selectedPageIndex, value))
+            {
+                CurrentPage = (SettingsPage)Math.Clamp(value, 0, (int)SettingsPage.General);
+            }
+        }
+    }
+
+    public string PageTitle => CurrentPage switch
+    {
+        SettingsPage.Providers => "服务",
+        SettingsPage.Audio => "录音",
+        SettingsPage.Insertion => "上屏",
+        SettingsPage.Live2D => "桌宠",
+        SettingsPage.Tts => "朗读",
+        _ => "通用"
+    };
+
+    public string PageSubtitle => CurrentPage switch
+    {
+        SettingsPage.Providers => "配置识别服务：云端 API、本地命令行或离线演示。",
+        SettingsPage.Audio => "选择麦克风与热键，调整录音、静音检测参数。",
+        SettingsPage.Insertion => "识别结果如何送入当前应用，以及悬浮提示窗的行为。",
+        SettingsPage.Live2D => "桌宠模型、尺寸、透明度、点击穿透与动作联动。",
+        SettingsPage.Tts => "使用 Windows 内置语音合成朗读识别结果。",
+        _ => "启动方式、数据目录、历史与日志、版本与许可。"
+    };
+
+    public string StatusText
+    {
+        get => _statusText;
+        private set
+        {
+            if (SetProperty(ref _statusText, value))
+            {
+                OnPropertyChanged(nameof(HasStatus));
+            }
+        }
+    }
+
+    public bool HasStatus => !string.IsNullOrEmpty(_statusText);
+
+    public string VersionText => $"{AppInfo.GetVersionLabel()}";
+
+    public string ConfigFilePath => _configStore.ConfigFilePath;
+
+    public string DataDirectory => AppInfo.AppDataDirectory;
+
+    public string LogDirectory => AppInfo.DefaultLogDirectory;
+
+    public string HistoryPath => _historyStore.FilePath;
+
+    /// <summary>重新枚举麦克风与语音包（每次打开设置窗口时调用）。</summary>
+    public void RefreshDevices()
+    {
+        try
+        {
+            var selectedDeviceId = SelectedAudioDevice?.Id;
+            AudioDevices.Clear();
+            AudioDevices.Add(new AudioDeviceInfo { Id = "", Name = "系统默认设备", IsDefault = true });
+            foreach (var device in _controller.GetInputDevices())
+            {
+                AudioDevices.Add(device);
+            }
+
+            SelectedAudioDevice = AudioDevices.FirstOrDefault(d =>
+                                      string.Equals(d.Id, selectedDeviceId, StringComparison.Ordinal))
+                                  ?? AudioDevices[0];
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"刷新录音设备失败：{ex.Message}");
+        }
+
+        try
+        {
+            var selectedVoice = SelectedTtsVoice;
+            TtsVoices.Clear();
+            foreach (var voice in _controller.GetTtsVoices())
+            {
+                TtsVoices.Add(voice);
+            }
+
+            SelectedTtsVoice = !string.IsNullOrEmpty(selectedVoice) && TtsVoices.Contains(selectedVoice)
+                ? selectedVoice
+                : TtsVoices.FirstOrDefault();
+            OnPropertyChanged(nameof(IsTtsAvailable));
+            TtsStatusText = TtsVoices.Count == 0
+                ? "未检测到 Windows 语音包，朗读功能不可用。"
+                : $"已检测到 {TtsVoices.Count} 个语音包。";
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"刷新语音包失败：{ex.Message}");
+        }
+
+        RefreshLive2DStatus();
+    }
+
+    // ==================== 通用命令 ====================
+
+    public RelayCommand SaveCommand { get; }
+    public RelayCommand ResetCommand { get; }
+    public RelayCommand OpenConfigFolderCommand { get; }
+    public RelayCommand OpenLogsFolderCommand { get; }
+    public RelayCommand OpenHistoryCommand { get; }
+    public RelayCommand OpenAboutCommand { get; }
+
+    // ==================== 服务页 ====================
+
+    public ObservableCollection<ProviderItemViewModel> Providers { get; } = new();
+
+    public ObservableCollection<AsrProviderDescriptor> Descriptors { get; }
+
+    public ObservableCollection<AsrProviderPreset> NewPresets { get; } = new();
+
+    public ObservableCollection<Choice> LogLevels { get; }
+
+    public ProviderItemViewModel? SelectedProvider
+    {
+        get => _selectedProvider;
+        set
+        {
+            if (SetProperty(ref _selectedProvider, value))
+            {
+                OnPropertiesChanged(nameof(HasSelectedProvider), nameof(SelectedProviderIsDefault));
+                RaiseProviderCommands();
+            }
+        }
+    }
+
+    public bool HasSelectedProvider => _selectedProvider is not null;
+
+    public bool SelectedProviderIsDefault => _selectedProvider is not null && _selectedProvider.IsDefault;
+
+    public AsrProviderDescriptor? NewDescriptor
+    {
+        get => _newDescriptor;
+        set
+        {
+            if (SetProperty(ref _newDescriptor, value))
+            {
+                NewPresets.Clear();
+                if (value is not null)
+                {
+                    foreach (var preset in value.Presets)
+                    {
+                        NewPresets.Add(preset);
+                    }
+                }
+
+                NewPreset = NewPresets.FirstOrDefault();
+                AddProviderCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public AsrProviderPreset? NewPreset
+    {
+        get => _newPreset;
+        set => SetProperty(ref _newPreset, value);
+    }
+
+    public bool HasDescriptorCatalog => Descriptors.Count > 0;
+
+    public string DescriptorCatalogHint => HasDescriptorCatalog
+        ? $"共 {Descriptors.Count} 种适配器"
+        : "未能加载服务目录（请检查 Core 注册表实现）";
+
+    public string TestResultText
+    {
+        get => _testResultText;
+        private set => SetProperty(ref _testResultText, value);
+    }
+
+    public bool HasTestResult
+    {
+        get => _hasTestResult;
+        private set => SetProperty(ref _hasTestResult, value);
+    }
+
+    public bool IsTestSuccess
+    {
+        get => _isTestSuccess;
+        private set => SetProperty(ref _isTestSuccess, value);
+    }
+
+    public bool IsTesting
+    {
+        get => _isTesting;
+        private set
+        {
+            if (SetProperty(ref _isTesting, value))
+            {
+                TestProviderCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public RelayCommand AddProviderCommand { get; }
+    public RelayCommand RemoveProviderCommand { get; }
+    public RelayCommand SetDefaultProviderCommand { get; }
+    public AsyncRelayCommand TestProviderCommand { get; }
+    public RelayCommand OpenProviderDocsCommand { get; }
+
+    // ==================== 录音页 ====================
+
+    public ObservableCollection<AudioDeviceInfo> AudioDevices { get; } = new();
+
+    public AudioDeviceInfo? SelectedAudioDevice
+    {
+        get => _selectedAudioDevice;
+        set => SetProperty(ref _selectedAudioDevice, value);
+    }
+
+    public string PushToTalkHotkey
+    {
+        get => _pushToTalkHotkey;
+        set
+        {
+            if (SetProperty(ref _pushToTalkHotkey, value))
+            {
+                ValidateHotkeys();
+            }
+        }
+    }
+
+    public string ToggleHotkey
+    {
+        get => _toggleHotkey;
+        set
+        {
+            if (SetProperty(ref _toggleHotkey, value))
+            {
+                ValidateHotkeys();
+            }
+        }
+    }
+
+    public string CancelHotkey
+    {
+        get => _cancelHotkey;
+        set
+        {
+            if (SetProperty(ref _cancelHotkey, value))
+            {
+                ValidateHotkeys();
+            }
+        }
+    }
+
+    public string? PushToTalkError
+    {
+        get => _pushToTalkError;
+        private set
+        {
+            if (SetProperty(ref _pushToTalkError, value))
+            {
+                OnPropertyChanged(nameof(HasPushToTalkError));
+            }
+        }
+    }
+
+    public string? ToggleHotkeyError
+    {
+        get => _toggleHotkeyError;
+        private set
+        {
+            if (SetProperty(ref _toggleHotkeyError, value))
+            {
+                OnPropertyChanged(nameof(HasToggleHotkeyError));
+            }
+        }
+    }
+
+    public string? CancelHotkeyError
+    {
+        get => _cancelHotkeyError;
+        private set
+        {
+            if (SetProperty(ref _cancelHotkeyError, value))
+            {
+                OnPropertyChanged(nameof(HasCancelHotkeyError));
+            }
+        }
+    }
+
+    public bool HasPushToTalkError => !string.IsNullOrEmpty(_pushToTalkError);
+    public bool HasToggleHotkeyError => !string.IsNullOrEmpty(_toggleHotkeyError);
+    public bool HasCancelHotkeyError => !string.IsNullOrEmpty(_cancelHotkeyError);
+
+    public bool EnablePushToTalk
+    {
+        get => _enablePushToTalk;
+        set => SetProperty(ref _enablePushToTalk, value);
+    }
+
+    public bool EnableToggle
+    {
+        get => _enableToggle;
+        set => SetProperty(ref _enableToggle, value);
+    }
+
+    public RecordingMode RecordingMode
+    {
+        get => _recordingMode;
+        set
+        {
+            if (SetProperty(ref _recordingMode, value))
+            {
+                OnPropertiesChanged(nameof(IsPushToTalkMode), nameof(IsToggleMode));
+            }
+        }
+    }
+
+    public bool IsPushToTalkMode
+    {
+        get => _recordingMode == RecordingMode.PushToTalk;
+        set
+        {
+            if (value)
+            {
+                RecordingMode = RecordingMode.PushToTalk;
+            }
+        }
+    }
+
+    public bool IsToggleMode
+    {
+        get => _recordingMode == RecordingMode.Toggle;
+        set
+        {
+            if (value)
+            {
+                RecordingMode = RecordingMode.Toggle;
+            }
+        }
+    }
+
+    public int MaxDurationSeconds
+    {
+        get => _maxDurationSeconds;
+        set => SetProperty(ref _maxDurationSeconds, Math.Clamp(value, 5, 600));
+    }
+
+    public int SilenceTimeoutMs
+    {
+        get => _silenceTimeoutMs;
+        set => SetProperty(ref _silenceTimeoutMs, Math.Clamp(value, 200, 5000));
+    }
+
+    public int MinSpeechMs
+    {
+        get => _minSpeechMs;
+        set => SetProperty(ref _minSpeechMs, Math.Clamp(value, 100, 3000));
+    }
+
+    public double VadThreshold
+    {
+        get => _vadThreshold;
+        set => SetProperty(ref _vadThreshold, Math.Clamp(value, 0.001, 0.2));
+    }
+
+    public bool AutoStopOnSilence
+    {
+        get => _autoStopOnSilence;
+        set => SetProperty(ref _autoStopOnSilence, value);
+    }
+
+    public bool PlayCues
+    {
+        get => _playCues;
+        set => SetProperty(ref _playCues, value);
+    }
+
+    public bool IsMicTesting
+    {
+        get => _isMicTesting;
+        private set
+        {
+            if (SetProperty(ref _isMicTesting, value))
+            {
+                TestMicCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public double MicTestLevel
+    {
+        get => _micTestLevel;
+        set => SetProperty(ref _micTestLevel, Math.Clamp(value, 0, 1));
+    }
+
+    public string MicTestStatus
+    {
+        get => _micTestStatus;
+        private set => SetProperty(ref _micTestStatus, value);
+    }
+
+    public AsyncRelayCommand TestMicCommand { get; }
+
+    // ==================== 上屏页 ====================
+
+    public InsertionMode InsertionMode
+    {
+        get => _insertionMode;
+        set
+        {
+            if (SetProperty(ref _insertionMode, value))
+            {
+                OnPropertiesChanged(nameof(IsClipboardPasteMode), nameof(IsSimulateTypingMode));
+            }
+        }
+    }
+
+    public bool IsClipboardPasteMode
+    {
+        get => _insertionMode == InsertionMode.ClipboardPaste;
+        set
+        {
+            if (value)
+            {
+                InsertionMode = InsertionMode.ClipboardPaste;
+            }
+        }
+    }
+
+    public bool IsSimulateTypingMode
+    {
+        get => _insertionMode == InsertionMode.SimulateTyping;
+        set
+        {
+            if (value)
+            {
+                InsertionMode = InsertionMode.SimulateTyping;
+            }
+        }
+    }
+
+    public bool AutoInsert
+    {
+        get => _autoInsert;
+        set => SetProperty(ref _autoInsert, value);
+    }
+
+    public bool PreviewBeforeInsert
+    {
+        get => _previewBeforeInsert;
+        set => SetProperty(ref _previewBeforeInsert, value);
+    }
+
+    public bool RestoreClipboard
+    {
+        get => _restoreClipboard;
+        set => SetProperty(ref _restoreClipboard, value);
+    }
+
+    public bool TrimWhitespace
+    {
+        get => _trimWhitespace;
+        set => SetProperty(ref _trimWhitespace, value);
+    }
+
+    public bool AppendSpace
+    {
+        get => _appendSpace;
+        set => SetProperty(ref _appendSpace, value);
+    }
+
+    public bool PressEnterAfterInsert
+    {
+        get => _pressEnterAfterInsert;
+        set => SetProperty(ref _pressEnterAfterInsert, value);
+    }
+
+    public int PasteDelayMs
+    {
+        get => _pasteDelayMs;
+        set => SetProperty(ref _pasteDelayMs, Math.Clamp(value, 0, 2000));
+    }
+
+    public ObservableCollection<ReplacementItemViewModel> Replacements { get; } = new();
+
+    public bool ShowHud
+    {
+        get => _showHud;
+        set => SetProperty(ref _showHud, value);
+    }
+
+    public bool ShowLiveTranscript
+    {
+        get => _showLiveTranscript;
+        set => SetProperty(ref _showLiveTranscript, value);
+    }
+
+    public bool OverlayAutoInsert
+    {
+        get => _overlayAutoInsert;
+        set => SetProperty(ref _overlayAutoInsert, value);
+    }
+
+    public int OverlayAutoHideMs
+    {
+        get => _overlayAutoHideMs;
+        set => SetProperty(ref _overlayAutoHideMs, Math.Clamp(value, 500, 30000));
+    }
+
+    public RelayCommand AddReplacementCommand { get; }
+    public RelayCommand RemoveReplacementCommand { get; }
+    public RelayCommand ResetOverlayPositionCommand { get; }
+
+    // ==================== 桌宠页 ====================
+
+    public bool Live2DEnabled
+    {
+        get => _live2DEnabled;
+        set => SetProperty(ref _live2DEnabled, value);
+    }
+
+    public string ModelDirectory
+    {
+        get => _modelDirectory;
+        set => SetProperty(ref _modelDirectory, value);
+    }
+
+    public double Live2DWidth
+    {
+        get => _live2DWidth;
+        set => SetProperty(ref _live2DWidth, Math.Clamp(value, 160, 1600));
+    }
+
+    public double Live2DHeight
+    {
+        get => _live2DHeight;
+        set => SetProperty(ref _live2DHeight, Math.Clamp(value, 160, 1600));
+    }
+
+    public double Live2DScale
+    {
+        get => _live2DScale;
+        set => SetProperty(ref _live2DScale, Math.Clamp(value, 0.2, 3.0));
+    }
+
+    public double Live2DOpacity
+    {
+        get => _live2DOpacity;
+        set => SetProperty(ref _live2DOpacity, Math.Clamp(value, 0.2, 1.0));
+    }
+
+    public double MouthSensitivity
+    {
+        get => _mouthSensitivity;
+        set => SetProperty(ref _mouthSensitivity, Math.Clamp(value, 0.1, 5.0));
+    }
+
+    public bool ClickThrough
+    {
+        get => _clickThrough;
+        set => SetProperty(ref _clickThrough, value);
+    }
+
+    public bool AlwaysOnTop
+    {
+        get => _alwaysOnTop;
+        set => SetProperty(ref _alwaysOnTop, value);
+    }
+
+    public bool EyeFollow
+    {
+        get => _eyeFollow;
+        set => SetProperty(ref _eyeFollow, value);
+    }
+
+    public bool IdleMotion
+    {
+        get => _idleMotion;
+        set => SetProperty(ref _idleMotion, value);
+    }
+
+    public bool TtsMouthSync
+    {
+        get => _ttsMouthSync;
+        set => SetProperty(ref _ttsMouthSync, value);
+    }
+
+    public bool ShowBubble
+    {
+        get => _showBubble;
+        set => SetProperty(ref _showBubble, value);
+    }
+
+    public string IdleMotionGroup
+    {
+        get => _idleMotionGroup;
+        set => SetProperty(ref _idleMotionGroup, value);
+    }
+
+    public string ListeningExpression
+    {
+        get => _listeningExpression;
+        set => SetProperty(ref _listeningExpression, value);
+    }
+
+    public string ThinkingExpression
+    {
+        get => _thinkingExpression;
+        set => SetProperty(ref _thinkingExpression, value);
+    }
+
+    public string SpeakingExpression
+    {
+        get => _speakingExpression;
+        set => SetProperty(ref _speakingExpression, value);
+    }
+
+    public string ErrorExpression
+    {
+        get => _errorExpression;
+        set => SetProperty(ref _errorExpression, value);
+    }
+
+    public string FallbackAvatarTheme
+    {
+        get => _fallbackAvatarTheme;
+        set => SetProperty(ref _fallbackAvatarTheme, value);
+    }
+
+    public string Live2DStatusText
+    {
+        get => _live2DStatusText;
+        private set => SetProperty(ref _live2DStatusText, value);
+    }
+
+    public RelayCommand BrowseModelDirectoryCommand { get; }
+    public RelayCommand ShowLive2DCommand { get; }
+    public RelayCommand HideLive2DCommand { get; }
+
+    // ==================== 朗读页 ====================
+
+    public bool TtsEnabled
+    {
+        get => _ttsEnabled;
+        set => SetProperty(ref _ttsEnabled, value);
+    }
+
+    public bool AutoSpeakResult
+    {
+        get => _autoSpeakResult;
+        set => SetProperty(ref _autoSpeakResult, value);
+    }
+
+    public ObservableCollection<string> TtsVoices { get; } = new();
+
+    public string? SelectedTtsVoice
+    {
+        get => _selectedTtsVoice;
+        set => SetProperty(ref _selectedTtsVoice, value);
+    }
+
+    public int TtsRate
+    {
+        get => _ttsRate;
+        set => SetProperty(ref _ttsRate, Math.Clamp(value, -10, 10));
+    }
+
+    public int TtsVolume
+    {
+        get => _ttsVolume;
+        set => SetProperty(ref _ttsVolume, Math.Clamp(value, 0, 100));
+    }
+
+    public string TtsStatusText
+    {
+        get => _ttsStatusText;
+        private set => SetProperty(ref _ttsStatusText, value);
+    }
+
+    public bool IsTtsAvailable => TtsVoices.Count > 0;
+
+    public AsyncRelayCommand TestTtsCommand { get; }
+
+    private bool _ttsEnabledTesting;
+
+    // ==================== 通用页 ====================
+
+    public bool StartWithWindows
+    {
+        get => _startWithWindows;
+        set => SetProperty(ref _startWithWindows, value);
+    }
+
+    public bool MinimizeToTray
+    {
+        get => _minimizeToTray;
+        set => SetProperty(ref _minimizeToTray, value);
+    }
+
+    public bool ShowTrayIcon
+    {
+        get => _showTrayIcon;
+        set => SetProperty(ref _showTrayIcon, value);
+    }
+
+    public bool ShowWelcomeOnStartup
+    {
+        get => _showWelcomeOnStartup;
+        set => SetProperty(ref _showWelcomeOnStartup, value);
+    }
+
+    public int HistoryLimit
+    {
+        get => _historyLimit;
+        set => SetProperty(ref _historyLimit, Math.Clamp(value, 10, 2000));
+    }
+
+    public Choice? SelectedLogLevel
+    {
+        get => _selectedLogLevel;
+        set => SetProperty(ref _selectedLogLevel, value);
+    }
+
+    // ==================== 初始化 ====================
+
+    private void InitializeFrom(AppConfig config)
+    {
+        _working = ConfigJson.Clone(config);
+
+        // 服务
+        Providers.Clear();
+        foreach (var profile in config.ProviderProfiles)
+        {
+            var item = new ProviderItemViewModel(profile, _registry);
+            Providers.Add(item);
+        }
+
+        _defaultProviderId = config.ActiveProviderProfileId;
+        if (Providers.All(p => p.Id != _defaultProviderId))
+        {
+            _defaultProviderId = Providers.FirstOrDefault(p => p.Enabled)?.Id
+                                 ?? Providers.FirstOrDefault()?.Id
+                                 ?? "";
+        }
+
+        UpdateDefaultFlags();
+        SelectedProvider = Providers.FirstOrDefault(p => p.Id == _defaultProviderId) ?? Providers.FirstOrDefault();
+        NewDescriptor = Descriptors.FirstOrDefault();
+        if (NewDescriptor is null)
+        {
+            NewPresets.Clear();
+            NewPreset = null;
+        }
+
+        // 录音
+        AudioDevices.Clear();
+        AudioDevices.Add(new AudioDeviceInfo { Id = "", Name = "系统默认设备", IsDefault = true });
+        try
+        {
+            foreach (var device in _controller.GetInputDevices())
+            {
+                AudioDevices.Add(device);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"枚举录音设备失败：{ex.Message}");
+        }
+
+        SelectedAudioDevice = AudioDevices.FirstOrDefault(d =>
+                                  string.Equals(d.Id, config.Audio.DeviceId, StringComparison.Ordinal))
+                              ?? AudioDevices[0];
+
+        PushToTalkHotkey = config.Hotkeys.PushToTalk;
+        ToggleHotkey = config.Hotkeys.Toggle;
+        CancelHotkey = config.Hotkeys.Cancel;
+        EnablePushToTalk = config.Hotkeys.EnablePushToTalk;
+        EnableToggle = config.Hotkeys.EnableToggle;
+        RecordingMode = config.Hotkeys.DefaultMode;
+        MaxDurationSeconds = config.Audio.MaxDurationSeconds;
+        SilenceTimeoutMs = config.Audio.SilenceTimeoutMs;
+        MinSpeechMs = config.Audio.MinSpeechMs;
+        VadThreshold = config.Audio.VadThreshold;
+        AutoStopOnSilence = config.Audio.AutoStopOnSilence;
+        PlayCues = config.Audio.PlayCues;
+
+        // 上屏
+        InsertionMode = config.Insertion.Mode;
+        AutoInsert = config.Insertion.AutoInsert;
+        PreviewBeforeInsert = config.Insertion.PreviewBeforeInsert;
+        RestoreClipboard = config.Insertion.RestoreClipboard;
+        TrimWhitespace = config.Insertion.TrimWhitespace;
+        AppendSpace = config.Insertion.AppendSpace;
+        PressEnterAfterInsert = config.Insertion.PressEnterAfterInsert;
+        PasteDelayMs = config.Insertion.PasteDelayMs;
+        Replacements.Clear();
+        foreach (var replacement in config.Insertion.Replacements)
+        {
+            Replacements.Add(new ReplacementItemViewModel(replacement.From, replacement.To));
+        }
+
+        ShowHud = config.Overlay.ShowHud;
+        ShowLiveTranscript = config.Overlay.ShowLiveTranscript;
+        OverlayAutoInsert = config.Overlay.AutoInsert;
+        OverlayAutoHideMs = config.Overlay.AutoHideMs;
+
+        // 桌宠
+        Live2DEnabled = config.Live2D.Enabled;
+        ModelDirectory = config.Live2D.ModelDirectory ?? "";
+        Live2DWidth = config.Live2D.Width;
+        Live2DHeight = config.Live2D.Height;
+        Live2DScale = config.Live2D.Scale;
+        Live2DOpacity = config.Live2D.Opacity;
+        MouthSensitivity = config.Live2D.MouthSensitivity;
+        ClickThrough = config.Live2D.ClickThrough;
+        AlwaysOnTop = config.Live2D.AlwaysOnTop;
+        EyeFollow = config.Live2D.EyeFollow;
+        IdleMotion = config.Live2D.IdleMotion;
+        SetMouthSync(config.Live2D.MouthSync);
+        ShowBubble = config.Live2D.ShowBubble;
+        IdleMotionGroup = config.Live2D.IdleMotionGroup;
+        ListeningExpression = config.Live2D.ListeningExpression ?? "";
+        ThinkingExpression = config.Live2D.ThinkingExpression ?? "";
+        SpeakingExpression = config.Live2D.SpeakingExpression ?? "";
+        ErrorExpression = config.Live2D.ErrorExpression ?? "";
+        FallbackAvatarTheme = config.Live2D.FallbackAvatarTheme;
+        RefreshLive2DStatus();
+
+        // 朗读
+        TtsEnabled = config.Tts.Enabled;
+        AutoSpeakResult = config.Tts.AutoSpeakResult;
+        TtsMouthSync = config.Tts.MouthSync;
+        TtsRate = config.Tts.Rate;
+        TtsVolume = config.Tts.Volume;
+
+        TtsVoices.Clear();
+        try
+        {
+            foreach (var voice in _controller.GetTtsVoices())
+            {
+                TtsVoices.Add(voice);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"枚举语音包失败：{ex.Message}");
+        }
+
+        SelectedTtsVoice = !string.IsNullOrEmpty(config.Tts.VoiceName) && TtsVoices.Contains(config.Tts.VoiceName)
+            ? config.Tts.VoiceName
+            : TtsVoices.FirstOrDefault();
+        TtsStatusText = TtsVoices.Count == 0
+            ? "未检测到 Windows 语音包，朗读功能不可用。"
+            : $"已检测到 {TtsVoices.Count} 个语音包。";
+
+        // 通用
+        StartWithWindows = config.Ui.StartWithWindows || StartupRegistration.IsEnabled();
+        MinimizeToTray = config.Ui.MinimizeToTray;
+        ShowTrayIcon = config.Ui.ShowTrayIcon;
+        ShowWelcomeOnStartup = config.Ui.ShowWelcomeOnStartup;
+        HistoryLimit = config.Ui.HistoryLimit;
+        SelectedLogLevel = LogLevels.FirstOrDefault(l =>
+                                string.Equals(l.Value, config.Logging.Level, StringComparison.OrdinalIgnoreCase))
+                            ?? LogLevels[2];
+
+        ValidateHotkeys();
+    }
+
+    private void SetMouthSync(bool value)
+    {
+        _mouthSync = value;
+        OnPropertyChanged(nameof(MouthSync));
+    }
+
+    public bool MouthSync
+    {
+        get => _mouthSync;
+        set => SetProperty(ref _mouthSync, value);
+    }
+
+    // ==================== 服务页逻辑 ====================
+
+    private void UpdateDefaultFlags()
+    {
+        foreach (var provider in Providers)
+        {
+            provider.IsDefault = string.Equals(provider.Id, _defaultProviderId, StringComparison.Ordinal);
+        }
+
+        OnPropertyChanged(nameof(SelectedProviderIsDefault));
+        SetDefaultProviderCommand.RaiseCanExecuteChanged();
+    }
+
+    private void AddProvider()
+    {
+        var descriptor = NewDescriptor;
+        if (descriptor is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var template = NewPreset?.Template.Clone() ?? new ProviderProfile
+            {
+                TypeId = descriptor.TypeId,
+                Name = descriptor.DisplayName,
+                Language = "zh",
+                TimeoutSeconds = 60
+            };
+
+            template.Id = Guid.NewGuid().ToString("N")[..8];
+            template.TypeId = descriptor.TypeId;
+            template.Name = string.IsNullOrWhiteSpace(template.Name) ? descriptor.DisplayName : template.Name;
+            template.Enabled = true;
+
+            var item = new ProviderItemViewModel(template, _registry);
+            Providers.Add(item);
+            SelectedProvider = item;
+            StatusText = $"已添加服务“{item.Name}”，填写参数后点击“保存”。";
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("添加服务失败", ex);
+            Ui.Error("添加服务失败：" + ex.Message);
+        }
+    }
+
+    private void RemoveProvider()
+    {
+        var item = SelectedProvider;
+        if (item is null)
+        {
+            return;
+        }
+
+        if (Providers.Count <= 1)
+        {
+            Ui.Warn("至少需要保留一个识别服务。");
+            return;
+        }
+
+        if (!Ui.Confirm($"确定删除服务“{item.Name}”吗？", "删除服务", "删除", "取消"))
+        {
+            return;
+        }
+
+        var index = Providers.IndexOf(item);
+        Providers.Remove(item);
+
+        if (string.Equals(_defaultProviderId, item.Id, StringComparison.Ordinal))
+        {
+            _defaultProviderId = Providers.FirstOrDefault(p => p.Enabled)?.Id ?? Providers[0].Id;
+            UpdateDefaultFlags();
+        }
+
+        SelectedProvider = index > 0
+            ? Providers[Math.Min(index - 1, Providers.Count - 1)]
+            : Providers.FirstOrDefault();
+        StatusText = "已删除服务，点击“保存”后生效。";
+    }
+
+    private void SetDefaultProvider()
+    {
+        var item = SelectedProvider;
+        if (item is null)
+        {
+            return;
+        }
+
+        item.Enabled = true;
+        _defaultProviderId = item.Id;
+        UpdateDefaultFlags();
+        StatusText = $"已将“{item.Name}”设为默认服务，点击“保存”后生效。";
+    }
+
+    private async Task TestProviderAsync()
+    {
+        var item = SelectedProvider;
+        if (item is null)
+        {
+            return;
+        }
+
+        IsTesting = true;
+        HasTestResult = true;
+        IsTestSuccess = false;
+        TestResultText = "正在录音 3 秒并调用识别服务，请对着麦克风说话…";
+        StatusText = $"正在测试服务“{item.Name}”…";
+
+        try
+        {
+            var profile = item.ToProfile();
+            var result = await _controller.TestProviderAsync(profile, 3).ConfigureAwait(true);
+            IsTestSuccess = true;
+            TestResultText = $"识别成功（{result.Latency.TotalMilliseconds:0} ms · 音频 {result.AudioDuration.TotalSeconds:0.0}s）：{result.Text}";
+            StatusText = "测试识别成功。";
+        }
+        catch (AsrException ex)
+        {
+            IsTestSuccess = false;
+            var code = ex.StatusCode is int status ? $"（HTTP {status}）" : "";
+            TestResultText = $"识别失败{code}：{ex.Message}";
+            StatusText = "测试识别失败，请检查服务参数与网络。";
+            _logger.Warn($"测试服务失败：{ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            IsTestSuccess = false;
+            TestResultText = "识别失败：" + ex.Message;
+            StatusText = "测试识别失败。";
+            _logger.Warn($"测试服务异常：{ex.Message}");
+        }
+        finally
+        {
+            IsTesting = false;
+        }
+    }
+
+    private void OpenProviderDocs()
+    {
+        var url = SelectedProvider?.Descriptor?.DocsUrl;
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            WindowHelper.OpenUrl(url);
+        }
+    }
+
+    // ==================== 录音页逻辑 ====================
+
+    private void ValidateHotkeys()
+    {
+        string? pushError = null;
+        string? toggleError = null;
+        string? cancelError = null;
+
+        var pushOk = HotkeyGesture.TryNormalize(PushToTalkHotkey, out var pushNormalized, out var pushMsg);
+        if (!pushOk)
+        {
+            pushError = pushMsg;
+        }
+
+        var toggleOk = HotkeyGesture.TryNormalize(ToggleHotkey, out var toggleNormalized, out var toggleMsg);
+        if (!toggleOk)
+        {
+            toggleError = toggleMsg;
+        }
+
+        var cancelOk = HotkeyGesture.TryNormalize(CancelHotkey, out var cancelNormalized, out var cancelMsg);
+        if (!cancelOk)
+        {
+            cancelError = cancelMsg;
+        }
+
+        if (pushOk && toggleOk && string.Equals(pushNormalized, toggleNormalized, StringComparison.OrdinalIgnoreCase))
+        {
+            toggleError = "不能与“按住说话”热键相同";
+        }
+
+        if (pushOk && cancelOk && string.Equals(pushNormalized, cancelNormalized, StringComparison.OrdinalIgnoreCase))
+        {
+            cancelError = "不能与“按住说话”热键相同";
+        }
+
+        if (toggleOk && cancelOk && string.Equals(toggleNormalized, cancelNormalized, StringComparison.OrdinalIgnoreCase))
+        {
+            cancelError = "不能与“切换录音”热键相同";
+        }
+
+        PushToTalkError = pushError;
+        ToggleHotkeyError = toggleError;
+        CancelHotkeyError = cancelError;
+    }
+
+    private async Task TestMicrophoneAsync()
+    {
+        if (IsMicTesting)
+        {
+            return;
+        }
+
+        if (_controller.State != AppState.Idle)
+        {
+            MicTestStatus = "当前正在录音或识别，请稍后再试。";
+            return;
+        }
+
+        try
+        {
+            if (!_controller.StartRecording())
+            {
+                MicTestStatus = "无法开始录音：麦克风可能被占用或不可用。";
+                return;
+            }
+
+            IsMicTesting = true;
+            MicTestLevel = 0;
+            MicTestStatus = "正在录音 3 秒，请对着麦克风说话…";
+
+            try
+            {
+                await Task.Delay(3000).ConfigureAwait(true);
+            }
+            finally
+            {
+                _controller.Cancel();
+            }
+
+            MicTestStatus = "录音测试完成：电平有波动说明麦克风工作正常。";
+        }
+        catch (Exception ex)
+        {
+            MicTestStatus = "录音测试失败：" + ex.Message;
+            _logger.Warn($"录音测试失败：{ex.Message}");
+        }
+        finally
+        {
+            IsMicTesting = false;
+            MicTestLevel = 0;
+        }
+    }
+
+    private void OnMicrophoneLevelChanged(object? sender, AudioLevelEventArgs e)
+    {
+        WindowHelper.RunOnUi(() => MicTestLevel = Math.Clamp(e.Level * 9.0, 0, 1));
+    }
+
+    // ==================== 桌宠页逻辑 ====================
+
+    private void BrowseModelDirectory()
+    {
+        try
+        {
+            var dialog = new OpenFolderDialog
+            {
+                Title = "选择 Live2D 模型目录（包含 *.model3.json）",
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                ModelDirectory = dialog.FolderName;
+                StatusText = "已选择模型目录，点击“保存”后生效。";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"选择模型目录失败：{ex.Message}");
+            Ui.Warn("无法打开目录选择框：" + ex.Message);
+        }
+    }
+
+    private void SetLive2DVisible(bool visible)
+    {
+        try
+        {
+            if (visible)
+            {
+                _controller.Live2D.Show();
+            }
+            else
+            {
+                _controller.Live2D.Hide();
+            }
+
+            RefreshLive2DStatus();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"切换桌宠显示失败：{ex.Message}");
+        }
+    }
+
+    private void RefreshLive2DStatus()
+    {
+        try
+        {
+            var live2D = _controller.Live2D;
+            Live2DStatusText = live2D switch
+            {
+                { IsAvailable: true, IsVisible: true } => "Live2D 桌宠运行中。",
+                { IsAvailable: true } => "Live2D 桌宠已隐藏。",
+                { LastError: not null } => $"Live2D 不可用，已使用内置兜底形象：{live2D.LastError}",
+                _ => "当前使用内置兜底形象（未加载 Live2D 模型）。"
+            };
+        }
+        catch (Exception ex)
+        {
+            Live2DStatusText = "无法读取桌宠状态：" + ex.Message;
+        }
+    }
+
+    // ==================== 朗读页逻辑 ====================
+
+    private async Task TestTtsAsync()
+    {
+        if (_ttsEnabledTesting)
+        {
+            return;
+        }
+
+        _ttsEnabledTesting = true;
+        TestTtsCommand.RaiseCanExecuteChanged();
+        TtsStatusText = "正在朗读测试文本…";
+
+        try
+        {
+            await _controller.SpeakAsync("你好，我是 VoxIME 声语，这是一段语音朗读测试。").ConfigureAwait(true);
+            TtsStatusText = "朗读测试完成。";
+        }
+        catch (Exception ex)
+        {
+            TtsStatusText = "朗读失败：" + ex.Message;
+            _logger.Warn($"朗读测试失败：{ex.Message}");
+        }
+        finally
+        {
+            _ttsEnabledTesting = false;
+            TestTtsCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    // ==================== 保存 ====================
+
+    private void Save()
+    {
+        ValidateHotkeys();
+        if (HasPushToTalkError || HasToggleHotkeyError || HasCancelHotkeyError)
+        {
+            StatusText = "热键设置有误，请先修正标红的输入框。";
+            Ui.Warn("热键格式有误，请检查录音页中的热键设置。", "无法保存");
+            SelectedPageIndex = (int)SettingsPage.Audio;
+            return;
+        }
+
+        if (Providers.Count == 0)
+        {
+            Ui.Warn("至少需要保留一个识别服务。", "无法保存");
+            return;
+        }
+
+        try
+        {
+            var config = CollectConfig();
+            _configStore.Save(config);
+            _controller.ApplyConfig(_configStore.Current);
+
+            if (!StartupRegistration.SetEnabled(config.Ui.StartWithWindows))
+            {
+                StatusText = "配置已保存，但写入开机自启注册表失败（权限不足）。";
+            }
+            else
+            {
+                StatusText = "配置已保存，热键与各项设置已立即生效。";
+            }
+
+            _working = ConfigJson.Clone(_configStore.Current);
+            Saved?.Invoke(this, _configStore.Current);
+            RefreshLive2DStatus();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("保存设置失败", ex);
+            StatusText = "保存失败：" + ex.Message;
+            Ui.Error("保存设置失败：" + ex.Message);
+        }
+    }
+
+    private AppConfig CollectConfig()
+    {
+        var config = ConfigJson.Clone(_working);
+
+        config.ProviderProfiles = Providers.Select(p => p.ToProfile()).ToList();
+        if (config.ProviderProfiles.Count == 0)
+        {
+            throw new InvalidOperationException("没有可用的识别服务配置");
+        }
+
+        var defaultId = _defaultProviderId;
+        if (config.ProviderProfiles.All(p => p.Id != defaultId))
+        {
+            defaultId = config.ProviderProfiles.FirstOrDefault(p => p.Enabled)?.Id
+                        ?? config.ProviderProfiles[0].Id;
+        }
+
+        config.ActiveProviderProfileId = defaultId;
+
+        HotkeyGesture.TryNormalize(PushToTalkHotkey, out var push, out _);
+        HotkeyGesture.TryNormalize(ToggleHotkey, out var toggle, out _);
+        HotkeyGesture.TryNormalize(CancelHotkey, out var cancel, out _);
+
+        config.Hotkeys = new HotkeyConfig
+        {
+            PushToTalk = push,
+            Toggle = toggle,
+            Cancel = cancel,
+            EnablePushToTalk = EnablePushToTalk,
+            EnableToggle = EnableToggle,
+            DefaultMode = RecordingMode
+        };
+
+        config.Audio = new AudioConfig
+        {
+            DeviceId = string.IsNullOrWhiteSpace(SelectedAudioDevice?.Id) ? null : SelectedAudioDevice!.Id,
+            SampleRate = 16000,
+            MaxDurationSeconds = MaxDurationSeconds,
+            AutoStopOnSilence = AutoStopOnSilence,
+            SilenceTimeoutMs = SilenceTimeoutMs,
+            MinSpeechMs = MinSpeechMs,
+            VadThreshold = VadThreshold,
+            PlayCues = PlayCues
+        };
+
+        config.Insertion = new InsertionConfig
+        {
+            Mode = InsertionMode,
+            AutoInsert = AutoInsert,
+            PreviewBeforeInsert = PreviewBeforeInsert,
+            RestoreClipboard = RestoreClipboard,
+            PasteDelayMs = PasteDelayMs,
+            TrimWhitespace = TrimWhitespace,
+            AppendSpace = AppendSpace,
+            PressEnterAfterInsert = PressEnterAfterInsert,
+            Replacements = Replacements
+                .Where(r => !string.IsNullOrEmpty(r.From))
+                .Select(r => new TextReplacement { From = r.From, To = r.To })
+                .ToList()
+        };
+
+        var currentOverlay = _configStore.Current.Overlay;
+        config.Overlay = new OverlayConfig
+        {
+            ShowHud = ShowHud,
+            ShowLiveTranscript = ShowLiveTranscript,
+            AutoInsert = OverlayAutoInsert,
+            AutoHideMs = OverlayAutoHideMs,
+            Left = currentOverlay.Left,
+            Top = currentOverlay.Top
+        };
+
+        config.Live2D = new Live2DConfig
+        {
+            Enabled = Live2DEnabled,
+            ModelDirectory = string.IsNullOrWhiteSpace(ModelDirectory) ? null : ModelDirectory.Trim(),
+            Width = Live2DWidth,
+            Height = Live2DHeight,
+            Scale = Live2DScale,
+            Opacity = Live2DOpacity,
+            ClickThrough = ClickThrough,
+            AlwaysOnTop = AlwaysOnTop,
+            EyeFollow = EyeFollow,
+            IdleMotion = IdleMotion,
+            MouthSync = MouthSync,
+            MouthSensitivity = MouthSensitivity,
+            ShowBubble = ShowBubble,
+            IdleMotionGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(),
+            ListeningExpression = NullIfEmpty(ListeningExpression),
+            ThinkingExpression = NullIfEmpty(ThinkingExpression),
+            SpeakingExpression = NullIfEmpty(SpeakingExpression),
+            ErrorExpression = NullIfEmpty(ErrorExpression),
+            FallbackAvatarTheme = string.IsNullOrWhiteSpace(FallbackAvatarTheme) ? "violet" : FallbackAvatarTheme.Trim(),
+            Left = _configStore.Current.Live2D.Left,
+            Top = _configStore.Current.Live2D.Top
+        };
+
+        config.Tts = new TtsConfig
+        {
+            Enabled = TtsEnabled,
+            AutoSpeakResult = AutoSpeakResult,
+            VoiceName = string.IsNullOrWhiteSpace(SelectedTtsVoice) ? null : SelectedTtsVoice,
+            Rate = TtsRate,
+            Volume = TtsVolume,
+            MouthSync = TtsMouthSync
+        };
+
+        config.Ui = new UiConfig
+        {
+            Language = "zh-CN",
+            StartWithWindows = StartWithWindows,
+            MinimizeToTray = MinimizeToTray,
+            ShowTrayIcon = ShowTrayIcon,
+            ShowHistory = true,
+            HistoryLimit = HistoryLimit,
+            Theme = "dark",
+            AccentColor = "#7C5CFF",
+            ShowWelcomeOnStartup = ShowWelcomeOnStartup
+        };
+
+        config.Logging = new LoggingConfig
+        {
+            Level = SelectedLogLevel?.Value ?? "info",
+            Directory = _working.Logging.Directory,
+            MaxFileSizeKb = _working.Logging.MaxFileSizeKb,
+            RetainDays = _working.Logging.RetainDays
+        };
+
+        return config;
+    }
+
+    private static string? NullIfEmpty(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void ResetToDefaults()
+    {
+        if (!Ui.Confirm("恢复所有设置为默认值？当前配置将被覆盖（历史记录不受影响）。", "恢复默认设置", "恢复", "取消"))
+        {
+            return;
+        }
+
+        try
+        {
+            _configStore.ResetToDefaults();
+            _controller.ApplyConfig(_configStore.Current);
+            InitializeFrom(_configStore.Current);
+            StatusText = "已恢复默认设置。";
+            Saved?.Invoke(this, _configStore.Current);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("恢复默认设置失败", ex);
+            Ui.Error("恢复默认设置失败：" + ex.Message);
+        }
+    }
+
+    private void RaiseProviderCommands()
+    {
+        RemoveProviderCommand.RaiseCanExecuteChanged();
+        SetDefaultProviderCommand.RaiseCanExecuteChanged();
+        TestProviderCommand.RaiseCanExecuteChanged();
+        OpenProviderDocsCommand.RaiseCanExecuteChanged();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _controller.MicrophoneLevelChanged -= OnMicrophoneLevelChanged;
+    }
+}

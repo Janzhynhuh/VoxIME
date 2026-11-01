@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    VoxIME 解决方案公共构建设置。
+    语言：C# / .NET 10 / Windows x64。
+    注意：不要在全局设置 RuntimeIdentifier，发布脚本会在 dotnet publish 时指定 win-x64。
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.1.0</Version>
+    <FileVersion>0.1.0.0</FileVersion>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <Product>VoxIME 声语</Product>
+    <Company>VoxIME Project</Company>
+    <Copyright>Copyright © 2026 VoxIME Project</Copyright>
+    <NeutralLanguage>zh-Hans</NeutralLanguage>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+    <AnalysisLevel>none</AnalysisLevel>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CA1416;CS1591;NU1701;CS0169;CS0649</NoWarn>
+  </PropertyGroup>
+
+</Project>

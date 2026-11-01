@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>VoxIME.App</RootNamespace>
+    <AssemblyName>VoxIME</AssemblyName>
+    <ApplicationIcon>..\..\assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VoxIME.Core\VoxIME.Core.csproj" />
+    <ProjectReference Include="..\VoxIME.Live2D\VoxIME.Live2D.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="app.manifest" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+  <!--
+    WPF 模板自带的 MainWindow 已不再使用：本项目无 StartupUri，所有窗口由 AppHost 统一管理
+    （Tray / HUD / 设置 / 历史 / 欢迎 / 关于）。文件保留但排除出编译，避免出现无用的空窗口类型。
+  -->
+  <ItemGroup>
+    <Page Remove="MainWindow.xaml" />
+    <Compile Remove="MainWindow.xaml.cs" />
+  </ItemGroup>
+
+  <!--
+    WPF 与 WinForms 同时启用时，SDK 会隐式引入 System.Windows.Forms / System.Drawing，
+    与 WPF 的 Application/MessageBox/Clipboard/Brush/Color 等类型冲突。
+    本工程以 WPF 为主：移除这两个隐式 using，仅在托盘的 WinForms 代码文件中显式引入。
+  -->
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
+</Project>
+
+
+

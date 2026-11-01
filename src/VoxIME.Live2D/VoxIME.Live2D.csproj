@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      必须使用 windows10.0.17763.0（Win10 1809+）平台 TFM：
+      Microsoft.Web.WebView2.Wpf.WebView2CompositionControl（透明 WPF 合成的唯一可行方案）
+      在运行时依赖 WinRT 投影程序集 Microsoft.Windows.SDK.NET.dll；
+      而 net10.0-windows（= windows7.0）不会引入该投影，运行时抛 FileNotFoundException。
+      注意：VoxIME.App 必须使用同样的 TFM 才能引用本项目（Lead 已同步）。
+    -->
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>VoxIME.Live2D</RootNamespace>
+    <AssemblyName>VoxIME.Live2D</AssemblyName>
+    <!--
+      类库默认不把 NuGet/框架依赖复制到 bin，导致单独构建本库时无法直接确认
+      Microsoft.Windows.SDK.NET.dll（WinRT 投影）是否被带上。打开该开关后，
+      单独 `dotnet build src/VoxIME.Live2D` 的输出目录也能看到 WebView2 与
+      WinRT 投影依赖，便于集成验证；宿主 exe 的 publish 不受影响。
+    -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3485.44" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VoxIME.Core\VoxIME.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\assets\live2d\wwwroot\**\*" Link="live2d\wwwroot\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    开发期验证程序放在 devtools/ 下（独立 csproj，不属于本库，也不参与解决方案构建）。
+    必须从库的默认 Compile/Content 通配中排除，避免其生成的 obj/*.cs 混入库编译。
+  -->
+  <ItemGroup>
+    <Compile Remove="devtools\**\*.cs" />
+    <None Remove="devtools\**\*" />
+    <Content Remove="devtools\**\*" />
+    <EmbeddedResource Remove="devtools\**\*" />
+    <Page Remove="devtools\**\*.xaml" />
+  </ItemGroup>
+
+</Project>

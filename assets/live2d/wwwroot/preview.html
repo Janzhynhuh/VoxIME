@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>VoxIME Live2D 预览</title>
+  <!--
+    独立预览 / 调试页（不需要 WPF，也不需要构建）。
+    URL 参数：
+      model=<相对或绝对路径>   .model3.json 路径；相对路径会依次尝试 ./models/、../models/、当前目录
+      bg=checker|solid|desktop|transparent  背景（默认 checker，用于证明透明合成）
+      state=idle|listening|thinking|speaking|error
+      mouth=0..1    gaze=x,y (-1..1)    bubble=气泡文字
+      demo=1       强制显示内置 Canvas 兜底形象（无模型时的页面行为）
+      status=1     显示详细调试状态
+  -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="preview" class="preview-page bg-checker">
+  <div id="stage">
+    <canvas id="demo-canvas" class="hidden"></canvas>
+    <div id="bubble" role="status" aria-live="polite"></div>
+    <div id="hint" class="hidden"></div>
+  </div>
+
+  <div id="preview-panel">
+    <div class="row">
+      <label for="model-input">模型</label>
+      <input id="model-input" type="text" spellcheck="false"
+             placeholder="例如 ../models/Hiyori/Hiyori.model3.json 或 https://voxime.models/Hiyori/Hiyori.model3.json" />
+      <button id="btn-load" type="button">加载</button>
+      <select id="bg-select" title="背景">
+        <option value="checker">棋盘格（验证透明）</option>
+        <option value="desktop">模拟桌面壁纸</option>
+        <option value="solid">深色纯色</option>
+        <option value="transparent">透明</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>状态</label>
+      <button class="state-btn" data-state="idle" type="button">待机</button>
+      <button class="state-btn" data-state="listening" type="button">聆听</button>
+      <button class="state-btn" data-state="thinking" type="button">思考</button>
+      <button class="state-btn" data-state="speaking" type="button">说话</button>
+      <button class="state-btn" data-state="error" type="button">出错</button>
+    </div>
+
+    <div class="row">
+      <label>口型</label>
+      <input id="mouth-slider" type="range" min="0" max="1" step="0.01" value="0" />
+      <span id="mouth-value">0.00</span>
+      <label>眼动</label>
+      <input id="gaze-x" type="range" min="-1" max="1" step="0.01" value="0" title="眼动 X" />
+      <input id="gaze-y" type="range" min="-1" max="1" step="0.01" value="0" title="眼动 Y" />
+      <label class="check"><input id="chk-eyefollow" type="checkbox" checked />眼动跟随</label>
+      <label class="check"><input id="chk-idlemotion" type="checkbox" checked />待机动作</label>
+      <label class="check"><input id="chk-mouthsync" type="checkbox" checked />口型同步</label>
+    </div>
+
+    <div class="row">
+      <label for="bubble-input">气泡</label>
+      <input id="bubble-input" type="text" placeholder="输入气泡文字（Enter 显示，空内容隐藏）" />
+      <button id="btn-bubble-hide" type="button">隐藏</button>
+      <button id="btn-demo" type="button">Canvas 兜底演示</button>
+    </div>
+
+    <div id="status">初始化中…</div>
+  </div>
+
+  <!-- 运行库顺序：Cubism Core → pixi.js → pixi-live2d-display(cubism4) → 业务脚本 -->
+  <script src="vendor/live2dcubismcore.min.js"></script>
+  <script src="vendor/pixi.min.js"></script>
+  <script src="vendor/cubism4.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

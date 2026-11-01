@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    开发期验证/截图工具（不属于 VoxIME.Live2D 库，也不参与解决方案构建）。
+    用途：
+      1) avatar   —— 渲染 WPF 兜底形象各状态截图 + 拼图；
+      2) pet      —— 真实启动 Live2DController（WebView2 + Hiyori 模型），
+                     截取桌宠窗口压在真实桌面壁纸上的截图，并做透明性像素校验；
+      3) fallback —— 强制走兜底形象的同一套启动/截图/校验流程。
+    运行方式见 docs/live2d.md。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>VoxIME.Live2D.DevTools</RootNamespace>
+    <AssemblyName>VoxIME.Live2D.Tools</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <StartupObject>VoxIME.Live2D.DevTools.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\VoxIME.Live2D.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3485.44" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,132 @@
+<Window x:Class="VoxIME.App.Views.HudWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="VoxIME HUD"
+        Width="640"
+        SizeToContent="Height"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        Opacity="0"
+        Focusable="False"
+        WindowStartupLocation="Manual">
+
+    <Border x:Name="Card" Margin="18"
+            Background="#F2171722"
+            BorderBrush="#26FFFFFF"
+            BorderThickness="1"
+            CornerRadius="18"
+            Padding="14,10,12,12"
+            Effect="{StaticResource HudShadow}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- 拖动把手 -->
+            <Border Grid.Row="0" Height="4" Width="36" CornerRadius="2" Background="#33FFFFFF"
+                    HorizontalAlignment="Center" Margin="0,0,0,10"
+                    Tag="hud-hit" Cursor="SizeAll"
+                    ToolTip="拖动可移动悬浮窗"
+                    MouseLeftButtonDown="DragHandle_MouseLeftButtonDown" />
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 麦克风电平环 -->
+                <Grid Grid.Column="0" Width="54" Height="54" Margin="2,0,14,0"
+                      Tag="hud-hit" Cursor="SizeAll"
+                      ToolTip="拖动可移动悬浮窗"
+                      MouseLeftButtonDown="DragHandle_MouseLeftButtonDown">
+                    <Ellipse Width="46" Height="46" Stroke="#FF2A2A3A" StrokeThickness="4" />
+                    <Ellipse Width="46" Height="46" Stroke="{Binding StatusBrush}" StrokeThickness="4"
+                             StrokeDashArray="{Binding Level, Converter={StaticResource LevelToDash}}"
+                             RenderTransformOrigin="0.5,0.5">
+                        <Ellipse.RenderTransform>
+                            <RotateTransform Angle="-90" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                    <TextBlock Style="{StaticResource GlyphIcon}" FontSize="16"
+                               Text="{Binding GlyphText}" Foreground="{Binding StatusBrush}" />
+                </Grid>
+
+                <!-- 状态 / 预览 -->
+                <Grid Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal">
+                        <TextBlock Text="{Binding StateText}" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{Binding StatusBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding DetailText}" Style="{StaticResource MutedText}"
+                                   Margin="10,0,0,0" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="300"
+                                   Visibility="{Binding DetailText, Converter={StaticResource NullToVis}}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="1" Text="{Binding ErrorText}" Style="{StaticResource DangerText}"
+                               Margin="0,5,0,0" MaxWidth="430" TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}" />
+
+                    <TextBlock Grid.Row="2" Text="{Binding HintText}" Style="{StaticResource MutedText}"
+                               Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding IsNormalMode, Converter={StaticResource BoolToVis}}" />
+
+                    <ProgressBar Grid.Row="3" Height="4" Margin="0,8,0,0"
+                                 Minimum="0" Maximum="1" Value="{Binding Level, Mode=OneWay}"
+                                 Foreground="{Binding StatusBrush}"
+                                 Background="#1FFFFFFF"
+                                 Visibility="{Binding ShowLevelBar, Converter={StaticResource BoolToVis}}" />
+
+                    <TextBox Grid.Row="3" Style="{StaticResource MultilineTextBox}"
+                             MinHeight="56" MaxHeight="120"
+                             Margin="0,8,0,0"
+                             Text="{Binding PreviewText, UpdateSourceTrigger=PropertyChanged}"
+                             Tag="hud-hit"
+                             Visibility="{Binding IsPreviewVisible, Converter={StaticResource BoolToVis}}" />
+                </Grid>
+
+                <!-- 操作按钮 -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="完成" Style="{StaticResource PrimaryButton}" FontSize="12"
+                            Padding="14,7" Margin="0,0,8,0"
+                            Command="{Binding StopCommand}"
+                            Visibility="{Binding ShowStopButton, Converter={StaticResource BoolToVis}}" />
+                    <Button Content="取消" Style="{StaticResource GhostButton}" FontSize="12"
+                            Padding="12,7" Margin="0,0,8,0"
+                            Command="{Binding CancelCommand}"
+                            Visibility="{Binding ShowCancelButton, Converter={StaticResource BoolToVis}}" />
+                    <Button Content="插入" Style="{StaticResource PrimaryButton}" FontSize="12"
+                            Padding="14,7" Margin="0,0,8,0"
+                            Command="{Binding InsertCommand}"
+                            Visibility="{Binding IsPreviewVisible, Converter={StaticResource BoolToVis}}" />
+                    <Button Content="复制" Style="{StaticResource SecondaryButton}" FontSize="12"
+                            Padding="12,7" Margin="0,0,8,0"
+                            Command="{Binding CopyCommand}"
+                            Visibility="{Binding IsPreviewVisible, Converter={StaticResource BoolToVis}}" />
+                    <Button Content="关闭" Style="{StaticResource GhostButton}" FontSize="12"
+                            Padding="12,7" Margin="0,0,8,0"
+                            Command="{Binding DismissPreviewCommand}"
+                            Visibility="{Binding IsPreviewVisible, Converter={StaticResource BoolToVis}}" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE713;"
+                            Command="{Binding OpenSettingsCommand}" ToolTip="打开设置" />
+                    <Button Style="{StaticResource IconButton}" Content="&#xE711;"
+                            Command="{Binding HideCommand}" ToolTip="隐藏悬浮窗" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

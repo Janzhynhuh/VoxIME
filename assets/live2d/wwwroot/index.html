@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>VoxIME Live2D</title>
+  <!--
+    VoxIME 桌宠页（供 WPF WebView2CompositionControl 嵌入，透明背景）。
+    URL 参数：
+      embedded=1   嵌入模式（隐藏提示、气泡交由 WPF 层渲染、不自动加载模型）
+      model=<url>  直接加载模型（独立打开时使用；嵌入模式由 C# loadModel 消息驱动）
+      demo=1       强制显示内置 Canvas 兜底形象（不加载模型）
+      state/mouth/gaze/bubble  调试用初始状态
+  -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="pet" class="pet-page">
+  <div id="stage">
+    <canvas id="demo-canvas" class="hidden"></canvas>
+    <div id="bubble" role="status" aria-live="polite"></div>
+    <div id="hint" class="hidden"></div>
+  </div>
+
+  <!-- 运行库顺序：Cubism Core → pixi.js → pixi-live2d-display(cubism4) → 业务脚本 -->
+  <script src="vendor/live2dcubismcore.min.js"></script>
+  <script src="vendor/pixi.min.js"></script>
+  <script src="vendor/cubism4.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+# Build outputs
+bin/
+obj/
+artifacts/
+publish/
+deploy/
+*.zip
+*.user
+*.suo
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+
+# Test results
+TestResults/
+*.trx
+coverage*.xml
+coverage*.json
+
+# Logs / local data
+logs/
+*.log
+*.tmp
+*.bak
+*.json.log
+
+# Live2D models and third-party binaries are downloaded locally, not committed
+# （官方示例模型有独立许可，不随仓库/发布包分发；用 scripts/fetch-sample-model.ps1 获取）
+assets/live2d/models/
+assets/runtime/
+
+# NuGet
+*.nupkg
+packages/
+
+# Local secrets / environment
+.env
+.env.*
+secrets.*

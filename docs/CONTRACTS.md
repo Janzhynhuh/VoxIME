@@ -1,0 +1,168 @@
+# VoxIME 开发契约（团队共享）
+
+> 本文件是 4 名队友 + Lead 共同遵守的接口/文件边界约定。**动手前先完整读一遍**。
+> 任何需要偏离本契约的改动，先 `send_message` 通知 lead，不要自行改公共文件。
+
+## 1. 项目目标
+
+Windows x64 语音输入法 **VoxIME 声语**：悬浮语音助手形态。
+
+- 全局热键（按住说话 / 按下切换）录音 → 可插拔多厂商 ASR 识别 → 文本自动插入当前焦点应用。
+- 透明置顶 Live2D 桌宠窗口：Cubism 3/4 模型、眼动跟随、待机动画、TTS 驱动口型、状态联动；无模型时用内置兜底形象。
+- WPF 设置界面 + 托盘图标 + 历史记录 + 配置持久化（API Key 用 DPAPI 加密）。
+- 技术栈：.NET 10 / C# / WPF / NAudio / System.Speech / WebView2 / pixi-live2d-display。x64，Windows 11 环境已验证可构建。
+
+## 2. 环境事实
+
+- 工作目录：`<repo>`（所有相对路径以此为准）。
+- `dotnet` 10.0.402 已安装；`dotnet build` / `dotnet test` 直接用。
+- NuGet、GitHub 可访问；WebView2 Runtime 已安装（156.x）。
+- **TFM 约定（2025-11-01 更新）**：`VoxIME.Core`、`VoxIME.Core.Tests` 使用 `net10.0-windows`；`VoxIME.App`、`VoxIME.Live2D` 使用 **`net10.0-windows10.0.17763.0`**（Live2D 透明合成需要 `WebView2CompositionControl` 及其 WinRT 投影 `Microsoft.Windows.SDK.NET`，最低 Windows 10 1809）。不要随意改动其他项目的 TFM。
+- Python 路径：`C:\Users\<user>\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe`（用途有限）。
+- 无 Visual Studio IDE，只用命令行构建；已安装 MSVC BuildTools（本项目不需要 C++）。
+- 没有真实麦克风/API Key 的自动化测试环境，**ASR 网络请求一律用 HttpMessageHandler 假实现做单元测试，不要打真实网络**。
+
+## 3. 目录与文件所有权（严禁越界写）
+
+| 归属 | 文件范围 |
+|---|---|
+| **Lead** | `Directory.Build.props`、`global.json`、`VoxIME.sln`、`README.md`、`docs/`（除 `docs/live2d.md`）、`scripts/`（除 `scripts/fetch-sample-model.ps1`）、`deploy/`、`assets/app.*`、`src/VoxIME.Core/AppInfo.cs`、`src/VoxIME.Core/Abstractions/**`、`src/VoxIME.Core/Configuration/**`、`src/VoxIME.Core/Logging/**`、`src/VoxIME.Core/History/**`、`src/VoxIME.Core/Services/**`、`tests/VoxIME.Core.Tests/Integration/**`、`tests/VoxIME.Core.Tests/Configuration/**` |
+| **A（core-services）** | `src/VoxIME.Core/Audio/**`、`src/VoxIME.Core/Hotkeys/**`、`src/VoxIME.Core/TextInsertion/**`、`src/VoxIME.Core/Tts/**`、`tests/VoxIME.Core.Tests/Audio/**`、`tests/VoxIME.Core.Tests/Hotkeys/**`、`tests/VoxIME.Core.Tests/TextInsertion/**`、`tests/VoxIME.Core.Tests/Tts/**` |
+| **B（asr-providers）** | `src/VoxIME.Core/Asr/**`、`tests/VoxIME.Core.Tests/Asr/**`、`docs/providers.md` |
+| **C（wpf-shell）** | `src/VoxIME.App/**`（可修改本目录内所有文件，不得改其他项目） |
+| **D（live2d）** | `src/VoxIME.Live2D/**`、`assets/live2d/**`、`docs/live2d.md`、`scripts/fetch-sample-model.ps1` |
+
+公共契约文件（`Abstractions/`、`Configuration/`、`Logging/`、`History/`）已冻结：**只读**。如确实需要新增接口/字段，发消息给 lead，由 lead 修改。
+
+## 4. 已冻结的核心接口（命名空间 `VoxIME.Core.Abstractions`）
+
+定义文件在 `src/VoxIME.Core/Abstractions/`，请直接阅读，不要重复定义：
+
+- `AudioModels.cs`：`IAudioCaptureService`、`IBeepPlayer`、`AudioClip`、`AudioDeviceInfo`、`AudioLevelEventArgs`、`RecordingOptions`、`RecordingResult`、`AudioCue`
+- `AsrModels.cs`：`IAsrProvider`、`IAsrProviderRegistry`、`AsrProviderDescriptor`、`AsrProviderPreset`、`AsrResult`、`AsrCallOptions`、`AsrException`、`AsrProviderTypeIds`（类型 ID 常量）、`AsrCategories`
+- `InsertionModels.cs`：`ITextInjector`、`IClipboardService`、`ITextPostProcessor`、`InsertionResult`
+- `HotkeyModels.cs`：`IHotkeyService`、`HotkeyEventArgs`、`HotkeyAction`
+- `TtsModels.cs`：`ITtsService`、`TtsOptions`
+- `Live2DModels.cs`：`ILive2DController`、`Live2DState`
+- `VoiceInputModels.cs`：`IVoiceInputController`（UI 唯一依赖的主控接口）、`AppState`、`AppStateChangedEventArgs`、`TranscriptionRecord`
+
+配置类型在 `VoxIME.Core.Configuration`：`AppConfig`（含 `ProviderProfile`、`HotkeyConfig`、`AudioConfig`、`InsertionConfig`、`Live2DConfig`、`TtsConfig`、`UiConfig`、`OverlayConfig`、`LoggingConfig`）、`IConfigStore`/`JsonConfigStore`、`ISecretProtector`/`DpapiSecretProtector`、`ConfigJson`。
+日志：`VoxIME.Core.Logging.IAppLogger`、`FileLogger`、`NullLogger`、`LogLevel`。
+历史：`VoxIME.Core.History.IHistoryStore`/`JsonlHistoryStore`。
+
+## 5. 必须提供的具体实现类（**类名、命名空间、构造函数签名不可改**，UI/集成按此装配）
+
+### A（core-services）
+```csharp
+namespace VoxIME.Core.Audio;
+public sealed class WasapiAudioCaptureService : IAudioCaptureService
+{
+    public WasapiAudioCaptureService(IAppLogger logger);
+}
+public sealed class SystemBeepPlayer : IBeepPlayer
+{
+    public SystemBeepPlayer();
+}
+// VAD 需可单测（public）
+public sealed class VoiceActivityDetector { /* 自行设计，须能对 16k float 采样判断语音/静音 */ }
+
+namespace VoxIME.Core.TextInsertion;
+public sealed class Win32ClipboardService : IClipboardService { public Win32ClipboardService(); }
+public sealed class ClipboardTextInjector : ITextInjector
+{
+    public ClipboardTextInjector(IClipboardService clipboard, IAppLogger logger);
+}
+public sealed class DefaultTextPostProcessor : ITextPostProcessor { public DefaultTextPostProcessor(); }
+
+namespace VoxIME.Core.Hotkeys;
+public sealed class GlobalHotkeyService : IHotkeyService { public GlobalHotkeyService(IAppLogger logger); }
+// 热键解析/匹配器必须 public + 可单测（例如 HotkeyGesture / HotkeyMatcher）
+
+namespace VoxIME.Core.Tts;
+public sealed class SapiTtsService : ITtsService { public SapiTtsService(IAppLogger logger); }
+```
+
+### B（asr-providers）
+```csharp
+namespace VoxIME.Core.Asr;
+public sealed class AsrProviderRegistry : IAsrProviderRegistry
+{
+    public AsrProviderRegistry(HttpClient httpClient, IAppLogger logger);
+}
+
+namespace VoxIME.Core.Asr.Providers;
+public sealed class OpenAiCompatibleTranscriptionProvider : IAsrProvider
+{ public OpenAiCompatibleTranscriptionProvider(ProviderProfile profile, HttpClient httpClient, IAppLogger logger); }
+public sealed class OpenAiAudioChatProvider : IAsrProvider { /* 同签名 */ }
+public sealed class LocalCliAsrProvider : IAsrProvider { /* 同签名 */ }
+public sealed class TencentAsrProvider : IAsrProvider { /* 同签名 */ }
+public sealed class XfyunAsrProvider : IAsrProvider { /* 同签名 */ }
+public sealed class MockAsrProvider : IAsrProvider { /* 同签名 */ }
+```
+`AsrProviderRegistry.Descriptors` 必须覆盖：OpenAI Whisper、硅基流动 SenseVoice、LM Studio/本地 OpenAI 兼容、**小米 MiMo ASR**、**阿里云 DashScope**、**腾讯云**、**科大讯飞**、**本地 CLI（whisper.cpp / FunASR / sherpa-onnx）**、Mock。每个 descriptor 带 1 个以上 `AsrProviderPreset`（含默认 BaseUrl/Model/Language）。
+
+### D（live2d）
+```csharp
+namespace VoxIME.Live2D;
+public sealed class Live2DController : ILive2DController
+{
+    public Live2DController(IAppLogger logger);
+}
+```
+必须实现：透明置顶无边框窗口（不出现在任务栏）、模型目录加载（递归找 `*.model3.json`）、状态联动、口型、眼动、气泡、ClickThrough、AlwaysOnTop、Position/Size/Scale/Opacity、`ApplyConfig` 热切换、异常降级、**无模型/无 WebView2 时内置 WPF 兜底形象**。
+
+### Lead
+```csharp
+namespace VoxIME.Core.Services;
+public sealed class VoiceInputController : IVoiceInputController
+{
+    public VoiceInputController(IConfigStore configStore, IAudioCaptureService audio,
+        IAsrProviderRegistry asrRegistry, ITextInjector injector, ITextPostProcessor postProcessor,
+        ITtsService tts, IHotkeyService hotkeys, ILive2DController live2d, IBeepPlayer beep,
+        IHistoryStore history, IAppLogger logger);
+}
+```
+
+## 6. 构建与测试命令
+
+```powershell
+# 只构建自己负责的项目（推荐，避免被他人未完成的代码阻塞）
+dotnet build src/VoxIME.Core/VoxIME.Core.csproj
+dotnet build src/VoxIME.Live2D/VoxIME.Live2D.csproj
+dotnet build src/VoxIME.App/VoxIME.App.csproj
+
+# 单元测试（第一遍构建会还原，约 30s）
+dotnet test tests/VoxIME.Core.Tests/VoxIME.Core.Tests.csproj --nologo
+
+# 全解决方案（Lead 最终集成用）
+dotnet build VoxIME.sln
+```
+注意：`VoxIME.App` 在 A/B/D 的实现类出现前无法编译通过（AppHost 引用它们）。C 可以先写完 UI/ViewModel，构建失败时确认报错只涉及尚未出现的实现类即可。
+
+## 7. 通用编码要求
+
+- 语言：代码用 C# 12+，标识符英文；**UI 文案、错误提示、注释、文档用简体中文**。
+- 空值处理：项目开启 `Nullable`，不要用 `!` 乱压；对不可信输入做防御。
+- 线程：Core 服务不要假设 UI 线程；事件在后台线程触发时由 UI 层自行 Dispatcher。避免 `async void`（事件处理器除外）。
+- 异常：不要让后台线程未捕获异常导致崩溃；对外错误通过事件/`AsrException` 汇报并记日志。
+- 不引入新的 NuGet 包（现有：NAudio、System.Speech、ProtectedData、WebView2、xunit）。需要新的先问 Lead。
+- 不要修改 `Directory.Build.props`、`global.json`、`VoxIME.sln`、其他项目的 `.csproj`；不要 `git init`/`git commit`；不要 `dotnet publish`。
+- 不写死绝对路径；用户数据目录用 `AppInfo.AppDataDirectory`。
+- 不要删除/覆盖其他队友正在写的文件。
+- WPF 资源（样式/图片）自己负责；D 的 `assets/live2d/wwwroot/**` 由 Live2D.csproj 以 Content 复制到输出目录，网页用相对路径引用。
+
+## 8. 工作流
+
+1. `team_task_get` 读取自己的任务 → `team_task_update`（action=claim, expected_revision=当前 revision）认领。
+2. 按任务描述 + 本契约实现，边写边用 `dotnet build` 自检。
+3. 完成后：`dotnet build`/`dotnet test` 通过 → `team_task_update`（action=complete）→ `send_message` 给 lead，内容：完成内容、关键文件列表、构建/测试结果、未完成/风险点。
+4. 遇到契约冲突、缺依赖、需要拆分的决策：**立即**发消息给 lead，不要卡住超过 10 分钟。
+5. Lead 会做最终集成与发布；队友不需要打包、不需要写 README。
+
+## 9. 交互/配色（C 的 UI 参考）
+
+- 深色现代风：主背景 `#12121A`，卡片 `#1C1C27`，强调色 `#7C5CFF`（配置里默认 accent），正文 `#E8E8F0`，次要文字 `#8A8AA0`，成功 `#4ADE80`，危险 `#FF6B6B`。
+- 字体：`Microsoft YaHei UI`，圆角 12px，无边框窗口可拖动。
+- 中文界面：状态文案："待机 / 聆听中… / 识别中… / 朗读中 / 出错了"。
+- 设置窗口约 980×700，左侧导航（服务、录音、上屏、桌宠、朗读、通用），右侧内容区。
+- HUD：屏幕底部居中，胶囊卡片，含麦克风电平环、状态文字、识别预览、插入/复制/取消按钮；点击按钮区域不穿透。

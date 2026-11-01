@@ -1,0 +1,21 @@
+{
+  "description": "真实厂商联调：Windows SAPI 合成中文语音 → VoxIME 应用完整链路（强制 WAV 输入）→ 小米 MiMo ASR → 上屏到真实前台文本框",
+  "date": "2026-11-01",
+  "app": "VoxIME 0.1.0",
+  "provider": "小米 MiMo",
+  "providerTypeId": "openai-audio-chat",
+  "model": "mimo-v2.5-asr",
+  "endpoint": "https://api.xiaomimimo.com/v1/chat/completions",
+  "audio": "SAPI 合成中文语音 WAV（9.455 秒，16kHz / 16bit / mono）",
+  "recognizedText": "你好，我是声语语音输入法。这是一段用于测试小米Mimo语音识别接口的真实语音。",
+  "latencyMs": 1179.0,
+  "inserted": true,
+  "success": true,
+  "note": "API Key 仅保存在本机 %APPDATA%\\VoxIME 的 DPAPI 加密配置中，未写入仓库；测试音频由 Windows SAPI 合成，不包含真实人声。",
+  "verified": [
+    "OpenAiAudioChatProvider 请求格式被 MiMo 接口接受（HTTP 200）",
+    "真实中文语音识别结果与原文一致",
+    "识别结果经剪贴板粘贴写入前台 WinForms TextBox，内容逐字相同",
+    "应用退出码 0，任务栏/桌宠/HUD 状态正常"
+  ]
+}

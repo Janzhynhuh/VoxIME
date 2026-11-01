@@ -1,0 +1,28 @@
+<Application x:Class="VoxIME.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:inf="clr-namespace:VoxIME.App.Infrastructure"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Colors.xaml" />
+                <ResourceDictionary Source="Themes/Controls.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- 转换器 -->
+            <inf:BoolToVisibilityConverter x:Key="BoolToVis" />
+            <inf:InverseBoolConverter x:Key="InverseBool" />
+            <inf:NullToVisibilityConverter x:Key="NullToVis" />
+            <inf:EnumToVisibilityConverter x:Key="EnumToVis" />
+            <inf:EnumToBooleanConverter x:Key="EnumToBool" />
+            <inf:StateToBrushConverter x:Key="StateToBrush" />
+            <inf:LevelToDashArrayConverter x:Key="LevelToDash" Circumference="125.66" Thickness="4" />
+
+            <!-- 全局控件间距辅助 -->
+            <Style x:Key="FormRow" TargetType="StackPanel">
+                <Setter Property="Margin" Value="0,0,0,16" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

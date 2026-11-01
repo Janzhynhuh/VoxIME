@@ -1,0 +1,319 @@
+/* ============================================================
+   VoxIME Live2D 桌宠页面样式
+   - pet 页面（index.html）：完全透明，供 WPF WebView2 宿主嵌入
+   - preview 页面（preview.html）：独立预览 + 调试面板 + 棋盘格背景
+   无 npm / 无构建，纯手写 CSS。
+   ============================================================ */
+
+:root {
+  --violet: #7c5cff;
+  --violet-light: #b39dff;
+  --violet-dark: #4a2fa8;
+  --bg-card: rgba(28, 28, 39, 0.92);
+  --bg-deep: #12121a;
+  --text: #e8e8f0;
+  --text-dim: #8a8aa0;
+  --ok: #4ade80;
+  --danger: #ff6b6b;
+  --warn: #fbbf24;
+  --font: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--font);
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---------- 舞台 ---------- */
+#stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+#demo-canvas,
+#live2d-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: transparent;
+}
+
+#live2d-canvas.hidden,
+#demo-canvas.hidden { display: none; }
+
+/* ---------- 气泡 ---------- */
+#bubble {
+  position: absolute;
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%) translateY(-6px) scale(0.96);
+  max-width: min(88%, 420px);
+  padding: 10px 16px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(36, 34, 52, 0.96), rgba(24, 23, 36, 0.96));
+  border: 1px solid rgba(124, 92, 255, 0.55);
+  box-shadow: 0 10px 32px rgba(20, 12, 60, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: center;
+  word-break: break-word;
+  white-space: pre-wrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  z-index: 20;
+}
+
+#bubble.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+#bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(24, 23, 36, 0.96);
+  border-right: 1px solid rgba(124, 92, 255, 0.55);
+  border-bottom: 1px solid rgba(124, 92, 255, 0.55);
+}
+
+/* ---------- 提示 / 状态 ---------- */
+#hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(18, 18, 26, 0.72);
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 15;
+}
+
+#hint.error {
+  color: var(--danger);
+  border-color: rgba(255, 107, 107, 0.5);
+}
+
+#hint.hidden { display: none; }
+
+/* ============================================================
+   preview 页面
+   ============================================================ */
+body.preview-page {
+  background: transparent;
+}
+
+/* 棋盘格：证明内容背景是透明的 */
+body.bg-checker::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-color: #2a2a35;
+  background-image:
+    linear-gradient(45deg, #3a3a48 25%, transparent 25%, transparent 75%, #3a3a48 75%),
+    linear-gradient(45deg, #3a3a48 25%, transparent 25%, transparent 75%, #3a3a48 75%);
+  background-size: 32px 32px;
+  background-position: 0 0, 16px 16px;
+}
+
+/* 纯色背景 */
+body.bg-solid::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background: radial-gradient(circle at 50% 34%, #3a2f6b 0%, #1a1726 62%, #0e0d14 100%);
+}
+
+/* 模拟桌面壁纸：用于展示桌宠压在桌面上的观感 */
+body.bg-desktop::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 22%),
+    radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 18%),
+    radial-gradient(circle at 70% 88%, rgba(140, 190, 255, 0.35) 0%, rgba(140, 190, 255, 0) 45%),
+    radial-gradient(circle at 22% 82%, rgba(255, 220, 160, 0.22) 0%, rgba(255, 220, 160, 0) 40%),
+    linear-gradient(165deg, #6fb6e8 0%, #a9d3ee 34%, #d9e9f3 58%, #7aa88f 78%, #4f7a63 100%);
+}
+
+body.bg-desktop::after {
+  content: "";
+  position: fixed;
+  left: 6%;
+  bottom: 0;
+  width: 88%;
+  height: 34%;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(30, 60, 45, 0.55) 0%, rgba(30, 60, 45, 0) 70%),
+    linear-gradient(180deg, rgba(90, 140, 110, 0) 0%, rgba(52, 92, 70, 0.55) 100%);
+  clip-path: polygon(0 62%, 10% 48%, 18% 58%, 28% 30%, 40% 52%, 50% 22%, 62% 50%, 74% 36%, 86% 54%, 94% 44%, 100% 60%, 100% 100%, 0 100%);
+}
+
+/* 预览面板 */
+#preview-panel {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 30;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--bg-card);
+  border: 1px solid rgba(124, 92, 255, 0.28);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+#preview-panel .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#preview-panel .row > label { color: var(--text-dim); white-space: nowrap; }
+
+#model-input {
+  flex: 1;
+  min-width: 180px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  background: rgba(10, 10, 16, 0.75);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+}
+
+#model-input:focus { border-color: var(--violet); }
+
+button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  background: rgba(124, 92, 255, 0.12);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+button:hover { background: rgba(124, 92, 255, 0.28); border-color: var(--violet); }
+button:active { transform: translateY(1px); }
+
+button.state-btn.active {
+  background: var(--violet);
+  border-color: var(--violet-light);
+  box-shadow: 0 0 16px rgba(124, 92, 255, 0.55);
+}
+
+select {
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  background: rgba(10, 10, 16, 0.75);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 0 8px;
+  outline: none;
+}
+
+input[type="range"] {
+  width: 130px;
+  accent-color: var(--violet);
+}
+
+input[type="text"] {
+  height: 28px;
+  flex: 1;
+  min-width: 140px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  background: rgba(10, 10, 16, 0.75);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  outline: none;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.check input { accent-color: var(--violet); }
+
+#status {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  line-height: 1.5;
+  max-height: 56px;
+  overflow: hidden;
+}
+
+#status .ok { color: var(--ok); }
+#status .err { color: var(--danger); }
+#status .warn { color: var(--warn); }
+
+/* pet 页面不显示预览面板（如误入了 preview 面板也隐藏） */
+body.pet-page #preview-panel { display: none; }
+
+/* 预览页：舞台让出底部面板高度，避免模型被面板遮挡 */
+body.preview-page #stage {
+  inset: 0 0 234px 0;
+}
+
+body.preview-page #bubble {
+  top: 14px;
+}
+
+/* 没有模型/宿主时，棋盘背景上的兜底形象也清晰可见 */
+body.preview-page #demo-canvas {
+  background: transparent;
+}

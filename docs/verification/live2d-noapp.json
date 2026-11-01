@@ -1,0 +1,10 @@
+{
+  "applicationCurrentIsNull": true,
+  "isAvailable": false,
+  "isVisible": false,
+  "lastError": "Hide 失败：当前进程没有 WPF Dispatcher，请在有 WPF Application 的 UI 线程初始化桌宠。",
+  "errorEventCount": 3,
+  "readyEventCount": 0,
+  "pass": true,
+  "success": true
+}

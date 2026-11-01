@@ -1,0 +1,20 @@
+# 统一换行符与二进制识别，避免 Windows/Linux 协作时出现无意义 diff
+* text=auto
+
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+*.sln   text eol=crlf
+*.cs    text eol=lf
+*.xaml  text eol=lf
+*.js    text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.json  text eol=lf
+
+*.png   binary
+*.ico   binary
+*.zip   binary
+*.moc3  binary
