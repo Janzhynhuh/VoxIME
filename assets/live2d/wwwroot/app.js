@@ -676,6 +676,9 @@
       if (group) {
         // priority=3（FORCE）：预览/状态动作要能打断当前待机动作，否则待机循环占用
         // 同一优先级时 startRandomMotion 会返回 false，看起来像“预览不可用”。
+        // 先停掉当前动作：连续预览不同动作时，已存在的 FORCE 动作会让同组/同索引
+        // 的下一次 startMotion 被拒绝。
+        try { model.internalModel.motionManager.stopAllMotions(); } catch (e) { /* ignore */ }
         model.motion(group, undefined, 3);
         if (selection && selection !== '__none__') {
           sendHost({ type: 'debug', message: '状态动作：' + state + ' -> ' + group });
@@ -691,6 +694,8 @@
     var group = String(motionGroup || '').trim();
     if (!group || !model) return;
     try {
+      // 连续预览时先停掉上一个动作，避免 FORCE 动作仍占用 state 导致下一次被拒绝。
+      try { model.internalModel.motionManager.stopAllMotions(); } catch (e) { /* ignore */ }
       // priority=3（FORCE）：预览要能打断当前待机循环。
       var result = model.motion(group, undefined, 3);
       if (result && typeof result.then === 'function') {
