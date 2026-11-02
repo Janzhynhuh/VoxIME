@@ -236,6 +236,36 @@ public sealed class VoiceInputController : IVoiceInputController
         _logger.Info("配置已应用");
     }
 
+    /// <inheritdoc />
+    public void ResetLive2DPosition()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            var config = _configStore.Current;
+            // (-1,-1) 是“没有保存位置”的哨兵值；开启贴边时回到当前屏右下角，否则居中。
+            config.Live2D.Left = -1;
+            config.Live2D.Top = -1;
+            _configStore.Save(config);
+            _live2d.ApplyConfig(config.Live2D);
+            if (config.Live2D.Enabled)
+            {
+                _live2d.Show();
+            }
+
+            _logger.Info("[Live2D] 桌宠位置已重置");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"[Live2D] 重置桌宠位置失败：{ex.Message}");
+            throw;
+        }
+    }
+
     public bool StartRecording()
     {
         if (_disposed)

@@ -75,6 +75,9 @@
                                     Command="{Binding ShowLive2DCommand}" />
                             <Button Style="{StaticResource SmallButton}" Content="隐藏桌宠" Margin="8,0,0,0"
                                     Command="{Binding HideLive2DCommand}" />
+                            <Button Style="{StaticResource SmallButton}" Content="重置位置" Margin="8,0,0,0"
+                                    Command="{Binding ResetLive2DPositionCommand}"
+                                    ToolTip="清除保存的位置，把桌宠移回当前屏幕右下角（关闭贴边时居中）" />
                         </StackPanel>
                     </Grid>
                 </StackPanel>

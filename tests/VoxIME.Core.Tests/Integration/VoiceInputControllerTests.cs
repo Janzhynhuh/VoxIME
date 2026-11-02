@@ -87,6 +87,21 @@ public sealed class VoiceInputControllerTests
     }
 
     [Fact]
+    public void ResetLive2DPosition_ClearsSavedPositionAndReapplies()
+    {
+        _controller.Initialize();
+        _configStore.Current.Live2D.Left = 123;
+        _configStore.Current.Live2D.Top = 456;
+
+        _controller.ResetLive2DPosition();
+
+        Assert.Equal(-1, _configStore.Current.Live2D.Left);
+        Assert.Equal(-1, _configStore.Current.Live2D.Top);
+        Assert.Equal(-1, _live2d.Config!.Left);
+        Assert.Equal(-1, _live2d.Config.Top);
+    }
+
+    [Fact]
     public void StartRecording_EntersListeningAndStartsAudio()
     {
         _controller.Initialize();

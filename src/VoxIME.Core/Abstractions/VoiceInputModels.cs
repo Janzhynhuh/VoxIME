@@ -70,6 +70,9 @@ public interface IVoiceInputController : IAsyncDisposable
     /// <summary>设置窗口保存后调用：热键、音频参数、桌宠、TTS 立即生效。</summary>
     void ApplyConfig(AppConfig config);
 
+    /// <summary>清除桌宠保存的位置并移回默认位置（右下角/屏幕居中）。</summary>
+    void ResetLive2DPosition();
+
     /// <summary>开始录音；繁忙/不可用时返回 false。</summary>
     bool StartRecording();
 

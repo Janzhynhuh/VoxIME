@@ -417,6 +417,14 @@ public sealed class Live2DController : ILive2DController
 
         try
         {
+            // 配置里是 (-1,-1) 表示位置已被重置：同时丢掉本进程内缓存的拖动位置，
+            // 否则 ApplyWindowConfiguration 会继续使用旧坐标，重置按钮看起来无效。
+            if (Math.Abs(config.Left + 1) < 0.01 && Math.Abs(config.Top + 1) < 0.01)
+            {
+                _userLeft = null;
+                _userTop = null;
+            }
+
             var previousDirectory = GetConfig().ModelDirectory;
             ApplyWindowConfiguration();
             ApplyGazeConfig(config);

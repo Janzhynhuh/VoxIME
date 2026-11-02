@@ -175,6 +175,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         OpenLive2DModelsFolderCommand = new RelayCommand(OpenLive2DModelsFolder);
         ShowLive2DCommand = new RelayCommand(() => SetLive2DVisible(true));
         HideLive2DCommand = new RelayCommand(() => SetLive2DVisible(false));
+        ResetLive2DPositionCommand = new RelayCommand(ResetLive2DPosition);
         TestTtsCommand = new AsyncRelayCommand(TestTtsAsync, () => !_ttsEnabledTesting);
         AddReplacementCommand = new RelayCommand(() => Replacements.Add(new ReplacementItemViewModel("", "")));
         RemoveReplacementCommand = new RelayCommand(param =>
@@ -1024,6 +1025,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand OpenLive2DModelsFolderCommand { get; }
     public RelayCommand ShowLive2DCommand { get; }
     public RelayCommand HideLive2DCommand { get; }
+    public RelayCommand ResetLive2DPositionCommand { get; }
 
     // ==================== 朗读页 ====================
 
@@ -1810,6 +1812,21 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             _logger.Warn($"切换桌宠显示失败：{ex.Message}");
+        }
+    }
+
+    private void ResetLive2DPosition()
+    {
+        try
+        {
+            _controller.ResetLive2DPosition();
+            RefreshLive2DStatus();
+            ShowSaveStatus("桌宠位置已重置");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"重置桌宠位置失败：{ex.Message}");
+            Ui.Error("重置桌宠位置失败：" + ex.Message);
         }
     }
 
