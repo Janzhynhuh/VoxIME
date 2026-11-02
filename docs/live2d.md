@@ -138,7 +138,7 @@ Hiyori/
 - 导入后出现在下拉框中，选择不同模型即可在多个模型间切换（点击「保存」后应用到桌宠）。
 - **打开模型库目录**：直接查看/手动放入模型（手动放入后点「刷新列表」）。
 - **删除选中模型**：只删除模型库里的副本（有二次确认），不会影响你原来的文件夹。
-- **状态表情映射**：设置页四个状态改为可编辑下拉框，自动扫描 `model3.json` 的 `Expressions` 以及模型目录下的 `Exp3/*.exp3.json`；`Animation/*.motion3.json` 会注册为动作。当前模型没有登记表情时也能识别 VTube Studio 的文件夹资源；映射按模型目录记忆。
+- **状态表情映射**：设置页四个状态改为可编辑下拉框，自动扫描 `model3.json` 的 `Expressions` 以及模型目录下的 `Exp3/*.exp3.json`；`Animation/*.motion3.json` 会注册为 `Animation/<文件名>` 动作组，避免和 model3 原生 Idle 组冲突。当前模型没有登记表情时也能识别 VTube Studio 的文件夹资源；映射按模型目录记忆。
 - **状态动作映射/预览**：四个状态可分别选择「自动（同名动作组）」「不播放」或具体动作组，待机动作组也可从下拉框选；切换待机组、状态动作、预览动作前后都会先停止当前动作，并把模型参数/部件透明度恢复到加载时的基线，避免「脱捕」这类动作修改的自定义参数残留（不依赖具体模型或参数名）；每项旁「预览」按钮会立即在桌宠上试播当前选择，只播一遍，结束后停 3 秒再恢复默认动作（避免 VTube Studio 动作的 Loop 标记导致无限重复）。待机动作本身是循环的，冷却结束后会继续待机循环，所以视觉上会比状态动作更连贯。动作映射同样按模型目录记忆。状态表情旁也有「预览」，可立即应用所选表情，3 秒后恢复默认表情。
 - **重置位置**：桌宠状态栏旁的「重置位置」会清除保存的 `Left/Top`，把窗口移回默认位置（开启贴边时回当前屏幕右下角，关闭贴边时当前屏幕居中），下次启动也不会再使用旧位置。
 - **自动找回**：启动时以及检测到显示器工作区/虚拟屏尺寸变化时，如果保存的窗口位置已经不在当前桌面可见区域，会自动把它移回当前屏右下角（关闭贴边时居中），避免远程桌面/切换分辨率后“看不到桌宠”。
@@ -174,7 +174,7 @@ Hiyori/
 | `MouthSync` | true | 口型同步开关（关闭后嘴巴闭合） |
 | `MouthSensitivity` | 1.0 | 口型灵敏度（0.1..5.0，与输入音量相乘后 clamp 到 0..1） |
 | `ShowBubble` | true | 是否显示气泡（false 时忽略 `SetBubbleText`） |
-| `IdleMotionGroup` | "Idle" | 待机动作组名（大小写不敏感；找不到时退化为包含 "idle" 的组，再找不到用第一个动作组） |
+| `IdleMotionGroup` | "Idle" | 待机动作组名（大小写不敏感，精确匹配；找不到时不播放待机动作，不会自动拿第一个动作组） |
 | `ListeningExpression` / `ThinkingExpression` / `SpeakingExpression` / `ErrorExpression` | null | 状态对应的表情名；模型没有该表情时忽略 |
 | `ListeningMotionGroup` / `ThinkingMotionGroup` / `SpeakingMotionGroup` / `ErrorMotionGroup` | null | 状态对应的动作组名；null/空=自动同名匹配，`__none__`=不播放，其它=指定组 |
 | `FallbackAvatarTheme` | "violet" | 兜底形象主题（当前仅 violet，保留扩展） |
@@ -188,7 +188,7 @@ Hiyori/
 
 | 状态 | 动作组查找顺序 | 表情 |
 |---|---|---|
-| `Idle` | 待机动作组（`IdleMotionGroup`，默认 `Idle`） | 重置为默认表情 |
+| `Idle` | 待机动作组（`IdleMotionGroup`，默认 `Idle`；仅精确匹配 model3 声明的组） | 重置为默认表情 |
 | `Listening` | 优先 `ListeningMotionGroup`；未配置时找同名组（`Listening`/`Listen`），否则继续待机 | `ListeningExpression`（若模型有） |
 | `Thinking` | 优先 `ThinkingMotionGroup`；未配置时同名组（`Thinking`/`Think`），否则待机 | `ThinkingExpression` |
 | `Speaking` | 优先 `SpeakingMotionGroup`；未配置时同名组（`Speaking`/`Speak`），否则待机；口型由 `SetMouthOpen` 驱动 | `SpeakingExpression` |
@@ -436,7 +436,7 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 | 桌宠显示兜底形象，`LastError` 提示 WebView2 初始化失败 | 未安装 WebView2 Evergreen Runtime，或显卡/WebView2 进程启动失败；安装 Runtime 后重启应用 |
 | 页面握手超时 | 检查 `live2d/wwwroot` 是否随发布复制到输出目录；或用 `Live2DWebHost.ResolveWebRoot()` 的查找逻辑核对；杀软拦截本地虚拟主机一般不影响 |
 | 模型加载失败 | 检查 `LastError` 与 `%APPDATA%\VoxIME\logs\`（含页面 error message）；常见原因：模型文件不完整、moc3 版本与 Cubism Core 不匹配、路径含特殊字符 |
-| 模型加载成功但不动/不眨眼 | 模型缺少动作组/EyeBlink 组时属正常；`IdleMotion=false` 会停止待机动作；检查 cdi3/model3 的 Groups 声明 |
+| 模型加载成功但不动/不眨眼 | 模型缺少 EyeBlink 组时不会眨眼；扫描到的 `Animation/*.motion3.json` 组名带 `Animation/` 前缀，不会被默认当待机组；需要时在「待机动作组」里显式选择。动作播放期间 Cubism 会跳过自动眨眼，若想恢复眨眼/物理，待机组选「不播放」或关闭待机动作 |
 | 嘴巴不动 | 模型未声明 `LipSync` 组且没有 `ParamMouthOpenY`；或 `MouthSync=false`/音量为 0 |
 | 眼动不跟随 | 模型没有 `ParamEyeBallX/Y`/`ParamAngleX/Y`；或 `EyeFollow=false` |
 | 点击穿透失效/拖不动 | `ClickThrough=true` 时整窗穿透（鼠标事件给下层窗口），这是预期；需要拖动时在设置里关闭点击穿透（或 `ApplyConfig` 热切换），此时窗口整体可拖动 |

@@ -186,13 +186,22 @@ public sealed class Live2DModelAssetCatalog
         foreach (var file in EnumerateAssetFiles(root, "*.motion3.json", "animation", "motions", "motion"))
         {
             var relative = ToRelative(root, file);
+            // model3.json 已登记的动作不要再用扫描副本重复注入。
+            if (motions.Any(item => string.Equals(item.File, relative, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
             var stem = Path.GetFileName(file);
             if (stem.EndsWith(".motion3.json", StringComparison.OrdinalIgnoreCase))
             {
                 stem = stem[..^".motion3.json".Length];
             }
 
-            var group = stem.Contains("idle", StringComparison.OrdinalIgnoreCase) ? "Idle" : stem;
+            // Animation/IDLE 之类是 VTube Studio 的一次性动作，不是 model3 声明的 Idle 组；
+            // 直接命名为 Idle 会被默认待机逻辑自动播放并抑制眨眼/物理效果。
+            // 用 Animation/ 前缀保留原文件名，避免与 model3 原生动作组重名。
+            var group = "Animation/" + stem;
             if (motionKeys.Add(group + "|" + relative))
             {
                 motions.Add(new Live2DMotionAsset(group, relative));

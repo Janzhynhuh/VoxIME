@@ -152,7 +152,20 @@ internal sealed class Live2DWebHost : IDisposable
                 MapModelDirectory(modelDirectory!);
             }
 
-            var url = $"https://{AppHostName}/{PageRelativePath}?embedded=1&host=1&v=1";
+            // 升级后 WebView2 可能继续使用旧的 app.js；本地页面不依赖网络缓存，
+            // 每次初始化清掉磁盘缓存，保证待机/眨眼等 JS 修复立即生效。
+            try
+            {
+                await core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.DiskCache)
+                    .ConfigureAwait(true);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn($"[Live2D] 清理 WebView2 缓存失败（忽略）：{ex.Message}");
+            }
+
+            var assetVersion = GetWebAssetVersion(webRoot);
+            var url = $"https://{AppHostName}/{PageRelativePath}?embedded=1&host=1&v={assetVersion}";
             _logger.Info($"[Live2D] 导航到桌宠页：{url}");
             core.Navigate(url);
             _coreReady = true;
@@ -288,6 +301,28 @@ internal sealed class Live2DWebHost : IDisposable
                     motions = modelAssets.Motions.Select(item => new { group = item.Group, file = item.File }).ToArray()
                 }
         });
+    }
+
+    /// <summary>
+    /// 用网页资源时间戳做缓存版本号。WebView2 会缓存同一虚拟主机 URL；
+    /// 只改 app.js 而不改查询参数时，升级后可能仍加载旧脚本，导致状态/待机逻辑看起来没生效。
+    /// </summary>
+    private static string GetWebAssetVersion(string webRoot)
+    {
+        try
+        {
+            var appJs = Path.Combine(webRoot, "app.js");
+            if (File.Exists(appJs))
+            {
+                return File.GetLastWriteTimeUtc(appJs).Ticks.ToString();
+            }
+        }
+        catch (Exception)
+        {
+            // 版本号失败时退回程序版本，不阻塞页面加载。
+        }
+
+        return AppInfo.Version;
     }
 
     public void Dispose()

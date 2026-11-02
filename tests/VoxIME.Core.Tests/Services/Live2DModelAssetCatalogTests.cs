@@ -39,8 +39,28 @@ public sealed class Live2DModelAssetCatalogTests : IDisposable
         Assert.Contains(catalog.Expressions, item => item.Name == "脸红" && item.File == "Exp3/脸红.exp3.json");
         Assert.Contains(catalog.Expressions, item => item.Name == "爱心眼");
         Assert.Contains(catalog.Motions, item => item.Group == "Idle" && item.File == "Animation/IDLE.motion3.json");
-        Assert.Contains(catalog.Motions, item => item.Group == "举手");
+        Assert.Contains(catalog.Motions, item => item.Group == "Animation/举手");
         Assert.Equal(catalog.Motions.Select(item => item.Group + "|" + item.File).Distinct().Count(), catalog.Motions.Count);
+    }
+
+    [Fact]
+    public void Load_UnregisteredIdleAnimation_IsPrefixedAndNotDefaultIdleGroup()
+    {
+        var root = Path.Combine(_root, "unregistered");
+        var animation = Path.Combine(root, "Animation");
+        Directory.CreateDirectory(animation);
+        File.WriteAllText(Path.Combine(animation, "IDLE.motion3.json"), "{}");
+        File.WriteAllText(Path.Combine(root, "model.model3.json"), """
+        {
+          "Version": 3,
+          "FileReferences": { "Moc": "model.moc3", "Textures": ["texture.png"] }
+        }
+        """);
+
+        var catalog = Live2DModelAssetCatalog.Load(root);
+
+        Assert.Contains(catalog.Motions, item => item.Group == "Animation/IDLE");
+        Assert.DoesNotContain(catalog.Motions, item => item.Group == "Idle");
     }
 
     [Fact]

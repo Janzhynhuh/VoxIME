@@ -362,14 +362,21 @@
     var groups = Object.keys(definitions);
     var wanted = String(config.idleMotionGroup || 'Idle').toLowerCase();
     var group = groups.find(function (g) { return g.toLowerCase() === wanted; });
-    if (!group) group = groups.find(function (g) { return g.toLowerCase().indexOf('idle') >= 0; });
-    if (!group) group = groups[0] || null;
+    // 不再把任意动作组（甚至 Animation/IDLE 这种一次性动画）当成待机组：
+    // 这类动作会循环播放并抑制 Cubism 自动眨眼/自然呼吸，模型看起来“死了”。
+    // 用户要自定义待机组时，在设置里显式选择该动作组即可。
 
     var previousGroup = idleGroup;
     var previousActive = idleMotionActive;
     var nextActive = !!(config.idleMotion && group);
+    // MotionManager 的 groups.idle 默认值是 "Idle"；首次加载且关闭待机动作时
+    // previousActive 也是 false，仅比较 previous 状态会误判为“没变化”，
+    // 导致默认的 Idle 动作仍然自动播放。这里同时比较引擎当前的目标组名。
+    var desiredIdleGroup = nextActive ? group : '__voxime_idle_disabled__';
+    var currentIdleGroup = mm.groups ? mm.groups.idle : null;
     var changed = previousActive !== nextActive
-      || (nextActive && (!previousGroup || previousGroup.toLowerCase() !== group.toLowerCase()));
+      || (nextActive && (!previousGroup || previousGroup.toLowerCase() !== group.toLowerCase()))
+      || currentIdleGroup !== desiredIdleGroup;
 
     if (changed) {
       try {
@@ -517,6 +524,8 @@
       try {
         diag.readback = {
           mouth: core.getParameterValueById(getCubismId(mouthParamIds[0])),
+          eyeLOpen: core.getParameterValueById(getCubismId('ParamEyeLOpen')),
+          eyeROpen: core.getParameterValueById(getCubismId('ParamEyeROpen')),
           angleX: core.getParameterValueById(getCubismId('ParamAngleX')),
           angleY: core.getParameterValueById(getCubismId('ParamAngleY')),
           eyeBallX: core.getParameterValueById(getCubismId('ParamEyeBallX')),
@@ -764,17 +773,21 @@
       var mm = model.internalModel.motionManager;
       var definitions = mm.definitions || {};
       var groups = Object.keys(definitions);
-      var selection = stateMotions[state];
+      // idle 由 setupIdleGroup 管理：这里不能再按名字自动播放 "Idle"，
+      // 否则即使关闭待机动作，也会被状态切换重新拉起来，并且会抑制 Cubism 自动眨眼。
+      var selection = state === 'idle' ? null : stateMotions[state];
       var group = null;
-      if (selection === '__none__') {
-        group = null;
-      } else if (selection) {
-        group = String(selection);
-      } else {
-        var candidates = [state, state.charAt(0).toUpperCase() + state.slice(1)];
-        for (var c = 0; c < candidates.length && !group; c++) {
-          for (var g = 0; g < groups.length; g++) {
-            if (groups[g].toLowerCase() === candidates[c].toLowerCase()) { group = groups[g]; break; }
+      if (state !== 'idle') {
+        if (selection === '__none__') {
+          group = null;
+        } else if (selection) {
+          group = String(selection);
+        } else {
+          var candidates = [state, state.charAt(0).toUpperCase() + state.slice(1)];
+          for (var c = 0; c < candidates.length && !group; c++) {
+            for (var g = 0; g < groups.length; g++) {
+              if (groups[g].toLowerCase() === candidates[c].toLowerCase()) { group = groups[g]; break; }
+            }
           }
         }
       }
@@ -1751,6 +1764,12 @@
         targetGazeY: live.targetGazeY,
         groups: modelGroups,
         idleGroup: idleGroup,
+        config: {
+          idleMotion: config.idleMotion,
+          idleMotionGroup: config.idleMotionGroup,
+          eyeFollow: config.eyeFollow,
+          mouthSync: config.mouthSync
+        },
         demoActive: demoActive,
         fps: fpsCounter.value,
         mouthSync: config.mouthSync,
@@ -1760,7 +1779,7 @@
       try {
         if (model) {
           result.params = {};
-          var ids = ['ParamMouthOpenY', 'ParamAngleX', 'ParamAngleY', 'ParamEyeBallX', 'ParamEyeBallY'];
+          var ids = ['ParamMouthOpenY', 'ParamEyeLOpen', 'ParamEyeROpen', 'ParamAngleX', 'ParamAngleY', 'ParamEyeBallX', 'ParamEyeBallY'];
           for (var i = 0; i < ids.length; i++) {
             try { result.params[ids[i]] = model.internalModel.coreModel.getParameterValueById(getCubismId(ids[i])); } catch (e) { /* ignore */ }
           }
@@ -1768,6 +1787,8 @@
             var mm = model.internalModel.motionManager;
             result.motion = {
               playing: !!mm.playing,
+              finished: typeof mm.isFinished === 'function' ? mm.isFinished() : null,
+              idleGroup: mm.groups ? mm.groups.idle : null,
               group: mm.state ? mm.state.currentGroup : null,
               index: mm.state ? mm.state.currentIndex : null
             };
