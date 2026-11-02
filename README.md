@@ -38,17 +38,24 @@
 
 ## 🚀 快速开始
 
-### 方式一：使用发布包（推荐）
+### 方式一：安装包（推荐）
 
-1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.3.1.zip`，解压到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
-2. 双击 `VoxIME.exe` 启动，托盘出现声语图标。
-3. 托盘右键 → **设置**：
+1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-Setup-v0.3.1.exe`，双击运行。
+   - 默认安装到当前用户目录 `%LOCALAPPDATA%\Programs\VoxIME`，**不需要管理员权限**
+   - 安装器会创建开始菜单快捷方式，可选桌面快捷方式
+   - 卸载默认**保留** `%APPDATA%\VoxIME` 里的配置、历史和模型；只有安装时勾选“删除用户数据”才会清理
+2. 首次启动后，托盘出现声语图标。托盘右键 → **设置**：
    - 「服务」页点击 **新增服务**，选择你的识别厂商，填入 BaseUrl / Model / API Key，点 **测试识别** 验证。
    - 或选择 **本地离线（命令行）**，填入本机 `whisper-cli.exe` 等路径。
-4. 回到任意输入框，按住 `Ctrl+Alt` 说话，松开后文字自动上屏。
-5. 桌宠默认出现在屏幕右下角；`设置 → 桌宠` 可换模型、调大小/透明度/点击穿透。
+3. 回到任意输入框，按住 `Ctrl+Alt` 说话，松开后文字自动上屏。
+4. 桌宠默认出现在屏幕右下角；`设置 → 桌宠` 可换模型、调大小/透明度/点击穿透。
 
-### 方式二：源码构建
+### 方式二：绿色压缩包
+
+1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.3.1.zip`，解压到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
+2. 双击 `VoxIME.exe` 启动，后续设置步骤同上。
+
+### 方式三：源码构建
 
 ```powershell
 # 要求：Windows 10/11 x64 + .NET 10 SDK
@@ -59,6 +66,10 @@ dotnet run --project src/VoxIME.App
 # 发布自包含 x64 包（含 .NET 运行时，目标机器无需安装 SDK）
 .\scripts\publish-x64.ps1
 # 产物：deploy\VoxIME-win-x64\ 与 deploy\VoxIME-win-x64-v0.3.1.zip
+
+# 构建 Windows 安装包（需要 Inno Setup 6；CI 会自动执行）
+.\scripts\build-installer.ps1 -SkipPublish
+# 产物：deploy\VoxIME-Setup-v0.3.1.exe
 ```
 
 ## 🎙️ 支持的语音识别服务

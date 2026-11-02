@@ -229,7 +229,7 @@ sequenceDiagram
 
 ## 9. 发布与运行要求
 
-- 目标：Windows 10 1809+ / Windows 11，x64；自包含发布包含 .NET 10 运行时。
+- 目标：Windows 10 1809+ / Windows 11，x64；自包含发布包含 .NET 10 运行时。提供 per-user Inno Setup 安装包（默认 `%LOCALAPPDATA%\Programs\VoxIME`，不弹 UAC，卸载保留 `%APPDATA%\VoxIME` 用户数据）。
 - WebView2：Win11 自带；Win10 需安装 Evergreen Runtime（程序检测失败时降级兜底）。
 - 音频：WASAPI 共享模式，默认设备/指定设备；16kHz 单声道。
 - 建议以普通用户权限运行；要对管理员窗口上屏时以管理员身份运行。
