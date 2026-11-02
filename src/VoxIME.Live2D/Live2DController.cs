@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.IO;
 using System.Threading;
 using System.Windows;
@@ -84,6 +85,7 @@ public sealed class Live2DController : ILive2DController
     private string? _lastError;
     private double? _userLeft;
     private double? _userTop;
+    private bool _systemParametersSubscribed;
 
     public Live2DController(IAppLogger logger)
     {
@@ -202,7 +204,105 @@ public sealed class Live2DController : ILive2DController
             $"{snapshot.Width}x{snapshot.Height}, Opacity={snapshot.Opacity}, Scale={snapshot.Scale}, " +
             $"ClickThrough={snapshot.ClickThrough}, AlwaysOnTop={snapshot.AlwaysOnTop}");
 
+        SubscribeDisplaySettings();
         RunOnUiThread(InitializeCore, "Initialize");
+    }
+
+    private void SubscribeDisplaySettings()
+    {
+        if (_systemParametersSubscribed)
+        {
+            return;
+        }
+
+        try
+        {
+            SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
+            _systemParametersSubscribed = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"[Live2D] 订阅显示器配置变化失败：{ex.Message}");
+        }
+    }
+
+    private void UnsubscribeDisplaySettings()
+    {
+        if (!_systemParametersSubscribed)
+        {
+            return;
+        }
+
+        try
+        {
+            SystemParameters.StaticPropertyChanged -= OnSystemParametersChanged;
+        }
+        catch (Exception)
+        {
+            // 进程退出阶段忽略。
+        }
+        finally
+        {
+            _systemParametersSubscribed = false;
+        }
+    }
+
+    private void OnSystemParametersChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (e.PropertyName != nameof(SystemParameters.WorkArea)
+            && e.PropertyName != nameof(SystemParameters.VirtualScreenLeft)
+            && e.PropertyName != nameof(SystemParameters.VirtualScreenTop)
+            && e.PropertyName != nameof(SystemParameters.VirtualScreenWidth)
+            && e.PropertyName != nameof(SystemParameters.VirtualScreenHeight)
+            && e.PropertyName != nameof(SystemParameters.PrimaryScreenWidth)
+            && e.PropertyName != nameof(SystemParameters.PrimaryScreenHeight))
+        {
+            return;
+        }
+
+        RunOnUiThread(EnsureWindowVisibleOnDisplayChange, "DisplaySettingsChanged");
+    }
+
+    private void EnsureWindowVisibleOnDisplayChange()
+    {
+        if (_disposed || _window is null || _window.IsVisibleOnCurrentDesktop())
+        {
+            return;
+        }
+
+        var config = GetConfig();
+        _logger.Info("[Live2D] 显示器布局变化，桌宠窗口已不在可见区域，自动回位。");
+        ResetWindowToVisiblePosition(config);
+    }
+
+    /// <summary>把窗口移到当前屏的可见位置，并通知上层持久化新坐标。</summary>
+    private void ResetWindowToVisiblePosition(Live2DConfig config)
+    {
+        if (_window is null)
+        {
+            return;
+        }
+
+        _userLeft = null;
+        _userTop = null;
+        _window.ApplyGeometry(
+            config.Width,
+            config.Height,
+            -1,
+            -1,
+            config.SnapToEdge,
+            config.KeepAboveTaskbar,
+            hasSavedPosition: false,
+            config.Opacity,
+            config.AlwaysOnTop,
+            config.ClickThrough);
+
+        PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
     }
 
     /// <inheritdoc />
@@ -286,6 +386,7 @@ public sealed class Live2DController : ILive2DController
 
         _disposed = true;
         _logger.Info("[Live2D] Dispose：释放桌宠资源。");
+        UnsubscribeDisplaySettings();
 
         var dispatcher = _dispatcher;
         if (dispatcher is null)
@@ -399,6 +500,14 @@ public sealed class Live2DController : ILive2DController
             config.Opacity,
             config.AlwaysOnTop,
             config.ClickThrough);
+
+        // 分辨率/多屏布局变化后，旧坐标可能完全落到当前桌面外（表现为“看不到桌宠”）。
+        if (!_window.IsVisibleOnCurrentDesktop())
+        {
+            _logger.Info("[Live2D] 桌宠窗口不在当前桌面可见区域，自动重置到默认位置。");
+            ResetWindowToVisiblePosition(config);
+        }
+
         _window.SetAvatarTransform(config.Scale, config.ModelOffsetX, config.ModelOffsetY);
         _window.Avatar.Theme = string.IsNullOrWhiteSpace(config.FallbackAvatarTheme)
             ? "violet"

@@ -403,6 +403,28 @@ internal sealed class PetWindow : Window
         Top = workArea.Top + (workArea.Height - Height) / 2;
     }
 
+    /// <summary>
+    /// 判断窗口是否在当前虚拟桌面上留下了足够可见区域。
+    /// 用于显示器分辨率/布局变化后，把落到屏幕外的桌宠自动找回来。
+    /// </summary>
+    public bool IsVisibleOnCurrentDesktop(double minVisibleSize = 120)
+    {
+        if (!IsFinite(Left) || !IsFinite(Top) || !IsFinite(Width) || !IsFinite(Height))
+        {
+            return false;
+        }
+
+        var virtualLeft = SystemParameters.VirtualScreenLeft;
+        var virtualTop = SystemParameters.VirtualScreenTop;
+        var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+
+        var visibleWidth = Math.Min(Left + Width, virtualRight) - Math.Max(Left, virtualLeft);
+        var visibleHeight = Math.Min(Top + Height, virtualBottom) - Math.Max(Top, virtualTop);
+        return visibleWidth >= Math.Min(Width, minVisibleSize)
+               && visibleHeight >= Math.Min(Height, minVisibleSize);
+    }
+
     /// <summary>把窗口限制在虚拟桌面范围内（避免拖到屏幕外再也找不回来）。</summary>
     public void ClampToVirtualScreen()
     {
