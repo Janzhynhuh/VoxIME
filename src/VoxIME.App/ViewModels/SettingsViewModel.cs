@@ -61,6 +61,14 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _micTestLevel;
     private double _micTestMaxLevel;
     private string _micTestStatus = "";
+    private AppContextMode _appContextMode;
+
+    public ObservableCollection<AppContextOption> AppContextOptions { get; } = new()
+    {
+        new("关闭（不读取、不发送）", AppContextMode.Off),
+        new("仅应用类型（推荐）", AppContextMode.AppOnly),
+        new("应用 + 窗口标题（识别更准，标题会发送给 ASR 服务）", AppContextMode.AppAndWindowTitle)
+    };
 
     // ---- 上屏 ----
     private InsertionMode _insertionMode;
@@ -690,6 +698,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _playCues, value);
     }
 
+    public AppContextMode AppContextMode
+    {
+        get => _appContextMode;
+        set => SetProperty(ref _appContextMode, value);
+    }
+
     public bool IsMicTesting
     {
         get => _isMicTesting;
@@ -1285,6 +1299,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         VadThreshold = config.Audio.VadThreshold;
         AutoStopOnSilence = config.Audio.AutoStopOnSilence;
         PlayCues = config.Audio.PlayCues;
+        AppContextMode = config.Audio.AppContextMode;
 
         // 上屏
         InsertionMode = config.Insertion.Mode;
@@ -2517,7 +2532,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             SilenceTimeoutMs = SilenceTimeoutMs,
             MinSpeechMs = MinSpeechMs,
             VadThreshold = VadThreshold,
-            PlayCues = PlayCues
+            PlayCues = PlayCues,
+            AppContextMode = AppContextMode
         };
 
         config.Insertion = new InsertionConfig

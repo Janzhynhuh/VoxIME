@@ -76,6 +76,19 @@ public enum RecordingMode
     Toggle
 }
 
+/// <summary>识别时附带的前台应用上下文级别。</summary>
+public enum AppContextMode
+{
+    /// <summary>不读取、不发送应用上下文。</summary>
+    Off,
+
+    /// <summary>只发送应用分类和进程名。</summary>
+    AppOnly,
+
+    /// <summary>发送应用分类、进程名和窗口标题（标题会发送给 ASR 服务）。</summary>
+    AppAndWindowTitle
+}
+
 public sealed class TextReplacement
 {
     public string From { get; set; } = "";
@@ -195,6 +208,11 @@ public sealed class AppConfig
 
         Audio ??= new AudioConfig();
         Audio.SampleRate = 16000;
+        if (!Enum.IsDefined(Audio.AppContextMode))
+        {
+            Audio.AppContextMode = AppContextMode.Off;
+        }
+
         Audio.MaxDurationSeconds = Math.Clamp(Audio.MaxDurationSeconds, 5, 600);
         Audio.SilenceTimeoutMs = Math.Clamp(Audio.SilenceTimeoutMs, 200, 5000);
         Audio.MinSpeechMs = Math.Clamp(Audio.MinSpeechMs, 100, 3000);
@@ -371,6 +389,9 @@ public sealed class AudioConfig
     /// </summary>
     public double VadThreshold { get; set; } = 0.003;
     public bool PlayCues { get; set; } = true;
+
+    /// <summary>识别请求附带的前台应用上下文级别；默认关闭。</summary>
+    public AppContextMode AppContextMode { get; set; } = AppContextMode.Off;
 }
 
 public sealed class InsertionConfig

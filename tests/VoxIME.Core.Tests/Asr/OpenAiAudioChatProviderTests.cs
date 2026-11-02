@@ -20,6 +20,36 @@ public sealed class OpenAiAudioChatProviderTests
         text + "\"},\"finish_reason\":\"stop\"}]}";
 
     [Fact]
+    public async Task 配置了提示词时_加入system消息()
+    {
+        var handler = FakeHttpMessageHandler.Json(SuccessJson());
+        var provider = Create(AsrTestData.AudioChatProfile(), handler);
+
+        await provider.TranscribeAsync(
+            AsrTestData.Silence(1),
+            new AsrCallOptions { Prompt = "当前应用：浏览器（chrome）" });
+
+        var messages = handler.SingleRequest.JsonBody!["messages"]!.AsArray();
+        Assert.Equal(2, messages.Count);
+        Assert.Equal("system", messages[0]!["role"]!.GetValue<string>());
+        Assert.Equal("当前应用：浏览器（chrome）", messages[0]!["content"]!.GetValue<string>());
+        Assert.Equal("user", messages[1]!["role"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task 无提示词时_不加入system消息()
+    {
+        var handler = FakeHttpMessageHandler.Json(SuccessJson());
+        var provider = Create(AsrTestData.AudioChatProfile(), handler);
+
+        await provider.TranscribeAsync(AsrTestData.Silence(1), new AsrCallOptions());
+
+        var messages = handler.SingleRequest.JsonBody!["messages"]!.AsArray();
+        Assert.Single(messages);
+        Assert.Equal("user", messages[0]!["role"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task 请求_使用chat_completions端点与UserAgent()
     {
         var handler = FakeHttpMessageHandler.Json(SuccessJson());

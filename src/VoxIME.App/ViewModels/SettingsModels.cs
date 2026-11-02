@@ -31,6 +31,21 @@ public sealed class Choice
     public override string ToString() => Label;
 }
 
+/// <summary>应用上下文级别的下拉选项（显示文案 + 枚举值）。</summary>
+public sealed class AppContextOption
+{
+    public AppContextOption(string label, AppContextMode mode)
+    {
+        Label = label;
+        Mode = mode;
+    }
+
+    public string Label { get; }
+    public AppContextMode Mode { get; }
+
+    public override string ToString() => Label;
+}
+
 /// <summary>术语替换表项。</summary>
 public sealed class ReplacementItemViewModel : ObservableObject
 {

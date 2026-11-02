@@ -33,7 +33,7 @@
 | `baseUrl` | 服务地址（见各节），本地 CLI / Mock 可留空 |
 | `model` | 模型名（本地 CLI 中可用于 `{model}` 占位符） |
 | `language` | 语言代码，默认 `zh`；`auto` 表示自动检测（按厂商支持情况省略或传 auto） |
-| `prompt` | 提示词（仅 OpenAI 转录接口使用） |
+| `prompt` | 识别提示词；OpenAI 转录接口放在 `prompt` 字段，音频对话接口放在 `messages` 的 system 消息 |
 | `extraJson` | 厂商特定 JSON 对象，会合并进请求体/参数（见各节控制字段） |
 | `timeoutSeconds` | 单次识别超时，默认 60（本地 CLI 建议 300+）。**HttpClient 统一超时无限，由这里控制** |
 | `command` / `commandArguments` / `outputMode` / `outputFileTemplate` | 仅本地 CLI 使用 |
@@ -152,7 +152,7 @@
 - 控制字段（不进入请求体）：
   - `"authHeader"`：`bearer`（默认，`Authorization: Bearer`）| `api-key`（`api-key:` 头）| `x-api-key`。
   - `"audioDataFormat"`：`base64`（默认，纯 base64 + `format` 字段）| `data-url`（`data:audio/wav;base64,...`，省略 `format`）。
-- 响应解析 `choices[0].message.content`（字符串或文本 parts 数组）。
+- 配置了提示词时，请求会多一条 `{"role":"system","content":"..."}` 消息；用户提示词中的前台应用上下文由 VoxIME 自动附加。
 
 ### 4.1 小米 MiMo ASR（预设）
 

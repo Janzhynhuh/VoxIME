@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using VoxIME.Core.Abstractions;
+using VoxIME.Core.Asr;
 using VoxIME.Core.Configuration;
 using VoxIME.Core.History;
 using VoxIME.Core.Logging;
@@ -23,6 +24,7 @@ public sealed class VoiceInputController : IVoiceInputController
     private readonly IBeepPlayer _beep;
     private readonly IHistoryStore _history;
     private readonly IAppLogger _logger;
+    private readonly IAppContextProvider _appContextProvider;
 
     private readonly object _lifecycleLock = new();
     private readonly object _stateLock = new();
@@ -35,6 +37,7 @@ public sealed class VoiceInputController : IVoiceInputController
     private bool _isPaused;
     private double _lastModelWidth;
     private double _lastModelHeight;
+    private AppContextInfo? _recordingContext;
 
     public VoiceInputController(
         IConfigStore configStore,
@@ -47,7 +50,8 @@ public sealed class VoiceInputController : IVoiceInputController
         ILive2DController live2d,
         IBeepPlayer beep,
         IHistoryStore history,
-        IAppLogger logger)
+        IAppLogger logger,
+        IAppContextProvider? appContextProvider = null)
     {
         _configStore = configStore;
         _audio = audio;
@@ -60,6 +64,7 @@ public sealed class VoiceInputController : IVoiceInputController
         _beep = beep;
         _history = history;
         _logger = logger;
+        _appContextProvider = appContextProvider ?? new Win32AppContextProvider();
     }
 
     public AppState State
@@ -285,6 +290,9 @@ public sealed class VoiceInputController : IVoiceInputController
                 return false;
             }
 
+            // 在音频启动/提示音之前取前台应用，避免后续窗口状态影响目标应用判断。
+            _recordingContext = CaptureAppContext();
+
             if (!_audio.IsRecording)
             {
                 try
@@ -305,6 +313,7 @@ public sealed class VoiceInputController : IVoiceInputController
                 }
                 catch (Exception ex)
                 {
+                    _recordingContext = null;
                     Fail($"无法启动麦克风：{ex.Message}", ex);
                     return false;
                 }
@@ -320,6 +329,31 @@ public sealed class VoiceInputController : IVoiceInputController
             _live2d.SetMouthOpen(0);
             _live2d.SetBubbleText(null);
             return true;
+        }
+    }
+
+    private AppContextInfo? CaptureAppContext()
+    {
+        if (Config.Audio.AppContextMode == AppContextMode.Off)
+        {
+            return null;
+        }
+
+        try
+        {
+            var context = _appContextProvider.CaptureCurrent();
+            if (context is not null)
+            {
+                // 只记录分类和进程名，不记录可能含文档名/网页标题的 WindowTitle。
+                _logger.Info($"识别上下文：{context.AppCategory}（{context.ProcessName}）");
+            }
+
+            return context;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"读取前台应用上下文失败：{ex.Message}");
+            return null;
         }
     }
 
@@ -339,6 +373,8 @@ public sealed class VoiceInputController : IVoiceInputController
         }
 
         RecordingResult recording;
+        var appContext = _recordingContext;
+        _recordingContext = null;
         try
         {
             recording = await _audio.StopAsync(cancellationToken).ConfigureAwait(false);
@@ -369,7 +405,7 @@ public sealed class VoiceInputController : IVoiceInputController
             return null;
         }
 
-        return await RecognizeAndInsertAsync(recording, cancellationToken).ConfigureAwait(false);
+        return await RecognizeAndInsertAsync(recording, appContext, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TranscriptionRecord?> ToggleRecordingAsync(CancellationToken cancellationToken = default)
@@ -384,6 +420,7 @@ public sealed class VoiceInputController : IVoiceInputController
 
     public void Cancel()
     {
+        _recordingContext = null;
         try
         {
             _audio.Cancel();
@@ -411,7 +448,14 @@ public sealed class VoiceInputController : IVoiceInputController
         }
     }
 
-    public async Task<AsrResult> TranscribeAsync(AudioClip clip, ProviderProfile profile, CancellationToken cancellationToken = default)
+    public Task<AsrResult> TranscribeAsync(AudioClip clip, ProviderProfile profile, CancellationToken cancellationToken = default) =>
+        TranscribeCoreAsync(clip, profile, null, cancellationToken);
+
+    private async Task<AsrResult> TranscribeCoreAsync(
+        AudioClip clip,
+        ProviderProfile profile,
+        AppContextInfo? appContext,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(clip);
         ArgumentNullException.ThrowIfNull(profile);
@@ -433,7 +477,10 @@ public sealed class VoiceInputController : IVoiceInputController
                 var options = new AsrCallOptions
                 {
                     Language = string.IsNullOrWhiteSpace(profile.Language) ? "auto" : profile.Language,
-                    Prompt = profile.Prompt,
+                    Prompt = AsrPromptComposer.Compose(
+                        profile.Prompt,
+                        appContext,
+                        Config.Audio.AppContextMode),
                     ExtraJson = profile.ExtraJson
                 };
                 var result = await provider.TranscribeAsync(clip, options, timeoutCts.Token).ConfigureAwait(false);
@@ -600,7 +647,10 @@ public sealed class VoiceInputController : IVoiceInputController
         }
     }
 
-    private async Task<TranscriptionRecord?> RecognizeAndInsertAsync(RecordingResult recording, CancellationToken cancellationToken)
+    private async Task<TranscriptionRecord?> RecognizeAndInsertAsync(
+        RecordingResult recording,
+        AppContextInfo? appContext,
+        CancellationToken cancellationToken)
     {
         var config = Config;
         var profile = config.GetActiveProfile();
@@ -614,7 +664,7 @@ public sealed class VoiceInputController : IVoiceInputController
         try
         {
             _live2d.SetBubbleText("正在识别…");
-            asrResult = await TranscribeAsync(recording.Clip, profile, cancellationToken).ConfigureAwait(false);
+            asrResult = await TranscribeCoreAsync(recording.Clip, profile, appContext, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

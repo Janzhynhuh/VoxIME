@@ -85,17 +85,20 @@ public sealed class OpenAiAudioChatProvider : IAsrProvider
         var language = AsrHttpSupport.LanguageOrNull(
             AsrHttpSupport.ResolveLanguage(options.Language, _profile.Language));
         var wav = clip.ToWav();
+        var prompt = string.IsNullOrWhiteSpace(options.Prompt) ? _profile.Prompt : options.Prompt;
+        prompt = string.IsNullOrWhiteSpace(prompt) ? null : prompt!.Trim();
 
         var extra = AsrHttpSupport.MergeExtraJson(_profile.ExtraJson, options.ExtraJson, Descriptor.TypeId);
         var authHeader = ReadControlString(extra, ControlAuthHeader, "bearer");
         var audioDataFormat = ReadControlString(extra, ControlAudioDataFormat, "base64");
 
-        var requestBody = BuildRequestBody(wav, _profile.Model, language, audioDataFormat, extra);
+        var requestBody = BuildRequestBody(wav, _profile.Model, language, prompt, audioDataFormat, extra);
         var json = requestBody.ToJsonString(AsrHttpSupport.JsonWriteOptions);
 
         _logger.Info(
             $"ASR[{Descriptor.DisplayName}] 请求音频对话接口 {_endpoint}，模型 {_profile.Model}，" +
-            $"语言 {language ?? "auto"}，音频 {clip.Duration.TotalSeconds:F1} 秒 / {wav.Length} 字节，鉴权 {authHeader}。");
+            $"语言 {language ?? "auto"}，音频 {clip.Duration.TotalSeconds:F1} 秒 / {wav.Length} 字节，" +
+            $"提示词 {prompt?.Length ?? 0} 字符，鉴权 {authHeader}。");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint)
         {
@@ -132,6 +135,7 @@ public sealed class OpenAiAudioChatProvider : IAsrProvider
         byte[] wav,
         string model,
         string? language,
+        string? prompt,
         string audioDataFormat,
         JsonObject extra)
     {
@@ -152,24 +156,35 @@ public sealed class OpenAiAudioChatProvider : IAsrProvider
             audioObject["format"] = "wav";
         }
 
-        var body = new JsonObject
+        var messages = new JsonArray();
+        if (!string.IsNullOrWhiteSpace(prompt))
         {
-            ["model"] = model,
-            ["messages"] = new JsonArray
+            // chat/completions 格式：用 system 消息携带识别上下文。
+            // 若某厂商不支持 system，可在服务“厂商附加 JSON”里覆盖 messages。
+            messages.Add(new JsonObject
+            {
+                ["role"] = "system",
+                ["content"] = prompt.Trim()
+            });
+        }
+
+        messages.Add(new JsonObject
+        {
+            ["role"] = "user",
+            ["content"] = new JsonArray
             {
                 new JsonObject
                 {
-                    ["role"] = "user",
-                    ["content"] = new JsonArray
-                    {
-                        new JsonObject
-                        {
-                            ["type"] = "input_audio",
-                            ["input_audio"] = audioObject
-                        }
-                    }
+                    ["type"] = "input_audio",
+                    ["input_audio"] = audioObject
                 }
             }
+        });
+
+        var body = new JsonObject
+        {
+            ["model"] = model,
+            ["messages"] = messages
         };
 
         if (!string.IsNullOrEmpty(language))

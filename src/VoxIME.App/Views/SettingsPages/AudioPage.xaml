@@ -35,6 +35,21 @@
                 </StackPanel>
             </Border>
 
+            <!-- 识别上下文 -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="识别上下文" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10" TextWrapping="Wrap"
+                               Text="开始录音时读取当前前台应用，随识别请求一起发送给 ASR 服务，帮助专有名词和场景判断。默认关闭。" />
+                    <ComboBox ItemsSource="{Binding AppContextOptions}"
+                              DisplayMemberPath="Label"
+                              SelectedValuePath="Mode"
+                              SelectedValue="{Binding AppContextMode, Mode=TwoWay}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,6,0,0" TextWrapping="Wrap"
+                               Text="“仅应用类型”只发送应用分类和进程名；“应用 + 窗口标题”会额外发送窗口标题（可能包含文件名/网页标题）。不读取窗口内容、剪贴板或选中文字，也不会把上下文写入日志或历史。" />
+                </StackPanel>
+            </Border>
+
             <!-- 热键 -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
