@@ -1628,7 +1628,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         try
         {
             _controller.Live2D.PreviewExpression(trimmed);
-            ExpressionPreviewStatus = $"已预览表情：{trimmed}";
+            ExpressionPreviewStatus = $"已预览表情：{trimmed}（3 秒后恢复默认表情）";
         }
         catch (Exception ex)
         {
@@ -1642,7 +1642,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         try
         {
             _controller.Live2D.PreviewMotion(group);
-            MotionPreviewStatus = statusOverride ?? $"已预览：{group}";
+            var isIdlePreview = string.Equals(group, string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(group, "Idle", StringComparison.OrdinalIgnoreCase);
+            MotionPreviewStatus = statusOverride ?? (isIdlePreview
+                ? $"已预览待机动作：{group}（播完停 3 秒后继续待机循环）"
+                : $"已预览：{group}（播完停 3 秒后恢复默认）");
         }
         catch (Exception ex)
         {
