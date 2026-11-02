@@ -34,7 +34,8 @@
 | 朗读 | Windows SAPI TTS 朗读识别结果（可选），语速/音色可配 |
 | Live2D 桌宠 | 透明置顶窗口，加载 Cubism 3/4/5 模型（含 MOC3 v5）；待机动画、眨眼、眼动跟随鼠标、聆听/思考/朗读/出错状态联动、麦克风或 TTS 驱动口型、气泡字幕；无模型时内置矢量兜底形象 |
 | 托盘与设置 | 托盘菜单、开机自启、暂停热键、设备选择、VAD 静音自动停止、术语替换、深色主题设置中心 |
-| 隐私安全 | 配置/历史/日志在本机；API Key DPAPI 加密落盘；日志不打印密钥 |
+| 配置备份 | 设置 → 通用 → 配置导入导出；可备份/迁移服务、热键、录音、上屏、桌宠、朗读等设置，导出时可选是否包含 API Key |
+| 隐私安全 | 配置/历史/日志在本机；API Key 明文保存在本地配置；日志不打印密钥 |
 
 ## 🚀 快速开始
 
@@ -118,13 +119,14 @@ dotnet run --project src/VoxIME.App
 
 | 内容 | 位置 |
 |---|---|
-| 配置（含 DPAPI 加密后的 Key） | `%APPDATA%\VoxIME\config.json` |
+| 配置（含明文 API Key，请勿分享） | `%APPDATA%\VoxIME\config.json` |
 | 历史记录（JSONL） | `%APPDATA%\VoxIME\history.jsonl` |
 | 日志 | `%APPDATA%\VoxIME\logs\` |
 | 录音临时文件 | `%APPDATA%\VoxIME\audio\`（识别后可清理） |
 | WebView2 用户数据 | `%APPDATA%\VoxIME\webview2\`（Live2D 页面缓存，可安全删除） |
 
-- API Key 仅在内存中明文，落盘前用当前 Windows 用户 DPAPI 加密（`ProtectedData`）。
+- API Key 明文保存在 `config.json`（旧版 DPAPI 配置会在首次加载时自动迁移为明文）；请勿分享配置文件或上传到公开位置。
+- 配置可在 设置 → 通用 → 配置导入导出 中备份/迁移；导出时可选择是否包含 API Key，导入前会自动备份当前配置。
 - 音频只发送给你选择的识别服务；本地 CLI 模式完全不出本机。
 - 程序不包含任何遥测/统计上报。
 
@@ -156,7 +158,7 @@ flowchart LR
 
 ```powershell
 dotnet build VoxIME.sln          # 全量构建（0 warning / 0 error）
-dotnet test                       # 347 个离线单元测试
+dotnet test                       # 353 个离线单元测试
 .\scripts\publish-x64.ps1         # 发布 x64 自包含包
 .\scripts\run.ps1                 # 开发模式运行
 .\scripts\e2e-smoke.ps1           # 端到端自检：录音→Mock 识别→上屏到前台文本框，结果写 %TEMP%\voxime-e2e-result.json
@@ -201,7 +203,7 @@ A：新版会在状态栏/日志里显示「输入峰值 X% / 检测阈值 Y%」
 A：旧版本把开始/结束录音等逻辑直接跑在全局鼠标钩子线程里，钩子被阻塞时整机鼠标都会卡；最新版已改为「钩子只入队 + 独立后台线程处理」，并让 HUD 预览模式的透明边距也鼠标穿透。若仍遇到，可在托盘菜单「暂停热键」或退出重开。
 
 **Q：识别报 401 Unauthorized / Invalid API Key？**
-A：说明本地没有可用的 API Key（或被平台撤销），不是环境变量问题。到 设置 → 服务 → 对应服务重新粘贴 API Key → 保存 → 点「测试识别」；Key 会用 Windows DPAPI 加密保存在本地。旧版本保存其它设置时可能把 Key 清空，最新版已修复（服务页 PasswordBox 直接写回配置，且保存时会保留已加密凭据）。
+A：说明本地没有可用的 API Key（或被平台撤销），不是环境变量问题。到 设置 → 服务 → 对应服务重新粘贴 API Key → 保存 → 点「测试识别」；Key 会明文保存在本地 `config.json`；可用 设置 → 通用 → 配置导入导出 备份或迁移。请勿分享配置文件。
 
 **Q：桌宠模型看起来分辨率低 / 缩放没变化？**
 A：桌宠窗口是固定像素区域，**窗口宽度/高度越大越清晰**；「模型缩放」已在最新版修复为在窗口内真实缩放，并随缩放提高渲染分辨率（>1 会放大并裁剪超出窗口的部分，想显示更大请同时调大窗口尺寸）。旧版的缩放走 WebView2 页面缩放，会被页面重新适配掉，表现为几乎不变或发糊。

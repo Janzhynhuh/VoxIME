@@ -238,9 +238,9 @@ public sealed class AppConfigTests
 
         Assert.Contains("\"mode\": \"simulateTyping\"", json);
         Assert.Contains("\"activeProviderProfileId\"", json);
-        // 敏感明文不得落盘（仅 Protected 密文字段允许出现）
-        Assert.DoesNotContain("\"apiKey\":", json);
-        Assert.DoesNotContain("\"apiSecret\":", json);
+        // 新版配置直接明文保存 Key，便于导入导出。
+        Assert.Contains("\"apiKey\":", json);
+        Assert.DoesNotContain("apiKeyProtected", json);
     }
 
     [Fact]

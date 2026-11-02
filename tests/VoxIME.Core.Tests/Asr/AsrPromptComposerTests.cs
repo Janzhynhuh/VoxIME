@@ -37,8 +37,9 @@ public sealed class AsrPromptComposerTests
 
         Assert.Contains("请准确转写", result);
         Assert.Contains("代码编辑器", result);
+        Assert.NotNull(result);
         Assert.Contains("Program.cs - Visual Studio Code", result);
-        Assert.DoesNotContain(result, ch => ch != '\n' && char.IsControl(ch));
+        Assert.DoesNotContain(result!, ch => ch != '\n' && char.IsControl(ch));
     }
 
     [Fact]

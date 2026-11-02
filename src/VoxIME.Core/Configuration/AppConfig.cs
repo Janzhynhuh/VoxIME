@@ -31,8 +31,9 @@ public static class ConfigJson
     }
 
     /// <summary>
-    /// 克隆 AppConfig，并保留各 ProviderProfile 的内存明文凭据（<see cref="ProviderProfile.ApiKey"/> 等
-    /// 标记了 JsonIgnore，普通 Clone 会丢失；设置页/自动保存必须用这个，否则保存其它设置会把 Key 抹掉）。
+    /// 克隆 AppConfig，并保留各 ProviderProfile 的明文凭据。
+    /// 配置现在直接保存明文 ApiKey/ApiSecret/SecretId，便于导入导出；
+    /// *Protected 字段仅用于读取旧版 DPAPI 配置并在加载时迁移。
     /// </summary>
     public static AppConfig CloneAppConfig(AppConfig source)
     {
@@ -49,9 +50,9 @@ public static class ConfigJson
             target.ApiKey = origin.ApiKey;
             target.ApiSecret = origin.ApiSecret;
             target.SecretId = origin.SecretId;
-            target.ApiKeyProtected ??= origin.ApiKeyProtected;
-            target.ApiSecretProtected ??= origin.ApiSecretProtected;
-            target.SecretIdProtected ??= origin.SecretIdProtected;
+            target.ApiKeyProtected = origin.ApiKeyProtected;
+            target.ApiSecretProtected = origin.ApiSecretProtected;
+            target.SecretIdProtected = origin.SecretIdProtected;
         }
 
         return clone;
@@ -337,13 +338,16 @@ public sealed class ProviderProfile
     // ---- 厂商身份（非敏感） ----
     public string? AppId { get; set; }
 
-    // ---- 敏感凭据（内存明文，落盘 DPAPI 加密） ----
-    [JsonIgnore] public string ApiKey { get; set; } = "";
-    [JsonIgnore] public string ApiSecret { get; set; } = "";
-    [JsonIgnore] public string SecretId { get; set; } = "";
+    // ---- 敏感凭据（明文保存，便于导入导出；请勿分享 config.json） ----
+    public string ApiKey { get; set; } = "";
+    public string ApiSecret { get; set; } = "";
+    public string SecretId { get; set; } = "";
 
+    /// <summary>仅兼容旧版 DPAPI 配置；加载时迁移为明文并清空。</summary>
     public string? ApiKeyProtected { get; set; }
+    /// <summary>仅兼容旧版 DPAPI 配置；加载时迁移为明文并清空。</summary>
     public string? ApiSecretProtected { get; set; }
+    /// <summary>仅兼容旧版 DPAPI 配置；加载时迁移为明文并清空。</summary>
     public string? SecretIdProtected { get; set; }
 
     [JsonIgnore]

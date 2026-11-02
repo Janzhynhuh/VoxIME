@@ -10,7 +10,7 @@
 | 多厂商可插拔 | `IAsrProvider` + `AsrProviderRegistry`，所有厂商差异封装在适配器内，UI 只认 `ProviderProfile` 与 `AsrProviderDescriptor` |
 | 识别结果可靠上屏 | 剪贴板粘贴优先（兼容性最好），模拟输入兜底；可配置预览确认 |
 | 桌宠可玩但不卡顿 | Live2D 在 WebView2 内由 requestAnimationFrame 渲染；C# 只做状态/参数推送（节流），不逐帧跨进程同步 |
-| 隐私 | 配置/历史/日志全部本地；Key 用 DPAPI 加密；本地 CLI 可完全离线 |
+| 隐私 | 配置/历史/日志全部本地；Key 明文保存在本地配置中（可导入导出）；本地 CLI 可完全离线 |
 | 可测试 | 所有核心服务通过接口注入；网络/进程/音频/UI 均可替换为 fake |
 
 ## 2. 分层与项目结构
@@ -37,7 +37,7 @@ flowchart TB
         Post[DefaultTextPostProcessor]
         Ins[ClipboardTextInjector]
         TTS[SapiTtsService]
-        Cfg[JsonConfigStore + DPAPI]
+        Cfg[JsonConfigStore + 配置导入导出]
         Hist[JSONL HistoryStore]
         Log[FileLogger]
     end
@@ -195,8 +195,8 @@ sequenceDiagram
 
 - `AppConfig` 全部字段带默认值，`Normalize()` 负责钳制范围、修复空 ID/重复 ID、补齐默认服务（Mock）。
 - `JsonConfigStore`：原子写入（临时文件 + `File.Replace`）；损坏文件自动备份为 `config.bad.json` 并回退默认；`ConfigChanged` 通知 UI。
-- 敏感字段：`ProviderProfile.ApiKey/ApiSecret/SecretId` 标 `[JsonIgnore]`，落盘写 `*Protected`（DPAPI CurrentUser），加载时解密；跨用户复制配置时自动失效为无凭据。
-- 凭据保持：`ConfigJson.CloneAppConfig` 克隆后按 Id 回填内存明文凭据（普通 JSON 克隆会丢 `[JsonIgnore]` 字段）；`EncryptSecrets` 在明文为空时保留已有 `*Protected`；设置页 PasswordBox 用代码同步（Password 不能直接绑定）写回 ViewModel。避免“保存热键/桌宠等设置时把 API Key 清空”。
+- 凭据：`ProviderProfile.ApiKey/ApiSecret/SecretId` 直接以明文写入 `config.json`，便于配置备份/迁移；旧版 `*Protected` DPAPI 字段仅用于加载时迁移，迁移后清空。
+- 配置交换：`ConfigExchangeService` 导出/导入 JSON，可选择是否包含 API Key；导入前由 UI 备份当前配置，导入只替换设置，不动历史/日志/模型。
 - 历史：JSONL 追加写，最多保留 1000 条，读取跳过损坏行。
 
 ## 7. 错误处理与降级
@@ -248,7 +248,7 @@ sequenceDiagram
 
 | 层级 | 方式 | 命令/产物 |
 |---|---|---|
-| 单元测试 | 347 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
+| 单元测试 | 353 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
 | 窗口级自检 | 构造并显示欢迎/设置/历史/关于/HUD 五个窗口后退出 | `VoxIME.exe --tray --selftest`（日志 `SELFTEST` 行，退出码 0/2） |
 | 端到端 | 真实启动应用 → 录音 3 秒 → 识别 → 上屏到一个真实前台 WinForms 文本框；结果写 JSON；支持 `-ForceAudioWav` 用指定 WAV 走真实厂商接口 | `scripts/e2e-smoke.ps1` → `%TEMP%\voxime-e2e-result.json` |
 | 真实厂商联调 | Windows SAPI 合成中文语音 → 应用完整链路（强制 WAV）→ 小米 MiMo ASR → 上屏；HTTP 200，识别结果与原文逐字一致，上屏内容与识别结果一致 | `docs/verification/e2e-mimo-real-asr.json` |

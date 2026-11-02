@@ -21,10 +21,10 @@ public interface IConfigStore
     void SetApiKey(ProviderProfile profile, string? apiKey);
 }
 
-/// <summary>JSON 配置存储：API Key 等敏感字段以 DPAPI 密文落盘。</summary>
+/// <summary>JSON 配置存储。敏感字段直接以明文保存，便于备份/导入；*Protected 字段仅用于旧版迁移。</summary>
 public sealed class JsonConfigStore : IConfigStore
 {
-    private readonly ISecretProtector _protector;
+    private readonly ISecretProtector _legacyProtector;
     private readonly IAppLogger _logger;
     private readonly object _sync = new();
     private AppConfig _current = AppConfig.CreateDefault();
@@ -32,7 +32,8 @@ public sealed class JsonConfigStore : IConfigStore
     public JsonConfigStore(string? configPath = null, ISecretProtector? protector = null, IAppLogger? logger = null)
     {
         ConfigFilePath = string.IsNullOrWhiteSpace(configPath) ? AppInfo.DefaultConfigPath : configPath!;
-        _protector = protector ?? new DpapiSecretProtector();
+        // 旧版 DPAPI 配置迁移用；新配置不再加密写入。
+        _legacyProtector = protector ?? new DpapiSecretProtector();
         _logger = logger ?? NullLogger.Instance;
     }
 
@@ -52,8 +53,13 @@ public sealed class JsonConfigStore : IConfigStore
                     var config = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
                     if (config is not null)
                     {
-                        DecryptSecrets(config);
+                        var migrated = MigrateLegacySecrets(config);
                         config.Normalize();
+                        if (migrated)
+                        {
+                            TryPersist(config);
+                        }
+
                         _current = config;
                         return _current;
                     }
@@ -76,12 +82,11 @@ public sealed class JsonConfigStore : IConfigStore
     {
         lock (_sync)
         {
+            MigrateLegacySecrets(config);
             config.Normalize();
-            EncryptSecrets(config);
             TryPersist(config);
             _current = config;
         }
-
         ConfigChanged?.Invoke(this, _current);
     }
 
@@ -98,13 +103,13 @@ public sealed class JsonConfigStore : IConfigStore
             return profile.ApiKey;
         }
 
-        return string.IsNullOrEmpty(profile.ApiKeyProtected) ? null : _protector.Unprotect(profile.ApiKeyProtected);
+        return string.IsNullOrEmpty(profile.ApiKeyProtected) ? null : _legacyProtector.Unprotect(profile.ApiKeyProtected);
     }
 
     public void SetApiKey(ProviderProfile profile, string? apiKey)
     {
         profile.ApiKey = apiKey?.Trim() ?? "";
-        profile.ApiKeyProtected = string.IsNullOrEmpty(profile.ApiKey) ? null : _protector.Protect(profile.ApiKey);
+        profile.ApiKeyProtected = null;
     }
 
     private void TryPersist(AppConfig config)
@@ -154,36 +159,43 @@ public sealed class JsonConfigStore : IConfigStore
         }
     }
 
-    private void EncryptSecrets(AppConfig config)
+    /// <summary>
+    /// 把旧版 DPAPI 字段解密到明文并清空 *Protected。
+    /// 新配置写盘时只保留明文；旧配置在首次加载/保存时自动完成迁移。
+    /// </summary>
+    private bool MigrateLegacySecrets(AppConfig config)
     {
+        var migrated = false;
         foreach (var profile in config.ProviderProfiles)
         {
-            // 明文存在时重新加密；明文为空但已有加密值时必须保留，否则“保存其它设置”会把凭据清空
-            // （ConfigJson.Clone 会丢掉 JsonIgnore 的明文，但保留 ApiKeyProtected）。
-            if (!string.IsNullOrEmpty(profile.ApiKey))
+            if (string.IsNullOrEmpty(profile.ApiKey) && !string.IsNullOrEmpty(profile.ApiKeyProtected))
             {
-                profile.ApiKeyProtected = _protector.Protect(profile.ApiKey);
+                profile.ApiKey = _legacyProtector.Unprotect(profile.ApiKeyProtected);
+                migrated = true;
             }
 
-            if (!string.IsNullOrEmpty(profile.ApiSecret))
+            if (string.IsNullOrEmpty(profile.ApiSecret) && !string.IsNullOrEmpty(profile.ApiSecretProtected))
             {
-                profile.ApiSecretProtected = _protector.Protect(profile.ApiSecret);
+                profile.ApiSecret = _legacyProtector.Unprotect(profile.ApiSecretProtected);
+                migrated = true;
             }
 
-            if (!string.IsNullOrEmpty(profile.SecretId))
+            if (string.IsNullOrEmpty(profile.SecretId) && !string.IsNullOrEmpty(profile.SecretIdProtected))
             {
-                profile.SecretIdProtected = _protector.Protect(profile.SecretId);
+                profile.SecretId = _legacyProtector.Unprotect(profile.SecretIdProtected);
+                migrated = true;
             }
+
+            if (profile.ApiKeyProtected is not null || profile.ApiSecretProtected is not null || profile.SecretIdProtected is not null)
+            {
+                migrated = true;
+            }
+
+            profile.ApiKeyProtected = null;
+            profile.ApiSecretProtected = null;
+            profile.SecretIdProtected = null;
         }
-    }
 
-    private void DecryptSecrets(AppConfig config)
-    {
-        foreach (var profile in config.ProviderProfiles)
-        {
-            profile.ApiKey = string.IsNullOrEmpty(profile.ApiKeyProtected) ? "" : _protector.Unprotect(profile.ApiKeyProtected);
-            profile.ApiSecret = string.IsNullOrEmpty(profile.ApiSecretProtected) ? "" : _protector.Unprotect(profile.ApiSecretProtected);
-            profile.SecretId = string.IsNullOrEmpty(profile.SecretIdProtected) ? "" : _protector.Unprotect(profile.SecretIdProtected);
-        }
+        return migrated;
     }
 }

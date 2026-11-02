@@ -105,8 +105,27 @@
                                 Padding="14,7" VerticalAlignment="Center"
                                 Command="{Binding OpenAboutCommand}" />
                     </Grid>
-                    <TextBlock Style="{StaticResource HintText}" Margin="0,12,0,0"
-                               Text="配置与历史仅保存在本机 %APPDATA%\VoxIME；API Key 使用 Windows DPAPI 加密。ASR 服务由各厂商提供，费用与合规责任由使用者承担。" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,12,0,0" TextWrapping="Wrap"
+                               Text="配置与历史仅保存在本机 %APPDATA%\VoxIME；API Key 明文保存在 config.json，请勿分享配置文件。ASR 服务由各厂商提供，费用与合规责任由使用者承担。" />
+                </StackPanel>
+            </Border>
+
+            <!-- 配置导入导出 -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="配置导入导出" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10" TextWrapping="Wrap"
+                               Text="把服务、热键、录音、上屏、桌宠、朗读等设置导出为 JSON，便于备份或迁移到另一台电脑。历史记录、日志和模型文件不包含在内。" />
+                    <CheckBox Content="导出时包含 API Key（明文，注意保管）"
+                              IsChecked="{Binding ExportSecrets, Mode=TwoWay}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <Button Style="{StaticResource SecondaryButton}" Content="导出配置…"
+                                Padding="14,7" Command="{Binding ExportConfigCommand}" />
+                        <Button Style="{StaticResource GhostButton}" Content="导入配置…"
+                                Padding="14,7" Margin="8,0,0,0" Command="{Binding ImportConfigCommand}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,6,0,0" TextWrapping="Wrap"
+                               Text="导入会替换当前全部设置；导入前自动备份当前配置，导入后建议重启应用。" />
                 </StackPanel>
             </Border>
 

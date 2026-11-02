@@ -8,7 +8,7 @@ VoxIME 代码以 MIT 许可发布（见根目录 `LICENSE`）。以下是运行�
 |---|---|---|
 | [NAudio](https://github.com/naudio/NAudio) 2.2.1 | MIT | WASAPI 采集、重采样、WAV 播放、提示音 |
 | [System.Speech](https://www.nuget.org/packages/System.Speech)（.NET 兼容包） | MIT | Windows SAPI 语音合成 |
-| [System.Security.Cryptography.ProtectedData](https://www.nuget.org/packages/System.Security.Cryptography.ProtectedData) | MIT | DPAPI 加密 API Key |
+| [System.Security.Cryptography.ProtectedData](https://www.nuget.org/packages/System.Security.Cryptography.ProtectedData) | MIT | 旧版 DPAPI 配置迁移 |
 | [Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) | Microsoft 许可（可再分发） | 承载 Live2D 网页 |
 | [Microsoft.Windows.SDK.NET.Ref](https://www.nuget.org/packages/Microsoft.Windows.SDK.NET.Ref)（经 TFM `net10.0-windows10.0.17763.0` 隐式引入） | Microsoft 许可 | WebView2CompositionControl 所需 WinRT 投影 |
 | [xunit](https://xunit.net/) 及测试依赖 | Apache-2.0 | 单元测试（仅开发） |

@@ -62,6 +62,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _micTestMaxLevel;
     private string _micTestStatus = "";
     private AppContextMode _appContextMode;
+    private bool _exportSecrets = true;
 
     public ObservableCollection<AppContextOption> AppContextOptions { get; } = new()
     {
@@ -171,6 +172,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         OpenLogsFolderCommand = new RelayCommand(() => WindowHelper.OpenFolder(AppInfo.DefaultLogDirectory));
         OpenHistoryCommand = new RelayCommand(() => HistoryRequested?.Invoke(this, EventArgs.Empty));
         OpenAboutCommand = new RelayCommand(() => AboutRequested?.Invoke(this, EventArgs.Empty));
+        ExportConfigCommand = new RelayCommand(ExportConfig);
+        ImportConfigCommand = new RelayCommand(ImportConfig);
 
         AddProviderCommand = new RelayCommand(AddProvider, () => NewDescriptor is not null);
         RemoveProviderCommand = new RelayCommand(RemoveProvider,
@@ -425,6 +428,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand OpenLogsFolderCommand { get; }
     public RelayCommand OpenHistoryCommand { get; }
     public RelayCommand OpenAboutCommand { get; }
+    public RelayCommand ExportConfigCommand { get; }
+    public RelayCommand ImportConfigCommand { get; }
 
     // ==================== 服务页 ====================
 
@@ -702,6 +707,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         get => _appContextMode;
         set => SetProperty(ref _appContextMode, value);
+    }
+
+    /// <summary>导出配置时是否包含 API Key 明文。</summary>
+    public bool ExportSecrets
+    {
+        get => _exportSecrets;
+        set => SetProperty(ref _exportSecrets, value);
     }
 
     public bool IsMicTesting
@@ -2651,6 +2663,115 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private static string? NullIfEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void ExportConfig()
+    {
+        try
+        {
+            var config = CollectConfig();
+            var dialog = new SaveFileDialog
+            {
+                Title = "导出 VoxIME 配置",
+                Filter = "VoxIME 配置 (*.json)|*.json|所有文件 (*.*)|*.*",
+                DefaultExt = ".json",
+                AddExtension = true,
+                FileName = $"VoxIME-config-{DateTime.Now:yyyyMMdd-HHmm}.json"
+            };
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            var json = ConfigExchangeService.Export(config, ExportSecrets);
+            File.WriteAllText(dialog.FileName, json);
+            ShowSaveStatus("配置已导出");
+            if (ExportSecrets)
+            {
+                Ui.Warn(
+                    "导出文件包含 API Key 明文，请妥善保管，不要上传到公开位置。",
+                    "配置已导出");
+            }
+            else
+            {
+                Ui.Info("配置已导出（未包含 API Key）。", "配置已导出");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("导出配置失败", ex);
+            Ui.Error("导出配置失败：" + ex.Message);
+        }
+    }
+
+    private void ImportConfig()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "导入 VoxIME 配置",
+            Filter = "VoxIME 配置 (*.json)|*.json|所有文件 (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(dialog.FileName);
+            var imported = ConfigExchangeService.Import(json);
+            var serviceCount = imported.ProviderProfiles.Count;
+            var hasSecrets = imported.ProviderProfiles.Any(p => p.HasAnySecret);
+            var message =
+                $"将用导入的配置替换当前全部设置（共 {serviceCount} 个识别服务）。\n\n" +
+                "历史记录、日志和模型文件不受影响。\n" +
+                (hasSecrets
+                    ? "导入文件包含 API Key。"
+                    : "导入文件不包含 API Key，导入后需要重新填写。") +
+                "\n\n导入前会自动备份当前配置。";
+            if (!Ui.Confirm(message, "导入配置", "导入", "取消"))
+            {
+                return;
+            }
+
+            BackupConfigBeforeImport();
+            _configStore.Save(imported);
+            _controller.ApplyConfig(_configStore.Current);
+            StartupRegistration.SetEnabled(imported.Ui.StartWithWindows);
+            InitializeFrom(_configStore.Current);
+            _working = ConfigJson.CloneAppConfig(_configStore.Current);
+            Saved?.Invoke(this, _configStore.Current);
+            RefreshLive2DStatus();
+            ShowSaveStatus("配置已导入");
+            Ui.Info("配置已导入。建议重启 VoxIME，确保热键、音频设备和桌宠完全生效。", "导入成功");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("导入配置失败", ex);
+            Ui.Error("导入配置失败：" + ex.Message);
+        }
+    }
+
+    private void BackupConfigBeforeImport()
+    {
+        try
+        {
+            var path = _configStore.ConfigFilePath;
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            var backup = path + $".bak-{DateTime.Now:yyyyMMdd-HHmmss}";
+            File.Copy(path, backup, overwrite: false);
+            _logger.Info($"导入配置前备份：{backup}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"导入前备份配置失败：{ex.Message}");
+        }
+    }
 
     private void ResetToDefaults()
     {

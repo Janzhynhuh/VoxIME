@@ -9,7 +9,7 @@ Windows x64 语音输入法 **VoxIME 声语**：悬浮语音助手形态。
 
 - 全局热键（按住说话 / 按下切换）录音 → 可插拔多厂商 ASR 识别 → 文本自动插入当前焦点应用。
 - 透明置顶 Live2D 桌宠窗口：Cubism 3/4/5 模型、眼动跟随、待机动画、TTS 驱动口型、状态联动；无模型时用内置兜底形象。
-- WPF 设置界面 + 托盘图标 + 历史记录 + 配置持久化（API Key 用 DPAPI 加密）。
+- WPF 设置界面 + 托盘图标 + 历史记录 + 配置持久化（支持配置导入导出，API Key 明文保存）。
 - 技术栈：.NET 10 / C# / WPF / NAudio / System.Speech / WebView2 / PixiJS 8 + untitled-pixi-live2d-engine。x64，Windows 11 环境已验证可构建。
 
 ## 2. 环境事实
@@ -46,7 +46,7 @@ Windows x64 语音输入法 **VoxIME 声语**：悬浮语音助手形态。
 - `Live2DModels.cs`：`ILive2DController`（含 `PreviewMotion`/`PreviewExpression` 预览）、`Live2DState`、`Live2DModelSizeEventArgs`（模型加载后上报原始宽高，用于窗口自适应）
 - `VoiceInputModels.cs`：`IVoiceInputController`（UI 唯一依赖的主控接口）、`AppState`、`AppStateChangedEventArgs`、`TranscriptionRecord`
 
-配置类型在 `VoxIME.Core.Configuration`：`AppConfig`（含 `ProviderProfile`、`HotkeyConfig`、`AudioConfig`、`InsertionConfig`、`Live2DConfig`、`TtsConfig`、`UiConfig`、`OverlayConfig`、`LoggingConfig`）、`IConfigStore`/`JsonConfigStore`、`ISecretProtector`/`DpapiSecretProtector`、`ConfigJson`。
+配置类型在 `VoxIME.Core.Configuration`：`AppConfig`（含 `ProviderProfile`、`HotkeyConfig`、`AudioConfig`、`InsertionConfig`、`Live2DConfig`、`TtsConfig`、`UiConfig`、`OverlayConfig`、`LoggingConfig`）、`IConfigStore`/`JsonConfigStore`、`ConfigExchangeService`、`ISecretProtector`/`DpapiSecretProtector`（仅旧版迁移）、`ConfigJson`。
 日志：`VoxIME.Core.Logging.IAppLogger`、`FileLogger`、`NullLogger`、`LogLevel`。
 历史：`VoxIME.Core.History.IHistoryStore`/`JsonlHistoryStore`。
 

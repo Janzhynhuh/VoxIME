@@ -38,7 +38,7 @@
 | `timeoutSeconds` | 单次识别超时，默认 60（本地 CLI 建议 300+）。**HttpClient 统一超时无限，由这里控制** |
 | `command` / `commandArguments` / `outputMode` / `outputFileTemplate` | 仅本地 CLI 使用 |
 | `appId` | 讯飞的 APPID |
-| `apiKey`（内存）/ `apiKeyProtected`（落盘） | 各厂商 API Key / SecretKey / 讯飞 APIKey |
+| `apiKey`（明文，直接落盘） | 各厂商 API Key / SecretKey / 讯飞 APIKey |
 | `apiSecret`（内存）/ `apiSecretProtected` | 讯飞 APISecret |
 | `secretId`（内存）/ `secretIdProtected` | 腾讯云 SecretId |
 
@@ -46,7 +46,7 @@
 
 - 所有 HTTP 请求带 `User-Agent: VoxIME/0.1`。
 - 非 2xx 统一抛 `AsrException`：`StatusCode` + 响应体前 1000 字符；超时、网络异常、取消也会映射成中文错误。
-- 日志只记录地址/模型/音频长度/耗时，**不记录任何密钥**（密钥仅存在于内存与 DPAPI 加密后的配置字段）。
+- 日志只记录地址/模型/音频长度/耗时，**不记录任何密钥**；密钥以明文保存在本地 `config.json`，请勿分享配置文件。
 - 时间单位：`AsrResult.Latency` 是本次请求耗时，`AudioDuration` 是音频时长。
 
 ## 3. OpenAI 兼容转录接口（`openai-transcription`）
@@ -341,5 +341,5 @@
   - 小米 MiMo 的鉴权头与 `asr_options` 支持范围（以 MiMo 官方文档为准）；
   - 阿里云 DashScope 专属业务空间域名迁移（`{WorkspaceId}.cn-beijing.maas.aliyuncs.com`）；
   - 腾讯云 Region 取值与引擎类型列表、讯飞 `eos`/`vad_eos` 字段的引擎版本兼容性。
-- 所有厂商的密钥仅保存在本机（DPAPI 加密的配置字段），VoxIME 不会上传、也不会写入日志；请勿把密钥提交到
+- 所有厂商的密钥仅保存在本机（`config.json` 明文），VoxIME 不会上传、也不会写入日志；请勿把密钥提交到
   版本库或截图分享。
