@@ -79,6 +79,7 @@
   var modelGroups = [];
   var idleGroup = null;
   var idleMotionActive = false;
+  var modelBaseline = null;
   var mouthParamIds = ['ParamMouthOpenY'];
   var mouthParamHandles = [];
   var demo = null;
@@ -400,20 +401,63 @@
     return groups;
   }
 
-  /** 把所有 Cubism 参数恢复为模型默认值，清除上一个动作残留的自定义参数。 */
-  function resetModelParametersToDefault() {
+  /** 记录模型加载完成时的参数值与部件透明度，作为“默认姿态”基线。 */
+  function captureModelBaseline() {
     try {
       var core = model && model.internalModel ? model.internalModel.coreModel : null;
       if (!core
           || typeof core.getParameterCount !== 'function'
-          || typeof core.getParameterDefaultValue !== 'function'
-          || typeof core.setParameterValueByIndex !== 'function') {
+          || typeof core.getParameterValueByIndex !== 'function') {
+        modelBaseline = null;
         return;
       }
 
-      var count = core.getParameterCount();
-      for (var i = 0; i < count; i++) {
-        core.setParameterValueByIndex(i, core.getParameterDefaultValue(i));
+      var parameters = [];
+      for (var i = 0; i < core.getParameterCount(); i++) {
+        parameters.push(core.getParameterValueByIndex(i));
+      }
+
+      var partOpacities = [];
+      if (typeof core.getPartCount === 'function' && typeof core.getPartOpacityByIndex === 'function') {
+        for (var p = 0; p < core.getPartCount(); p++) {
+          partOpacities.push(core.getPartOpacityByIndex(p));
+        }
+      }
+
+      modelBaseline = { parameters: parameters, partOpacities: partOpacities };
+    } catch (e) {
+      modelBaseline = null;
+      log('记录模型默认姿态失败（忽略）', e);
+    }
+  }
+
+  /** 把模型恢复到加载完成时的默认参数/部件透明度，清除上一个动作的残留。 */
+  function resetModelParametersToDefault() {
+    try {
+      var core = model && model.internalModel ? model.internalModel.coreModel : null;
+      if (!core) return;
+
+      if (modelBaseline
+          && modelBaseline.parameters.length === core.getParameterCount()
+          && typeof core.setParameterValueByIndex === 'function') {
+        for (var i = 0; i < modelBaseline.parameters.length; i++) {
+          core.setParameterValueByIndex(i, modelBaseline.parameters[i]);
+        }
+      } else if (typeof core.getParameterDefaultValue === 'function'
+                 && typeof core.setParameterValueByIndex === 'function') {
+        for (var d = 0; d < core.getParameterCount(); d++) {
+          core.setParameterValueByIndex(d, core.getParameterDefaultValue(d));
+        }
+      }
+
+      if (modelBaseline
+          && modelBaseline.partOpacities.length > 0
+          && typeof core.getPartCount === 'function'
+          && typeof core.setPartOpacityByIndex === 'function') {
+        var partCount = Math.min(modelBaseline.partOpacities.length, core.getPartCount());
+        for (var p = 0; p < partCount; p++) {
+          core.setPartOpacityByIndex(p, modelBaseline.partOpacities[p]);
+        }
       }
     } catch (e) {
       log('重置模型参数失败（忽略）', e);
@@ -541,6 +585,7 @@
       model.internalModel.on('beforeModelUpdate', applyMouthOverride);
       setupMouthParameters();
       applyModelAssets(pendingModelAssets);
+      captureModelBaseline();
       modelGroups = setupIdleGroup() || [];
       // 初始化时应用缩放与对应的后备分辨率（模型自带尺寸可能很大）。
       resizePixi();
@@ -646,6 +691,8 @@
     try { model.internalModel.off('beforeModelUpdate', applyMouthOverride); } catch (e) { /* ignore */ }
     try { model.destroy(); } catch (e) { /* ignore */ }
     model = null;
+    modelBaseline = null;
+    idleMotionActive = false;
     modelGroups = [];
     idleGroup = null;
   }
