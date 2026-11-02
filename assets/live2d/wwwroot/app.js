@@ -78,6 +78,7 @@
   var modelName = '';
   var modelGroups = [];
   var idleGroup = null;
+  var idleMotionActive = false;
   var mouthParamIds = ['ParamMouthOpenY'];
   var mouthParamHandles = [];
   var demo = null;
@@ -363,20 +364,60 @@
     if (!group) group = groups.find(function (g) { return g.toLowerCase().indexOf('idle') >= 0; });
     if (!group) group = groups[0] || null;
 
-    idleGroup = group;
-    try {
-      if (config.idleMotion && idleGroup) {
-        mm.groups.idle = idleGroup;
-        // 立即进入待机动作（之后 MotionManager 会在动作结束后自动随机下一个 Idle 动作）
-        model.motion(idleGroup);
-      } else {
-        mm.groups.idle = '__voxime_idle_disabled__';
+    var previousGroup = idleGroup;
+    var previousActive = idleMotionActive;
+    var nextActive = !!(config.idleMotion && group);
+    var changed = previousActive !== nextActive
+      || (nextActive && (!previousGroup || previousGroup.toLowerCase() !== group.toLowerCase()));
+
+    if (changed) {
+      try {
+        // 切组前先停掉旧动作并重置所有参数。像“脱捕”这种动作会改很多
+        // 自定义参数，如果不清空，切回 Idle 时这些参数会残留在模型上。
+        mm.stopAllMotions();
+        resetModelParametersToDefault();
+        if (nextActive) {
+          mm.groups.idle = group;
+          idleGroup = group;
+          idleMotionActive = true;
+          model.motion(group);
+        } else {
+          mm.groups.idle = '__voxime_idle_disabled__';
+          idleGroup = null;
+          idleMotionActive = false;
+        }
+        sendHost({
+          type: 'debug',
+          message: '待机动作组切换：' + (previousGroup || '(无)') + ' -> '
+            + (nextActive ? group : '(不播放)') + '，已重置参数'
+        });
+      } catch (e) {
+        log('待机动作设置失败（模型可能无动作组）', e);
       }
-    } catch (e) {
-      log('待机动作设置失败（模型可能无动作组）', e);
     }
+
     log('动作组: ' + groups.join(', ') + ' / 待机组: ' + (idleGroup || '无'));
     return groups;
+  }
+
+  /** 把所有 Cubism 参数恢复为模型默认值，清除上一个动作残留的自定义参数。 */
+  function resetModelParametersToDefault() {
+    try {
+      var core = model && model.internalModel ? model.internalModel.coreModel : null;
+      if (!core
+          || typeof core.getParameterCount !== 'function'
+          || typeof core.getParameterDefaultValue !== 'function'
+          || typeof core.setParameterValueByIndex !== 'function') {
+        return;
+      }
+
+      var count = core.getParameterCount();
+      for (var i = 0; i < count; i++) {
+        core.setParameterValueByIndex(i, core.getParameterDefaultValue(i));
+      }
+    } catch (e) {
+      log('重置模型参数失败（忽略）', e);
+    }
   }
 
   // Cubism 5 引擎的 CubismModel 参数 API 需要 CubismIdHandle，而不是裸字符串；
