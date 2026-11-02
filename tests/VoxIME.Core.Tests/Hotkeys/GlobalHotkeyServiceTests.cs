@@ -69,6 +69,24 @@ public class GlobalHotkeyServiceTests
     }
 
     [Fact]
+    public void 多热键配置可正常启动与停止()
+    {
+        using var service = new GlobalHotkeyService(NullLogger.Instance);
+
+        service.Start(new HotkeyConfig
+        {
+            PushToTalkGestures = new List<string> { "Ctrl+Alt", "F2" },
+            ToggleGestures = new List<string> { "Ctrl+Alt+M", "F9" },
+            CancelGestures = new List<string> { "Esc", "F10" }
+        });
+
+        // 无交互桌面环境可能无法安装钩子，但不允许抛异常。
+        Assert.Contains(service.IsRunning, new[] { true, false });
+        service.Stop();
+        Assert.False(service.IsRunning);
+    }
+
+    [Fact]
     public void 鼠标热键配置可正常启动与停止()
     {
         using var service = new GlobalHotkeyService(NullLogger.Instance);

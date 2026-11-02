@@ -114,7 +114,7 @@ sequenceDiagram
 
 ### 5.2 热键（`VoxIME.Core.Hotkeys`）
 
-- `GlobalHotkeyService`：同时安装 `SetWindowsHookEx(WH_KEYBOARD_LL)` 与 `WH_MOUSE_LL`，运行在独立后台线程（自带消息循环），不吞键盘按键；`HotkeyGesture`/`HotkeyMatcher`（public）负责解析 `"Ctrl+Alt"`、`"Ctrl+Shift+Space"`、`"F2"`、`"MouseX1"`、`"Ctrl+MouseX2"` 等手势并驱动"按住说话"状态机：组合键全部按下 → Pressed；任一键抬起 → Released；无自动重复。
+- `GlobalHotkeyService`：同时安装 `SetWindowsHookEx(WH_KEYBOARD_LL)` 与 `WH_MOUSE_LL`，运行在独立后台线程（自带消息循环），不吞键盘按键；`HotkeyGesture`/`HotkeyMatcher`（public）负责解析 `"Ctrl+Alt"`、`"Ctrl+Shift+Space"`、`"F2"`、`"MouseX1"`、`"Ctrl+MouseX2"` 等手势并驱动"按住说话"状态机：组合键全部按下 → Pressed；任一键抬起 → Released；无自动重复。`HotkeyConfig.PushToTalkGestures` / `ToggleGestures` / `CancelGestures` 支持每个功能多个热键，匹配任意一个即可；旧单值字段仍兼容。
 - 支持 `Ctrl/Alt/Shift/Win` + 单个键盘主键（最多 4 键组合），也支持鼠标键：`MouseX1`/`MouseX2`（侧键）、`MouseMiddle`、`MouseLeft`、`MouseRight`；`Esc` 作为取消键。
 - 鼠标键通过低级鼠标钩子映射为虚拟键码（0x01..0x06）后复用同一个匹配器；**只有命中已配置热键的鼠标事件会被吞掉**（避免浏览器前进/后退等默认行为同时触发），其余鼠标/键盘事件照常传递。
 - **钩子回调只入队、不执行业务逻辑**：专用 `VoxIME.HotkeyDispatch` 后台线程按序处理事件。低级鼠标/键盘钩子被阻塞会导致整机输入卡顿（表现为鼠标突然点不动屏幕），因此 `StartRecording` 等重活绝不能跑在钩子线程上。
@@ -245,7 +245,7 @@ sequenceDiagram
 
 | 层级 | 方式 | 命令/产物 |
 |---|---|---|
-| 单元测试 | 326 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
+| 单元测试 | 333 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
 | 窗口级自检 | 构造并显示欢迎/设置/历史/关于/HUD 五个窗口后退出 | `VoxIME.exe --tray --selftest`（日志 `SELFTEST` 行，退出码 0/2） |
 | 端到端 | 真实启动应用 → 录音 3 秒 → 识别 → 上屏到一个真实前台 WinForms 文本框；结果写 JSON；支持 `-ForceAudioWav` 用指定 WAV 走真实厂商接口 | `scripts/e2e-smoke.ps1` → `%TEMP%\voxime-e2e-result.json` |
 | 真实厂商联调 | Windows SAPI 合成中文语音 → 应用完整链路（强制 WAV）→ 小米 MiMo ASR → 上屏；HTTP 200，识别结果与原文逐字一致，上屏内容与识别结果一致 | `docs/verification/e2e-mimo-real-asr.json` |

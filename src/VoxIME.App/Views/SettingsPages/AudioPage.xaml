@@ -38,7 +38,7 @@
                 <StackPanel>
                     <TextBlock Text="全局热键" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10"
-                               Text="在输入框中直接按下组合键即可录制（例如 Ctrl+Alt、Ctrl+Shift+Space、F2）；也支持鼠标侧键：把光标放进输入框后按鼠标侧键/中键，会录成 MouseX1、MouseX2 或 MouseMiddle。" />
+                               Text="每个功能可以添加多个热键，任意一个触发即可；在输入框中直接按下组合键录制（例如 Ctrl+Alt、F2）；也支持鼠标侧键（MouseX1/MouseX2/MouseMiddle）。" />
 
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -46,12 +46,30 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="按住说话" Style="{StaticResource FieldLabel}" />
-                        </StackPanel>
+                        <TextBlock Grid.Column="0" Text="按住说话" Style="{StaticResource FieldLabel}"
+                                   VerticalAlignment="Top" Margin="0,6,0,0" />
                         <StackPanel Grid.Column="1">
-                            <TextBox infra:HotkeyCapture.IsEnabled="True"
-                                     Text="{Binding PushToTalkHotkey, UpdateSourceTrigger=PropertyChanged}" />
+                            <ItemsControl ItemsSource="{Binding PushToTalkHotkeys}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox infra:HotkeyCapture.IsEnabled="True"
+                                                     Text="{Binding Gesture, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="移除"
+                                                    Margin="8,0,0,0"
+                                                    Command="{Binding DataContext.RemovePushToTalkHotkeyCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Style="{StaticResource SmallButton}" Content="+ 添加一个热键"
+                                    HorizontalAlignment="Left" Margin="0,2,0,0"
+                                    Command="{Binding AddPushToTalkHotkeyCommand}" />
                             <TextBlock Text="{Binding PushToTalkError}" Style="{StaticResource DangerText}"
                                        Margin="0,4,0,0"
                                        Visibility="{Binding HasPushToTalkError, Converter={StaticResource BoolToVis}}" />
@@ -66,10 +84,30 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="切换录音" Style="{StaticResource FieldLabel}" />
+                        <TextBlock Grid.Column="0" Text="切换录音" Style="{StaticResource FieldLabel}"
+                                   VerticalAlignment="Top" Margin="0,6,0,0" />
                         <StackPanel Grid.Column="1">
-                            <TextBox infra:HotkeyCapture.IsEnabled="True"
-                                     Text="{Binding ToggleHotkey, UpdateSourceTrigger=PropertyChanged}" />
+                            <ItemsControl ItemsSource="{Binding ToggleHotkeys}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox infra:HotkeyCapture.IsEnabled="True"
+                                                     Text="{Binding Gesture, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="移除"
+                                                    Margin="8,0,0,0"
+                                                    Command="{Binding DataContext.RemoveToggleHotkeyCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Style="{StaticResource SmallButton}" Content="+ 添加一个热键"
+                                    HorizontalAlignment="Left" Margin="0,2,0,0"
+                                    Command="{Binding AddToggleHotkeyCommand}" />
                             <TextBlock Text="{Binding ToggleHotkeyError}" Style="{StaticResource DangerText}"
                                        Margin="0,4,0,0"
                                        Visibility="{Binding HasToggleHotkeyError, Converter={StaticResource BoolToVis}}" />
@@ -82,12 +120,31 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="120" />
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="取消录音" Style="{StaticResource FieldLabel}" />
+                        <TextBlock Grid.Column="0" Text="取消录音" Style="{StaticResource FieldLabel}"
+                                   VerticalAlignment="Top" Margin="0,6,0,0" />
                         <StackPanel Grid.Column="1">
-                            <TextBox infra:HotkeyCapture.IsEnabled="True"
-                                     Text="{Binding CancelHotkey, UpdateSourceTrigger=PropertyChanged}" />
+                            <ItemsControl ItemsSource="{Binding CancelHotkeys}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox infra:HotkeyCapture.IsEnabled="True"
+                                                     Text="{Binding Gesture, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="移除"
+                                                    Margin="8,0,0,0"
+                                                    Command="{Binding DataContext.RemoveCancelHotkeyCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Style="{StaticResource SmallButton}" Content="+ 添加一个热键"
+                                    HorizontalAlignment="Left" Margin="0,2,0,0"
+                                    Command="{Binding AddCancelHotkeyCommand}" />
                             <TextBlock Text="{Binding CancelHotkeyError}" Style="{StaticResource DangerText}"
                                        Margin="0,4,0,0"
                                        Visibility="{Binding HasCancelHotkeyError, Converter={StaticResource BoolToVis}}" />

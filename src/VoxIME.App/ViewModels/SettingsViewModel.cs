@@ -44,9 +44,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     // ---- 录音 ----
     private AudioDeviceInfo? _selectedAudioDevice;
-    private string _pushToTalkHotkey = "";
-    private string _toggleHotkey = "";
-    private string _cancelHotkey = "";
     private string? _pushToTalkError;
     private string? _toggleHotkeyError;
     private string? _cancelHotkeyError;
@@ -176,6 +173,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ShowLive2DCommand = new RelayCommand(() => SetLive2DVisible(true));
         HideLive2DCommand = new RelayCommand(() => SetLive2DVisible(false));
         ResetLive2DPositionCommand = new RelayCommand(ResetLive2DPosition);
+        AddPushToTalkHotkeyCommand = new RelayCommand(() => AddHotkeyRow(PushToTalkHotkeys));
+        RemovePushToTalkHotkeyCommand = new RelayCommand(param => RemoveHotkeyRow(PushToTalkHotkeys, param as HotkeyBindingViewModel));
+        AddToggleHotkeyCommand = new RelayCommand(() => AddHotkeyRow(ToggleHotkeys));
+        RemoveToggleHotkeyCommand = new RelayCommand(param => RemoveHotkeyRow(ToggleHotkeys, param as HotkeyBindingViewModel));
+        AddCancelHotkeyCommand = new RelayCommand(() => AddHotkeyRow(CancelHotkeys));
+        RemoveCancelHotkeyCommand = new RelayCommand(param => RemoveHotkeyRow(CancelHotkeys, param as HotkeyBindingViewModel));
         TestTtsCommand = new AsyncRelayCommand(TestTtsAsync, () => !_ttsEnabledTesting);
         AddReplacementCommand = new RelayCommand(() => Replacements.Add(new ReplacementItemViewModel("", "")));
         RemoveReplacementCommand = new RelayCommand(param =>
@@ -479,41 +482,16 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _selectedAudioDevice, value);
     }
 
-    public string PushToTalkHotkey
-    {
-        get => _pushToTalkHotkey;
-        set
-        {
-            if (SetProperty(ref _pushToTalkHotkey, value))
-            {
-                ValidateHotkeys();
-            }
-        }
-    }
+    public ObservableCollection<HotkeyBindingViewModel> PushToTalkHotkeys { get; } = new();
+    public ObservableCollection<HotkeyBindingViewModel> ToggleHotkeys { get; } = new();
+    public ObservableCollection<HotkeyBindingViewModel> CancelHotkeys { get; } = new();
 
-    public string ToggleHotkey
-    {
-        get => _toggleHotkey;
-        set
-        {
-            if (SetProperty(ref _toggleHotkey, value))
-            {
-                ValidateHotkeys();
-            }
-        }
-    }
-
-    public string CancelHotkey
-    {
-        get => _cancelHotkey;
-        set
-        {
-            if (SetProperty(ref _cancelHotkey, value))
-            {
-                ValidateHotkeys();
-            }
-        }
-    }
+    public RelayCommand AddPushToTalkHotkeyCommand { get; }
+    public RelayCommand RemovePushToTalkHotkeyCommand { get; }
+    public RelayCommand AddToggleHotkeyCommand { get; }
+    public RelayCommand RemoveToggleHotkeyCommand { get; }
+    public RelayCommand AddCancelHotkeyCommand { get; }
+    public RelayCommand RemoveCancelHotkeyCommand { get; }
 
     public string? PushToTalkError
     {
@@ -1161,9 +1139,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                                   string.Equals(d.Id, config.Audio.DeviceId, StringComparison.Ordinal))
                               ?? AudioDevices[0];
 
-        PushToTalkHotkey = config.Hotkeys.PushToTalk;
-        ToggleHotkey = config.Hotkeys.Toggle;
-        CancelHotkey = config.Hotkeys.Cancel;
+        LoadHotkeyRows(PushToTalkHotkeys, config.Hotkeys.PushToTalkGestures, config.Hotkeys.PushToTalk);
+        LoadHotkeyRows(ToggleHotkeys, config.Hotkeys.ToggleGestures, config.Hotkeys.Toggle);
+        LoadHotkeyRows(CancelHotkeys, config.Hotkeys.CancelGestures, config.Hotkeys.Cancel);
         EnablePushToTalk = config.Hotkeys.EnablePushToTalk;
         EnableToggle = config.Hotkeys.EnableToggle;
         RecordingMode = config.Hotkeys.DefaultMode;
@@ -1432,47 +1410,140 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private void ValidateHotkeys()
     {
-        string? pushError = null;
-        string? toggleError = null;
-        string? cancelError = null;
+        var push = NormalizeHotkeyRows(PushToTalkHotkeys, "按住说话", out var pushError);
+        var toggle = NormalizeHotkeyRows(ToggleHotkeys, "切换录音", out var toggleError);
+        var cancel = NormalizeHotkeyRows(CancelHotkeys, "取消录音", out var cancelError);
 
-        var pushOk = HotkeyGesture.TryNormalize(PushToTalkHotkey, out var pushNormalized, out var pushMsg);
-        if (!pushOk)
-        {
-            pushError = pushMsg;
-        }
-
-        var toggleOk = HotkeyGesture.TryNormalize(ToggleHotkey, out var toggleNormalized, out var toggleMsg);
-        if (!toggleOk)
-        {
-            toggleError = toggleMsg;
-        }
-
-        var cancelOk = HotkeyGesture.TryNormalize(CancelHotkey, out var cancelNormalized, out var cancelMsg);
-        if (!cancelOk)
-        {
-            cancelError = cancelMsg;
-        }
-
-        if (pushOk && toggleOk && string.Equals(pushNormalized, toggleNormalized, StringComparison.OrdinalIgnoreCase))
-        {
-            toggleError = "不能与“按住说话”热键相同";
-        }
-
-        if (pushOk && cancelOk && string.Equals(pushNormalized, cancelNormalized, StringComparison.OrdinalIgnoreCase))
-        {
-            cancelError = "不能与“按住说话”热键相同";
-        }
-
-        if (toggleOk && cancelOk && string.Equals(toggleNormalized, cancelNormalized, StringComparison.OrdinalIgnoreCase))
-        {
-            cancelError = "不能与“切换录音”热键相同";
-        }
+        ApplyHotkeyConflict(push, toggle, "按住说话", "切换录音", ref pushError, ref toggleError);
+        ApplyHotkeyConflict(push, cancel, "按住说话", "取消录音", ref pushError, ref cancelError);
+        ApplyHotkeyConflict(toggle, cancel, "切换录音", "取消录音", ref toggleError, ref cancelError);
 
         PushToTalkError = pushError;
         ToggleHotkeyError = toggleError;
         CancelHotkeyError = cancelError;
     }
+
+    private static List<string> NormalizeHotkeyRows(
+        ObservableCollection<HotkeyBindingViewModel> rows,
+        string actionName,
+        out string? error)
+    {
+        error = null;
+        var result = new List<string>();
+        var index = 0;
+        foreach (var row in rows)
+        {
+            index++;
+            if (string.IsNullOrWhiteSpace(row.Gesture))
+            {
+                continue;
+            }
+
+            if (!HotkeyGesture.TryNormalize(row.Gesture, out var normalized, out var message))
+            {
+                error ??= $"{actionName}第 {index} 个热键无效：{message}";
+                continue;
+            }
+
+            if (result.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+            {
+                error ??= $"{actionName}存在重复热键：{normalized}";
+                continue;
+            }
+
+            result.Add(normalized);
+        }
+
+        if (error is null && result.Count == 0)
+        {
+            error = $"{actionName}至少需要一个热键";
+        }
+
+        return result;
+    }
+
+    private static void ApplyHotkeyConflict(
+        List<string> first,
+        List<string> second,
+        string firstName,
+        string secondName,
+        ref string? firstError,
+        ref string? secondError)
+    {
+        var conflict = first.FirstOrDefault(
+            gesture => second.Contains(gesture, StringComparer.OrdinalIgnoreCase));
+        if (conflict is null)
+        {
+            return;
+        }
+
+        var message = $"热键 {conflict} 同时被“{firstName}”和“{secondName}”使用";
+        firstError ??= message;
+        secondError ??= message;
+    }
+
+    private void LoadHotkeyRows(
+        ObservableCollection<HotkeyBindingViewModel> rows,
+        List<string>? configured,
+        string legacy)
+    {
+        foreach (var row in rows)
+        {
+            row.Changed -= OnHotkeyRowChanged;
+        }
+
+        rows.Clear();
+        var values = configured?.Where(value => !string.IsNullOrWhiteSpace(value)).ToList() ?? new List<string>();
+        if (values.Count == 0 && !string.IsNullOrWhiteSpace(legacy))
+        {
+            values.Add(legacy.Trim());
+        }
+
+        if (values.Count == 0)
+        {
+            values.Add("");
+        }
+
+        foreach (var value in values)
+        {
+            var row = new HotkeyBindingViewModel { Gesture = value.Trim() };
+            row.Changed += OnHotkeyRowChanged;
+            rows.Add(row);
+        }
+    }
+
+    private void AddHotkeyRow(ObservableCollection<HotkeyBindingViewModel> rows)
+    {
+        if (rows.Count >= 8)
+        {
+            return;
+        }
+
+        var row = new HotkeyBindingViewModel();
+        row.Changed += OnHotkeyRowChanged;
+        rows.Add(row);
+        ValidateHotkeys();
+    }
+
+    private void RemoveHotkeyRow(ObservableCollection<HotkeyBindingViewModel> rows, HotkeyBindingViewModel? row)
+    {
+        if (row is null || !rows.Remove(row))
+        {
+            return;
+        }
+
+        row.Changed -= OnHotkeyRowChanged;
+        if (rows.Count == 0)
+        {
+            var blank = new HotkeyBindingViewModel();
+            blank.Changed += OnHotkeyRowChanged;
+            rows.Add(blank);
+        }
+
+        ValidateHotkeys();
+    }
+
+    private void OnHotkeyRowChanged(object? sender, EventArgs e) => ValidateHotkeys();
 
     private async Task TestMicrophoneAsync()
     {
@@ -1974,15 +2045,18 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         config.ActiveProviderProfileId = defaultId;
 
-        HotkeyGesture.TryNormalize(PushToTalkHotkey, out var push, out _);
-        HotkeyGesture.TryNormalize(ToggleHotkey, out var toggle, out _);
-        HotkeyGesture.TryNormalize(CancelHotkey, out var cancel, out _);
+        var push = NormalizeHotkeyRows(PushToTalkHotkeys, "按住说话", out _);
+        var toggle = NormalizeHotkeyRows(ToggleHotkeys, "切换录音", out _);
+        var cancel = NormalizeHotkeyRows(CancelHotkeys, "取消录音", out _);
 
         config.Hotkeys = new HotkeyConfig
         {
-            PushToTalk = push,
-            Toggle = toggle,
-            Cancel = cancel,
+            PushToTalk = push.FirstOrDefault() ?? "",
+            Toggle = toggle.FirstOrDefault() ?? "",
+            Cancel = cancel.FirstOrDefault() ?? "",
+            PushToTalkGestures = push,
+            ToggleGestures = toggle,
+            CancelGestures = cancel,
             EnablePushToTalk = EnablePushToTalk,
             EnableToggle = EnableToggle,
             DefaultMode = RecordingMode

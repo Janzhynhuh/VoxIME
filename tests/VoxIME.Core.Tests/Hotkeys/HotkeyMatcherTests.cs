@@ -191,6 +191,48 @@ public class HotkeyMatcherTests
     }
 
     [Fact]
+    public void 按住说话支持多个热键()
+    {
+        var config = DefaultConfig();
+        config.PushToTalkGestures = new List<string> { "Ctrl+Alt", "F2" };
+        var matcher = new HotkeyMatcher(config);
+
+        Assert.Equal(2, matcher.PushToTalkGestures.Count);
+
+        var pressed = matcher.ProcessKeyDown(KeyF2);
+        Assert.Equal(HotkeyAction.PushToTalkPressed, Assert.Single(pressed).Action);
+        Assert.True(matcher.IsPushToTalkActive);
+
+        var released = matcher.ProcessKeyUp(KeyF2);
+        Assert.Equal(HotkeyAction.PushToTalkReleased, Assert.Single(released).Action);
+
+        matcher.ProcessKeyDown(LCtrl);
+        var pressedAgain = matcher.ProcessKeyDown(LAlt);
+        Assert.Equal(HotkeyAction.PushToTalkPressed, Assert.Single(pressedAgain).Action);
+    }
+
+    [Fact]
+    public void 切换与取消都支持多个热键()
+    {
+        var config = DefaultConfig();
+        config.ToggleGestures = new List<string> { "Ctrl+Alt+M", "F9" };
+        config.CancelGestures = new List<string> { "Esc", "F10" };
+        var matcher = new HotkeyMatcher(config);
+
+        var toggle = matcher.ProcessKeyDown(0x78); // F9
+        Assert.Equal(HotkeyAction.TogglePressed, Assert.Single(toggle).Action);
+        matcher.ProcessKeyUp(0x78);
+
+        matcher.ProcessKeyDown(LCtrl);
+        matcher.ProcessKeyDown(LAlt);
+        var toggleByCombo = matcher.ProcessKeyDown(KeyM);
+        Assert.Equal(HotkeyAction.TogglePressed, Assert.Single(toggleByCombo).Action);
+
+        var cancel = matcher.ProcessKeyDown(0x79); // F10
+        Assert.Equal(HotkeyAction.CancelPressed, Assert.Single(cancel).Action);
+    }
+
+    [Fact]
     public void Reset清空按键状态()
     {
         var matcher = new HotkeyMatcher(DefaultConfig());

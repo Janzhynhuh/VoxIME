@@ -172,6 +172,15 @@ public sealed class AppConfig
         Hotkeys.PushToTalk = NormalizeGesture(Hotkeys.PushToTalk, AppInfo.DefaultHotkeyPushToTalk);
         Hotkeys.Toggle = NormalizeGesture(Hotkeys.Toggle, AppInfo.DefaultHotkeyToggle);
         Hotkeys.Cancel = NormalizeGesture(Hotkeys.Cancel, "Esc");
+        Hotkeys.PushToTalkGestures = NormalizeGestureList(
+            Hotkeys.PushToTalkGestures, Hotkeys.PushToTalk, AppInfo.DefaultHotkeyPushToTalk);
+        Hotkeys.ToggleGestures = NormalizeGestureList(
+            Hotkeys.ToggleGestures, Hotkeys.Toggle, AppInfo.DefaultHotkeyToggle);
+        Hotkeys.CancelGestures = NormalizeGestureList(Hotkeys.CancelGestures, Hotkeys.Cancel, "Esc");
+        // 旧字段保留为“第一个热键”，兼容旧版本读取。
+        Hotkeys.PushToTalk = Hotkeys.PushToTalkGestures[0];
+        Hotkeys.Toggle = Hotkeys.ToggleGestures[0];
+        Hotkeys.Cancel = Hotkeys.CancelGestures[0];
 
         Audio ??= new AudioConfig();
         Audio.SampleRate = 16000;
@@ -227,6 +236,49 @@ public sealed class AppConfig
 
     private static string NormalizeGesture(string? value, string fallback) =>
         string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
+    private static List<string> NormalizeGestureList(List<string>? values, string legacy, string fallback)
+    {
+        var result = new List<string>();
+        if (values is not null)
+        {
+            foreach (var value in values)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    continue;
+                }
+
+                var trimmed = value.Trim();
+                if (!result.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+                {
+                    result.Add(trimmed);
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(legacy))
+        {
+            var legacyTrimmed = legacy.Trim();
+            if (result.Count == 0)
+            {
+                result.Add(legacyTrimmed);
+            }
+            else if (!string.Equals(result[0], legacyTrimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                // 兼容旧代码/旧测试只改 PushToTalk 等单值字段的情况：单值字段视为新的第一热键。
+                result.RemoveAll(value => string.Equals(value, legacyTrimmed, StringComparison.OrdinalIgnoreCase));
+                result.Insert(0, legacyTrimmed);
+            }
+        }
+
+        if (result.Count == 0)
+        {
+            result.Add(string.IsNullOrWhiteSpace(legacy) ? fallback : legacy.Trim());
+        }
+
+        return result.Take(8).ToList();
+    }
 }
 
 public sealed class ProviderProfile
@@ -277,6 +329,16 @@ public sealed class HotkeyConfig
     /// <summary>切换录音的热键，如 "Ctrl+Alt+M"、"MouseX2"（鼠标侧键）。</summary>
     public string Toggle { get; set; } = AppInfo.DefaultHotkeyToggle;
     public string Cancel { get; set; } = "Esc";
+
+    /// <summary>按住说话可配置多个热键；旧配置（只有 <see cref="PushToTalk"/>）会自动迁移到这里。</summary>
+    public List<string> PushToTalkGestures { get; set; } = new();
+
+    /// <summary>切换录音可配置多个热键。</summary>
+    public List<string> ToggleGestures { get; set; } = new();
+
+    /// <summary>取消录音可配置多个热键。</summary>
+    public List<string> CancelGestures { get; set; } = new();
+
     public bool EnablePushToTalk { get; set; } = true;
     public bool EnableToggle { get; set; } = true;
     public RecordingMode DefaultMode { get; set; } = RecordingMode.PushToTalk;

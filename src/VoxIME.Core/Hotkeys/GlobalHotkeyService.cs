@@ -163,9 +163,9 @@ public sealed class GlobalHotkeyService : IHotkeyService
         }
 
         _running = true;
-        _logger.Info($"全局热键已启动：按住说话={matcher.PushToTalkGesture?.Display ?? "未启用"}，" +
-                     $"按下切换={matcher.ToggleGesture?.Display ?? "未启用"}，" +
-                     $"取消={matcher.CancelGesture?.Display ?? "未启用"}；" +
+        _logger.Info($"全局热键已启动：按住说话={FormatGestures(matcher.PushToTalkGestures)}，" +
+                     $"按下切换={FormatGestures(matcher.ToggleGestures)}，" +
+                     $"取消={FormatGestures(matcher.CancelGestures)}；" +
                      $"鼠标钩子={(_mouseHookHandle != IntPtr.Zero ? "已启用" : "不可用")}");
     }
 
@@ -464,9 +464,12 @@ public sealed class GlobalHotkeyService : IHotkeyService
 
     private static bool MatcherUsesMouse(HotkeyMatcher? matcher) =>
         matcher is not null
-        && (matcher.PushToTalkGesture?.IsMouseButton == true
-            || matcher.ToggleGesture?.IsMouseButton == true
-            || matcher.CancelGesture?.IsMouseButton == true);
+        && (matcher.PushToTalkGestures.Any(gesture => gesture.IsMouseButton)
+            || matcher.ToggleGestures.Any(gesture => gesture.IsMouseButton)
+            || matcher.CancelGestures.Any(gesture => gesture.IsMouseButton));
+
+    private static string FormatGestures(IReadOnlyList<HotkeyGesture> gestures) =>
+        gestures.Count == 0 ? "未启用" : string.Join(" / ", gestures.Select(gesture => gesture.Display));
 
     private void RaiseHotkeyTriggered(HotkeyEventArgs args)
     {

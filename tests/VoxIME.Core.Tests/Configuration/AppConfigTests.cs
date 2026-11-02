@@ -19,6 +19,26 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void Normalize_MigratesLegacyHotkeyAndPreservesMultipleGestures()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Hotkeys.PushToTalk = "F2";
+        config.Hotkeys.PushToTalkGestures.Clear();
+
+        config.Normalize();
+
+        Assert.Equal(new[] { "F2" }, config.Hotkeys.PushToTalkGestures);
+        Assert.Equal("F2", config.Hotkeys.PushToTalk);
+
+        config.Hotkeys.PushToTalkGestures = new List<string> { "F2", "Ctrl+Shift+Space" };
+        config.Hotkeys.PushToTalk = "F2";
+        config.Normalize();
+
+        Assert.Equal(new[] { "F2", "Ctrl+Shift+Space" }, config.Hotkeys.PushToTalkGestures);
+        Assert.Equal("F2", config.Hotkeys.PushToTalk);
+    }
+
+    [Fact]
     public void Normalize_ClampsOutOfRangeValues()
     {
         var config = new AppConfig
