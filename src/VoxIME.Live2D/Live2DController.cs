@@ -379,6 +379,39 @@ public sealed class Live2DController : ILive2DController
     }
 
     /// <inheritdoc />
+    public void PreviewExpression(string? expression)
+    {
+        var name = (expression ?? "").Trim();
+        if (name.Length == 0)
+        {
+            return;
+        }
+
+        RunOnUiThread(() =>
+        {
+            if (_disposed || _webHost is null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!_visible)
+                {
+                    ShowCore();
+                }
+
+                _webHost.SendPreviewExpression(name);
+                _logger.Info($"[Live2D] 预览表情：{name}");
+            }
+            catch (Exception ex)
+            {
+                HandleError($"预览表情失败：{name}", ex);
+            }
+        }, "PreviewExpression");
+    }
+
+    /// <inheritdoc />
     public void SetMouthOpen(double value)
     {
         var clamped = double.IsNaN(value) ? 0 : Math.Clamp(value, 0, 1);

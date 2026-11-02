@@ -54,6 +54,9 @@ public interface ILive2DController : IDisposable
     /// <summary>在桌宠上预览一个动作组（设置页动作预览用）；空组名忽略。</summary>
     void PreviewMotion(string? motionGroup);
 
+    /// <summary>在桌宠上预览一个表情（设置页表情预览用）；空表情名忽略。</summary>
+    void PreviewExpression(string? expression);
+
     /// <summary>0..1 张嘴幅度（麦克风音量或 TTS 播放音量）。</summary>
     void SetMouthOpen(double value);
 

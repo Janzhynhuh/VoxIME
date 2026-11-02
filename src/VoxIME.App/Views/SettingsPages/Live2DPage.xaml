@@ -366,21 +366,59 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="聆听" Style="{StaticResource FieldLabel}" />
-                            <ComboBox IsEditable="True" ItemsSource="{Binding AvailableExpressions}"
-                                      Text="{Binding ListeningExpression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="60" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0" IsEditable="True" ItemsSource="{Binding AvailableExpressions}"
+                                          Text="{Binding ListeningExpression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
+                                        Margin="8,0,0,0" Command="{Binding PreviewExpressionCommand}"
+                                        CommandParameter="listening" />
+                            </Grid>
                             <TextBlock Text="识别中" Style="{StaticResource FieldLabel}" Margin="0,10,0,5" />
-                            <ComboBox IsEditable="True" ItemsSource="{Binding AvailableExpressions}"
-                                      Text="{Binding ThinkingExpression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="60" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0" IsEditable="True" ItemsSource="{Binding AvailableExpressions}"
+                                          Text="{Binding ThinkingExpression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
+                                        Margin="8,0,0,0" Command="{Binding PreviewExpressionCommand}"
+                                        CommandParameter="thinking" />
+                            </Grid>
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock Text="朗读" Style="{StaticResource FieldLabel}" />
-                            <ComboBox IsEditable="True" ItemsSource="{Binding AvailableExpressions}"
-                                      Text="{Binding SpeakingExpression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="60" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0" IsEditable="True" ItemsSource="{Binding AvailableExpressions}"
+                                          Text="{Binding SpeakingExpression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
+                                        Margin="8,0,0,0" Command="{Binding PreviewExpressionCommand}"
+                                        CommandParameter="speaking" />
+                            </Grid>
                             <TextBlock Text="出错" Style="{StaticResource FieldLabel}" Margin="0,10,0,5" />
-                            <ComboBox IsEditable="True" ItemsSource="{Binding AvailableExpressions}"
-                                      Text="{Binding ErrorExpression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="60" />
+                                </Grid.ColumnDefinitions>
+                                <ComboBox Grid.Column="0" IsEditable="True" ItemsSource="{Binding AvailableExpressions}"
+                                          Text="{Binding ErrorExpression, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
+                                        Margin="8,0,0,0" Command="{Binding PreviewExpressionCommand}"
+                                        CommandParameter="error" />
+                            </Grid>
                         </StackPanel>
                     </Grid>
+                    <TextBlock Text="{Binding ExpressionPreviewStatus}" Style="{StaticResource HintText}"
+                               Margin="0,8,0,0" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
         </StackPanel>

@@ -225,6 +225,7 @@ internal sealed class FakeLive2DController : ILive2DController
     public string? BubbleText { get; private set; }
     public List<Live2DState> States { get; } = new();
     public List<string> PreviewedMotions { get; } = new();
+    public List<string> PreviewedExpressions { get; } = new();
     public Live2DConfig? Config { get; private set; }
     public bool Initialized { get; private set; }
 
@@ -260,6 +261,14 @@ internal sealed class FakeLive2DController : ILive2DController
         if (!string.IsNullOrWhiteSpace(motionGroup))
         {
             PreviewedMotions.Add(motionGroup);
+        }
+    }
+
+    public void PreviewExpression(string? expression)
+    {
+        if (!string.IsNullOrWhiteSpace(expression))
+        {
+            PreviewedExpressions.Add(expression);
         }
     }
 

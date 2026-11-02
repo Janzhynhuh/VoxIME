@@ -245,6 +245,9 @@ internal sealed class Live2DWebHost : IDisposable
     public void SendPreviewMotion(string motionGroup) =>
         Send(new { type = "previewMotion", group = motionGroup });
 
+    public void SendPreviewExpression(string expression) =>
+        Send(new { type = "previewExpression", name = expression });
+
     public void SendMouth(double value) => Send(new { type = "setMouth", value });
 
     public void SendGaze(double x, double y) => Send(new { type = "setGaze", x, y });
@@ -419,6 +422,23 @@ internal sealed class Live2DWebHost : IDisposable
                     else
                     {
                         _logger.Warn($"[Live2D] 动作预览失败：{group}");
+                    }
+                    break;
+                }
+                case "expressionPreviewResult":
+                {
+                    var ok = root.TryGetProperty("ok", out var okElement) && okElement.ValueKind == JsonValueKind.True;
+                    var name = root.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : "?";
+                    if (ok)
+                    {
+                        _logger.Info($"[Live2D] 已下发表情预览：{name}");
+                    }
+                    else
+                    {
+                        var message = root.TryGetProperty("message", out var messageElement)
+                            ? messageElement.GetString()
+                            : "未找到或加载失败";
+                        _logger.Warn($"[Live2D] 表情预览失败：{name}（{message}）");
                     }
                     break;
                 }

@@ -103,6 +103,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string _speakingMotionGroup = "";
     private string _errorMotionGroup = "";
     private string _motionPreviewStatus = "";
+    private string _expressionPreviewStatus = "";
     private string _listeningExpression = "";
     private string _thinkingExpression = "";
     private string _speakingExpression = "";
@@ -183,6 +184,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ResetLive2DPositionCommand = new RelayCommand(ResetLive2DPosition);
         PreviewIdleMotionCommand = new RelayCommand(PreviewIdleMotion);
         PreviewStateMotionCommand = new RelayCommand(param => PreviewStateMotion(param as string));
+        PreviewExpressionCommand = new RelayCommand(param => PreviewExpression(param as string));
         AddPushToTalkHotkeyCommand = new RelayCommand(() => AddHotkeyRow(PushToTalkHotkeys));
         RemovePushToTalkHotkeyCommand = new RelayCommand(param => RemoveHotkeyRow(PushToTalkHotkeys, param as HotkeyBindingViewModel));
         AddToggleHotkeyCommand = new RelayCommand(() => AddHotkeyRow(ToggleHotkeys));
@@ -1016,6 +1018,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _motionPreviewStatus, value);
     }
 
+    public string ExpressionPreviewStatus
+    {
+        get => _expressionPreviewStatus;
+        private set => SetProperty(ref _expressionPreviewStatus, value);
+    }
+
     public string ListeningExpression
     {
         get => _listeningExpression;
@@ -1129,6 +1137,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand ResetLive2DPositionCommand { get; }
     public RelayCommand PreviewIdleMotionCommand { get; }
     public RelayCommand PreviewStateMotionCommand { get; }
+    public RelayCommand PreviewExpressionCommand { get; }
 
     // ==================== 朗读页 ====================
 
@@ -1555,6 +1564,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
 
         string group;
+        var statusOverride = (string?)null;
         if (string.IsNullOrWhiteSpace(configured))
         {
             var autoName = normalized switch
@@ -1569,10 +1579,21 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 string.Equals(item, autoName, StringComparison.OrdinalIgnoreCase));
             if (actual is null)
             {
-                MotionPreviewStatus = autoName.Length == 0
-                    ? "没有可预览的动作组。"
-                    : $"自动：当前模型没有名为 {autoName} 的动作组，请从下拉框手动选择。";
-                return;
+                // 自动模式下没有同名组时，预览回退到模型第一个非 Idle 动作，避免按钮看起来“不可用”。
+                actual = AvailableMotionGroups.FirstOrDefault(item =>
+                             !string.Equals(item, "Idle", StringComparison.OrdinalIgnoreCase))
+                         ?? AvailableMotionGroups.FirstOrDefault();
+                if (actual is null)
+                {
+                    MotionPreviewStatus = autoName.Length == 0
+                        ? "当前模型没有可预览的动作组。"
+                        : $"自动：当前模型没有名为 {autoName} 的动作组，也没有其它动作组。请先导入带动作的模型。";
+                    return;
+                }
+
+                statusOverride = autoName.Length == 0
+                    ? $"已预览首个动作：{actual}"
+                    : $"自动：没有名为 {autoName} 的动作组，已预览首个动作：{actual}";
             }
 
             group = actual;
@@ -1582,15 +1603,46 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             group = configured.Trim();
         }
 
-        PreviewMotion(group);
+        PreviewMotion(group, statusOverride);
     }
 
-    private void PreviewMotion(string group)
+    private void PreviewExpression(string? state)
+    {
+        var normalized = (state ?? "").Trim().ToLowerInvariant();
+        var expression = normalized switch
+        {
+            "listening" => ListeningExpression,
+            "thinking" => ThinkingExpression,
+            "speaking" => SpeakingExpression,
+            "error" => ErrorExpression,
+            _ => null
+        };
+
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            ExpressionPreviewStatus = "该状态没有配置表情，先选择或输入一个表情名。";
+            return;
+        }
+
+        var trimmed = expression.Trim();
+        try
+        {
+            _controller.Live2D.PreviewExpression(trimmed);
+            ExpressionPreviewStatus = $"已预览表情：{trimmed}";
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"预览表情失败：{ex.Message}");
+            ExpressionPreviewStatus = "预览失败：" + ex.Message;
+        }
+    }
+
+    private void PreviewMotion(string group, string? statusOverride = null)
     {
         try
         {
             _controller.Live2D.PreviewMotion(group);
-            MotionPreviewStatus = $"已预览：{group}";
+            MotionPreviewStatus = statusOverride ?? $"已预览：{group}";
         }
         catch (Exception ex)
         {

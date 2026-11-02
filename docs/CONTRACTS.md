@@ -43,7 +43,7 @@ Windows x64 语音输入法 **VoxIME 声语**：悬浮语音助手形态。
 - `InsertionModels.cs`：`ITextInjector`、`IClipboardService`、`ITextPostProcessor`、`InsertionResult`
 - `HotkeyModels.cs`：`IHotkeyService`、`HotkeyEventArgs`、`HotkeyAction`
 - `TtsModels.cs`：`ITtsService`、`TtsOptions`
-- `Live2DModels.cs`：`ILive2DController`（含 `PreviewMotion` 动作预览）、`Live2DState`、`Live2DModelSizeEventArgs`（模型加载后上报原始宽高，用于窗口自适应）
+- `Live2DModels.cs`：`ILive2DController`（含 `PreviewMotion`/`PreviewExpression` 预览）、`Live2DState`、`Live2DModelSizeEventArgs`（模型加载后上报原始宽高，用于窗口自适应）
 - `VoiceInputModels.cs`：`IVoiceInputController`（UI 唯一依赖的主控接口）、`AppState`、`AppStateChangedEventArgs`、`TranscriptionRecord`
 
 配置类型在 `VoxIME.Core.Configuration`：`AppConfig`（含 `ProviderProfile`、`HotkeyConfig`、`AudioConfig`、`InsertionConfig`、`Live2DConfig`、`TtsConfig`、`UiConfig`、`OverlayConfig`、`LoggingConfig`）、`IConfigStore`/`JsonConfigStore`、`ISecretProtector`/`DpapiSecretProtector`、`ConfigJson`。

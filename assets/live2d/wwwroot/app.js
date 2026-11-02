@@ -674,7 +674,9 @@
         }
       }
       if (group) {
-        model.motion(group);
+        // priority=3（FORCE）：预览/状态动作要能打断当前待机动作，否则待机循环占用
+        // 同一优先级时 startRandomMotion 会返回 false，看起来像“预览不可用”。
+        model.motion(group, undefined, 3);
         if (selection && selection !== '__none__') {
           sendHost({ type: 'debug', message: '状态动作：' + state + ' -> ' + group });
         }
@@ -689,7 +691,8 @@
     var group = String(motionGroup || '').trim();
     if (!group || !model) return;
     try {
-      var result = model.motion(group);
+      // priority=3（FORCE）：预览要能打断当前待机循环。
+      var result = model.motion(group, undefined, 3);
       if (result && typeof result.then === 'function') {
         result.then(function (ok) {
           sendHost({ type: 'motionPreviewResult', group: group, ok: ok !== false });
@@ -706,6 +709,33 @@
       log('预览动作失败（忽略）: ' + group, e);
       sendHost({
         type: 'motionPreviewResult', group: group, ok: false,
+        message: String((e && e.message) || e)
+      });
+    }
+  }
+
+  /** 设置页“表情预览”：直接应用指定表情。 */
+  function previewExpression(expression) {
+    var name = String(expression || '').trim();
+    if (!name || !model) return;
+    try {
+      var result = model.expression(name);
+      if (result && typeof result.then === 'function') {
+        result.then(function (ok) {
+          sendHost({ type: 'expressionPreviewResult', name: name, ok: ok !== false });
+        }).catch(function (err) {
+          sendHost({
+            type: 'expressionPreviewResult', name: name, ok: false,
+            message: String((err && err.message) || err)
+          });
+        });
+      } else {
+        sendHost({ type: 'expressionPreviewResult', name: name, ok: true });
+      }
+    } catch (e) {
+      log('预览表情失败（忽略）: ' + name, e);
+      sendHost({
+        type: 'expressionPreviewResult', name: name, ok: false,
         message: String((e && e.message) || e)
       });
     }
@@ -845,6 +875,9 @@
         break;
       case 'previewMotion':
         previewMotion(data.group);
+        break;
+      case 'previewExpression':
+        previewExpression(data.name);
         break;
       default:
         log('未知宿主消息类型: ' + data.type);
@@ -1423,6 +1456,7 @@
     setBubble: setBubble,
     setConfig: applyConfig,
     previewMotion: previewMotion,
+    previewExpression: previewExpression,
     showDemo: showDemo,
     layout: function () {
       var canvas = getPixiCanvas();
