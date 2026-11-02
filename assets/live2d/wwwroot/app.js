@@ -57,6 +57,8 @@
   };
 
   var stateExpressions = { listening: null, thinking: null, speaking: null, error: null };
+  // 状态动作映射：null/空 = 自动找同名动作组；'__none__' = 不播放；其它 = 指定动作组。
+  var stateMotions = { listening: null, thinking: null, speaking: null, error: null };
   // C# 扫描到的 Exp3/Animation 资源（可能未登记在 model3.json 中），模型加载后注入引擎。
   var pendingModelAssets = null;
 
@@ -651,22 +653,61 @@
       log('表情应用失败（忽略）: ' + state + ' / ' + expression, e);
     }
 
-    // 2) 动作：模型若存在与状态同名的动作组则播放（如 Listening/Thinking/Speaking/Error/TapBody），
+    // 2) 动作：优先用状态动作映射；空 = 自动找同名动作组，'__none__' = 不播放。
     //    否则保持待机动作，不报错。
     try {
       var mm = model.internalModel.motionManager;
       var definitions = mm.definitions || {};
       var groups = Object.keys(definitions);
-      var candidates = [state, state.charAt(0).toUpperCase() + state.slice(1)];
+      var selection = stateMotions[state];
       var group = null;
-      for (var c = 0; c < candidates.length && !group; c++) {
-        for (var g = 0; g < groups.length; g++) {
-          if (groups[g].toLowerCase() === candidates[c].toLowerCase()) { group = groups[g]; break; }
+      if (selection === '__none__') {
+        group = null;
+      } else if (selection) {
+        group = String(selection);
+      } else {
+        var candidates = [state, state.charAt(0).toUpperCase() + state.slice(1)];
+        for (var c = 0; c < candidates.length && !group; c++) {
+          for (var g = 0; g < groups.length; g++) {
+            if (groups[g].toLowerCase() === candidates[c].toLowerCase()) { group = groups[g]; break; }
+          }
         }
       }
-      if (group) model.motion(group);
+      if (group) {
+        model.motion(group);
+        if (selection && selection !== '__none__') {
+          sendHost({ type: 'debug', message: '状态动作：' + state + ' -> ' + group });
+        }
+      }
     } catch (e) {
       log('状态动作应用失败（忽略）: ' + state, e);
+    }
+  }
+
+  /** 设置页“动作预览”：直接播放指定动作组。 */
+  function previewMotion(motionGroup) {
+    var group = String(motionGroup || '').trim();
+    if (!group || !model) return;
+    try {
+      var result = model.motion(group);
+      if (result && typeof result.then === 'function') {
+        result.then(function (ok) {
+          sendHost({ type: 'motionPreviewResult', group: group, ok: ok !== false });
+        }).catch(function (err) {
+          sendHost({
+            type: 'motionPreviewResult', group: group, ok: false,
+            message: String((err && err.message) || err)
+          });
+        });
+      } else {
+        sendHost({ type: 'motionPreviewResult', group: group, ok: true });
+      }
+    } catch (e) {
+      log('预览动作失败（忽略）: ' + group, e);
+      sendHost({
+        type: 'motionPreviewResult', group: group, ok: false,
+        message: String((e && e.message) || e)
+      });
     }
   }
 
@@ -718,6 +759,14 @@
         if (Object.prototype.hasOwnProperty.call(msg.expressions, key)) {
           var value = msg.expressions[key];
           stateExpressions[key] = value ? String(value) : null;
+        }
+      });
+    }
+    if (msg.motions && typeof msg.motions === 'object') {
+      Object.keys(stateMotions).forEach(function (key) {
+        if (Object.prototype.hasOwnProperty.call(msg.motions, key)) {
+          var value = msg.motions[key];
+          stateMotions[key] = value ? String(value) : null;
         }
       });
     }
@@ -793,6 +842,9 @@
         break;
       case 'setConfig':
         applyConfig(data);
+        break;
+      case 'previewMotion':
+        previewMotion(data.group);
         break;
       default:
         log('未知宿主消息类型: ' + data.type);
@@ -1370,6 +1422,7 @@
     setGaze: setGaze,
     setBubble: setBubble,
     setConfig: applyConfig,
+    previewMotion: previewMotion,
     showDemo: showDemo,
     layout: function () {
       var canvas = getPixiCanvas();

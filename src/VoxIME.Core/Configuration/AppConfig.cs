@@ -226,6 +226,7 @@ public sealed class AppConfig
         Live2D.EyeFollowFps = Math.Clamp(Live2D.EyeFollowFps, 5, 300);
         Live2D.EyeFollowInvertYByModel ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         Live2D.ExpressionByModel ??= new Dictionary<string, Live2DExpressionMap>(StringComparer.OrdinalIgnoreCase);
+        Live2D.MotionByModel ??= new Dictionary<string, Live2DMotionMap>(StringComparer.OrdinalIgnoreCase);
         Live2D.ModelLibraryDirectory = string.IsNullOrWhiteSpace(Live2D.ModelLibraryDirectory)
             ? null
             : Live2D.ModelLibraryDirectory.Trim();
@@ -428,6 +429,14 @@ public sealed class Live2DConfig
     public string? ThinkingExpression { get; set; }
     public string? SpeakingExpression { get; set; }
     public string? ErrorExpression { get; set; }
+    public string? ListeningMotionGroup { get; set; }
+    public string? ThinkingMotionGroup { get; set; }
+    public string? SpeakingMotionGroup { get; set; }
+    public string? ErrorMotionGroup { get; set; }
+
+    /// <summary>按模型目录记住的状态动作映射；旧配置没有此字段时回退到全局字段。</summary>
+    public Dictionary<string, Live2DMotionMap> MotionByModel { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>按模型目录记住的状态表情映射；旧配置没有此字段时回退到上面四个全局字段。</summary>
     public Dictionary<string, Live2DExpressionMap> ExpressionByModel { get; set; } =
@@ -451,7 +460,36 @@ public sealed class Live2DConfig
         };
     }
 
+    /// <summary>取指定模型的动作映射；没有按模型记录时返回全局字段。</summary>
+    public Live2DMotionMap ResolveMotionMap(string? modelDirectory)
+    {
+        var key = (modelDirectory ?? "").Trim();
+        if (key.Length > 0 && MotionByModel.TryGetValue(key, out var map) && map is not null)
+        {
+            return map;
+        }
+
+        return new Live2DMotionMap
+        {
+            IdleGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup,
+            Listening = ListeningMotionGroup,
+            Thinking = ThinkingMotionGroup,
+            Speaking = SpeakingMotionGroup,
+            Error = ErrorMotionGroup
+        };
+    }
+
     public string FallbackAvatarTheme { get; set; } = "violet";
+}
+
+/// <summary>一个模型对应的待机与四个状态动作组。</summary>
+public sealed class Live2DMotionMap
+{
+    public string? IdleGroup { get; set; }
+    public string? Listening { get; set; }
+    public string? Thinking { get; set; }
+    public string? Speaking { get; set; }
+    public string? Error { get; set; }
 }
 
 /// <summary>一个模型对应的四个状态表情名。</summary>

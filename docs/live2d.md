@@ -139,6 +139,7 @@ Hiyori/
 - **打开模型库目录**：直接查看/手动放入模型（手动放入后点「刷新列表」）。
 - **删除选中模型**：只删除模型库里的副本（有二次确认），不会影响你原来的文件夹。
 - **状态表情映射**：设置页四个状态改为可编辑下拉框，自动扫描 `model3.json` 的 `Expressions` 以及模型目录下的 `Exp3/*.exp3.json`；`Animation/*.motion3.json` 会注册为动作。当前模型没有登记表情时也能识别 VTube Studio 的文件夹资源；映射按模型目录记忆。
+- **状态动作映射/预览**：四个状态可分别选择「自动（同名动作组）」「不播放」或具体动作组，待机动作组也可从下拉框选；每项旁「预览」按钮会立即在桌宠上试播当前选择。动作映射同样按模型目录记忆。
 - **重置位置**：桌宠状态栏旁的「重置位置」会清除保存的 `Left/Top`，把窗口移回默认位置（开启贴边时回当前屏幕右下角，关闭贴边时当前屏幕居中），下次启动也不会再使用旧位置。
 - **自动找回**：启动时以及检测到显示器工作区/虚拟屏尺寸变化时，如果保存的窗口位置已经不在当前桌面可见区域，会自动把它移回当前屏右下角（关闭贴边时居中），避免远程桌面/切换分辨率后“看不到桌宠”。
 - 模型名优先取 `*.model3.json` 的文件名（如 `Hiyori.model3.json` → Hiyori），重名自动追加 `(2)`、`(3)`。
@@ -156,6 +157,7 @@ Hiyori/
 | `ModelLibraryDirectory` | null | 模型库根目录（导入目标）；null/空 → `%APPDATA%\VoxIME\models`；可改到其它磁盘 |
 | `Width`/`Height` | 380/560 | 桌宠窗口尺寸（DIP，clamp 160..1600） |
 | `ExpressionByModel` | {} | 按模型目录保存四个状态表情映射（旧全局字段作为兼容回退） |
+| `MotionByModel` | {} | 按模型目录保存待机+四个状态动作映射（旧全局字段作为兼容回退） |
 | `AutoFitWindow` | true | 模型加载/缩放/高度变化时保持高度，把窗口宽度收紧到模型显示宽度 + 左右各 5 DIP padding（结果持久化）；开启时设置页宽度滑块置灰 |
 | `SnapToEdge` | true | **只做下边吸附**：拖到窗口所在显示器底部约 100 DIP 内时贴底（按该显示器工作区/完整屏底边，支持多屏）；只改变 Y/高度，不改 X（不会因贴右边缘水平回弹）；向上拖动不强制回弹，左右上方向不吸附。关闭后使用拖动保存的位置，首次无位置则居中 |
 | `KeepAboveTaskbar` | true | 贴边时窗口下边缘保持在任务栏上方（工作区内）；关闭后允许压住任务栏 |
@@ -174,6 +176,7 @@ Hiyori/
 | `ShowBubble` | true | 是否显示气泡（false 时忽略 `SetBubbleText`） |
 | `IdleMotionGroup` | "Idle" | 待机动作组名（大小写不敏感；找不到时退化为包含 "idle" 的组，再找不到用第一个动作组） |
 | `ListeningExpression` / `ThinkingExpression` / `SpeakingExpression` / `ErrorExpression` | null | 状态对应的表情名；模型没有该表情时忽略 |
+| `ListeningMotionGroup` / `ThinkingMotionGroup` / `SpeakingMotionGroup` / `ErrorMotionGroup` | null | 状态对应的动作组名；null/空=自动同名匹配，`__none__`=不播放，其它=指定组 |
 | `FallbackAvatarTheme` | "violet" | 兜底形象主题（当前仅 violet，保留扩展） |
 
 `ApplyConfig` 为热更新：尺寸/位置/透明度/置顶/点击穿透/缩放立即生效；`ModelDirectory` 变化时
@@ -186,10 +189,10 @@ Hiyori/
 | 状态 | 动作组查找顺序 | 表情 |
 |---|---|---|
 | `Idle` | 待机动作组（`IdleMotionGroup`，默认 `Idle`） | 重置为默认表情 |
-| `Listening` | 与状态同名的动作组（`Listening`/`Listen`）若存在则播放，否则继续待机 | `ListeningExpression`（若模型有） |
-| `Thinking` | 同名动作组（`Thinking`/`Think`），否则待机 | `ThinkingExpression` |
-| `Speaking` | 同名动作组（`Speaking`/`Speak`），否则待机；口型由 `SetMouthOpen` 驱动 | `SpeakingExpression` |
-| `Error` | 同名动作组（`Error`），否则待机 | `ErrorExpression` |
+| `Listening` | 优先 `ListeningMotionGroup`；未配置时找同名组（`Listening`/`Listen`），否则继续待机 | `ListeningExpression`（若模型有） |
+| `Thinking` | 优先 `ThinkingMotionGroup`；未配置时同名组（`Thinking`/`Think`），否则待机 | `ThinkingExpression` |
+| `Speaking` | 优先 `SpeakingMotionGroup`；未配置时同名组（`Speaking`/`Speak`），否则待机；口型由 `SetMouthOpen` 驱动 | `SpeakingExpression` |
+| `Error` | 优先 `ErrorMotionGroup`；未配置时同名组（`Error`），否则待机 | `ErrorExpression` |
 
 约定：模型没有对应动作组/表情时**静默保持待机**，不报错、不崩溃（Hiyori 只有 `Idle`/`TapBody`，
 因此所有非 Idle 状态都表现为继续待机动作 + 口型/眼动变化）。
@@ -235,7 +238,10 @@ Hiyori/
 ```jsonc
 { "type": "setConfig", "eyeFollow": true, "idleMotion": true, "mouthSync": true, "scale": 1.0,
   "idleMotionGroup": "Idle", "showBubble": true,
-  "expressions": { "listening": null, "thinking": null, "speaking": null, "error": null } }
+  "expressions": { "listening": null, "thinking": null, "speaking": null, "error": null },
+  "motions": { "listening": null, "thinking": null, "speaking": null, "error": null },
+  "modelAssets": { "expressions": [], "motions": [] } }
+{ "type": "previewMotion", "group": "Idle" }
 { "type": "loadModel", "url": "https://voxime.models/Hiyori.model3.json" }
 { "type": "setState", "state": "idle|listening|thinking|speaking|error" }
 { "type": "setMouth", "value": 0.0 }
@@ -503,9 +509,9 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 2. **多屏幕/混合 DPI**：窗口位置/尺寸使用 WPF DIP（主屏工作区自动定位），多屏负坐标与
    逐屏 DPI 切换未做自动化验证；已限制窗口不被拖出虚拟桌面。
 3. **Cubism 2（.model.json）** 不支持（只引入 Modern bundle，覆盖 Cubism 3/4/5；旧模型需转换）。
-4. 状态→动作组使用**命名约定**（`Idle`/`Listening`/`Thinking`/`Speaking`/`Error`），
-   若模型动作组命名不同则保持待机；表情通过配置的 `*Expression` 名称匹配。需要更复杂的
-   每模型映射时可扩展 `setConfig.expressions`。
+4. 状态→动作组默认使用**命名约定**（`Idle`/`Listening`/`Thinking`/`Speaking`/`Error`），
+   若模型动作组命名不同，可在设置页「状态动作映射」中手动指定（也支持「不播放」）；表情通过配置的
+   `*Expression` 名称匹配。待机动作组同样可在下拉框中选择。
 5. 部分模型对 `ParamMouthOpenY` 的口型变形较细微（示例 Hiyori 在 0.9 时为小幅张嘴），
    属模型美术表现，非参数未生效（可用 `preview.html` 状态栏的“更新帧参数”回读确认）。
 6. WebGL/透明合成在不同显卡驱动/远程桌面下可能有差异；远程桌面（RDP）场景建议回退

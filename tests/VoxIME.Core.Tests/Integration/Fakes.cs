@@ -224,6 +224,7 @@ internal sealed class FakeLive2DController : ILive2DController
     public (double X, double Y) Gaze { get; private set; }
     public string? BubbleText { get; private set; }
     public List<Live2DState> States { get; } = new();
+    public List<string> PreviewedMotions { get; } = new();
     public Live2DConfig? Config { get; private set; }
     public bool Initialized { get; private set; }
 
@@ -252,6 +253,14 @@ internal sealed class FakeLive2DController : ILive2DController
     {
         State = state;
         States.Add(state);
+    }
+
+    public void PreviewMotion(string? motionGroup)
+    {
+        if (!string.IsNullOrWhiteSpace(motionGroup))
+        {
+            PreviewedMotions.Add(motionGroup);
+        }
     }
 
     public void SetMouthOpen(double value) => MouthOpen = value;

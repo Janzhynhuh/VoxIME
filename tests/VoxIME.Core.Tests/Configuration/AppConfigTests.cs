@@ -71,6 +71,29 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void MotionMap_ResolvesPerModelWithGlobalFallback()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.IdleMotionGroup = "Idle";
+        config.Live2D.ListeningMotionGroup = "global-listening";
+        config.Live2D.MotionByModel["E:\\models\\a"] = new Live2DMotionMap
+        {
+            IdleGroup = "a-idle",
+            Listening = "a-listening",
+            Error = "__none__"
+        };
+
+        var a = config.Live2D.ResolveMotionMap("E:\\models\\a");
+        Assert.Equal("a-idle", a.IdleGroup);
+        Assert.Equal("a-listening", a.Listening);
+        Assert.Equal("__none__", a.Error);
+
+        var b = config.Live2D.ResolveMotionMap("E:\\models\\b");
+        Assert.Equal("Idle", b.IdleGroup);
+        Assert.Equal("global-listening", b.Listening);
+    }
+
+    [Fact]
     public void Normalize_ClampsOutOfRangeValues()
     {
         var config = new AppConfig

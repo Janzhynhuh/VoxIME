@@ -98,6 +98,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _live2DOpacity;
     private double _mouthSensitivity;
     private string _idleMotionGroup = "Idle";
+    private string _listeningMotionGroup = "";
+    private string _thinkingMotionGroup = "";
+    private string _speakingMotionGroup = "";
+    private string _errorMotionGroup = "";
+    private string _motionPreviewStatus = "";
     private string _listeningExpression = "";
     private string _thinkingExpression = "";
     private string _speakingExpression = "";
@@ -176,6 +181,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ShowLive2DCommand = new RelayCommand(() => SetLive2DVisible(true));
         HideLive2DCommand = new RelayCommand(() => SetLive2DVisible(false));
         ResetLive2DPositionCommand = new RelayCommand(ResetLive2DPosition);
+        PreviewIdleMotionCommand = new RelayCommand(PreviewIdleMotion);
+        PreviewStateMotionCommand = new RelayCommand(param => PreviewStateMotion(param as string));
         AddPushToTalkHotkeyCommand = new RelayCommand(() => AddHotkeyRow(PushToTalkHotkeys));
         RemovePushToTalkHotkeyCommand = new RelayCommand(param => RemoveHotkeyRow(PushToTalkHotkeys, param as HotkeyBindingViewModel));
         AddToggleHotkeyCommand = new RelayCommand(() => AddHotkeyRow(ToggleHotkeys));
@@ -973,6 +980,42 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _idleMotionGroup, value);
     }
 
+    public string ListeningMotionGroup
+    {
+        get => _listeningMotionGroup;
+        set => SetProperty(ref _listeningMotionGroup, value);
+    }
+
+    public string ThinkingMotionGroup
+    {
+        get => _thinkingMotionGroup;
+        set => SetProperty(ref _thinkingMotionGroup, value);
+    }
+
+    public string SpeakingMotionGroup
+    {
+        get => _speakingMotionGroup;
+        set => SetProperty(ref _speakingMotionGroup, value);
+    }
+
+    public string ErrorMotionGroup
+    {
+        get => _errorMotionGroup;
+        set => SetProperty(ref _errorMotionGroup, value);
+    }
+
+    /// <summary>当前模型可用的动作组名（来自 model3.json + Animation 文件夹）。</summary>
+    public ObservableCollection<string> AvailableMotionGroups { get; } = new();
+
+    /// <summary>状态动作下拉选项：自动 / 不播放 / 具体动作组。</summary>
+    public ObservableCollection<Choice> StateMotionChoices { get; } = new();
+
+    public string MotionPreviewStatus
+    {
+        get => _motionPreviewStatus;
+        private set => SetProperty(ref _motionPreviewStatus, value);
+    }
+
     public string ListeningExpression
     {
         get => _listeningExpression;
@@ -1056,9 +1099,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 if (!string.Equals((ModelDirectory ?? "").Trim(), directory, StringComparison.OrdinalIgnoreCase))
                 {
                     SaveExpressionMapForModel(_expressionMapModelDirectory);
+                    SaveMotionMapForModel(_expressionMapModelDirectory);
                     ModelDirectory = directory;
                     _expressionMapModelDirectory = NormalizeModelDirectory(directory);
                     LoadExpressionMapForModel(_expressionMapModelDirectory, clearWhenMissing: true);
+                    LoadMotionMapForModel(_expressionMapModelDirectory, clearWhenMissing: true);
                     StatusText = directory.Length == 0
                         ? "已选择内置兜底形象，点击“保存”后生效。"
                         : $"已选择模型“{value.Name}”，点击“保存”后生效。";
@@ -1082,6 +1127,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand ShowLive2DCommand { get; }
     public RelayCommand HideLive2DCommand { get; }
     public RelayCommand ResetLive2DPositionCommand { get; }
+    public RelayCommand PreviewIdleMotionCommand { get; }
+    public RelayCommand PreviewStateMotionCommand { get; }
 
     // ==================== 朗读页 ====================
 
@@ -1273,6 +1320,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
         IdleMotionGroup = config.Live2D.IdleMotionGroup;
+        ListeningMotionGroup = config.Live2D.ListeningMotionGroup ?? "";
+        ThinkingMotionGroup = config.Live2D.ThinkingMotionGroup ?? "";
+        SpeakingMotionGroup = config.Live2D.SpeakingMotionGroup ?? "";
+        ErrorMotionGroup = config.Live2D.ErrorMotionGroup ?? "";
         ListeningExpression = config.Live2D.ListeningExpression ?? "";
         ThinkingExpression = config.Live2D.ThinkingExpression ?? "";
         SpeakingExpression = config.Live2D.SpeakingExpression ?? "";
@@ -1324,6 +1375,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ValidateHotkeys();
         _expressionMapModelDirectory = NormalizeModelDirectory(ModelDirectory);
         LoadExpressionMapForModel(_expressionMapModelDirectory, clearWhenMissing: false);
+        LoadMotionMapForModel(_expressionMapModelDirectory, clearWhenMissing: false);
         RefreshExpressionCatalog();
     }
 
@@ -1370,6 +1422,47 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private static string? EmptyToNull(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private void SaveMotionMapForModel(string? modelDirectory)
+    {
+        var key = NormalizeModelDirectory(modelDirectory);
+        if (key.Length == 0)
+        {
+            return;
+        }
+
+        _working.Live2D.MotionByModel[key] = new Live2DMotionMap
+        {
+            IdleGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(),
+            Listening = EmptyToNull(ListeningMotionGroup),
+            Thinking = EmptyToNull(ThinkingMotionGroup),
+            Speaking = EmptyToNull(SpeakingMotionGroup),
+            Error = EmptyToNull(ErrorMotionGroup)
+        };
+    }
+
+    private void LoadMotionMapForModel(string? modelDirectory, bool clearWhenMissing)
+    {
+        var key = NormalizeModelDirectory(modelDirectory);
+        if (key.Length > 0 && _working.Live2D.MotionByModel.TryGetValue(key, out var map) && map is not null)
+        {
+            IdleMotionGroup = string.IsNullOrWhiteSpace(map.IdleGroup) ? "Idle" : map.IdleGroup;
+            ListeningMotionGroup = map.Listening ?? "";
+            ThinkingMotionGroup = map.Thinking ?? "";
+            SpeakingMotionGroup = map.Speaking ?? "";
+            ErrorMotionGroup = map.Error ?? "";
+            return;
+        }
+
+        if (clearWhenMissing)
+        {
+            IdleMotionGroup = "Idle";
+            ListeningMotionGroup = "";
+            ThinkingMotionGroup = "";
+            SpeakingMotionGroup = "";
+            ErrorMotionGroup = "";
+        }
+    }
+
     private void RefreshExpressionCatalog()
     {
         try
@@ -1381,6 +1474,31 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 if (!AvailableExpressions.Contains(expression.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     AvailableExpressions.Add(expression.Name);
+                }
+            }
+
+            AvailableMotionGroups.Clear();
+            StateMotionChoices.Clear();
+            StateMotionChoices.Add(new Choice("自动（按状态同名动作组）", ""));
+            StateMotionChoices.Add(new Choice("不播放", "__none__"));
+            foreach (var group in catalog.Motions
+                         .Select(motion => motion.Group)
+                         .Where(group => !string.IsNullOrWhiteSpace(group))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                AvailableMotionGroups.Add(group);
+                StateMotionChoices.Add(new Choice(group, group));
+            }
+
+            // 旧配置里的自定义组名不在当前模型里时，也放进下拉框，避免保存后显示空白。
+            foreach (var value in new[] { ListeningMotionGroup, ThinkingMotionGroup, SpeakingMotionGroup, ErrorMotionGroup })
+            {
+                if (!string.IsNullOrWhiteSpace(value)
+                    && !string.Equals(value, "__none__", StringComparison.Ordinal)
+                    && !AvailableMotionGroups.Contains(value, StringComparer.OrdinalIgnoreCase)
+                    && !StateMotionChoices.Any(choice => string.Equals(choice.Value, value, StringComparison.OrdinalIgnoreCase)))
+                {
+                    StateMotionChoices.Add(new Choice($"自定义：{value}", value));
                 }
             }
 
@@ -1404,7 +1522,80 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             _logger.Warn($"扫描模型表情失败：{ex.Message}");
             AvailableExpressions.Clear();
+            AvailableMotionGroups.Clear();
+            StateMotionChoices.Clear();
+            StateMotionChoices.Add(new Choice("自动（按状态同名动作组）", ""));
+            StateMotionChoices.Add(new Choice("不播放", "__none__"));
             ExpressionCatalogHint = "读取模型表情失败，可手动输入表情名。";
+        }
+    }
+
+    private void PreviewIdleMotion()
+    {
+        var group = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim();
+        PreviewMotion(group);
+    }
+
+    private void PreviewStateMotion(string? state)
+    {
+        var normalized = (state ?? "").Trim().ToLowerInvariant();
+        var configured = normalized switch
+        {
+            "listening" => ListeningMotionGroup,
+            "thinking" => ThinkingMotionGroup,
+            "speaking" => SpeakingMotionGroup,
+            "error" => ErrorMotionGroup,
+            _ => null
+        };
+
+        if (string.Equals(configured, "__none__", StringComparison.Ordinal))
+        {
+            MotionPreviewStatus = "该状态设置为不播放动作。";
+            return;
+        }
+
+        string group;
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            var autoName = normalized switch
+            {
+                "listening" => "Listening",
+                "thinking" => "Thinking",
+                "speaking" => "Speaking",
+                "error" => "Error",
+                _ => ""
+            };
+            var actual = AvailableMotionGroups.FirstOrDefault(item =>
+                string.Equals(item, autoName, StringComparison.OrdinalIgnoreCase));
+            if (actual is null)
+            {
+                MotionPreviewStatus = autoName.Length == 0
+                    ? "没有可预览的动作组。"
+                    : $"自动：当前模型没有名为 {autoName} 的动作组，请从下拉框手动选择。";
+                return;
+            }
+
+            group = actual;
+        }
+        else
+        {
+            group = configured.Trim();
+        }
+
+        PreviewMotion(group);
+    }
+
+    private void PreviewMotion(string group)
+    {
+        try
+        {
+            _controller.Live2D.PreviewMotion(group);
+            MotionPreviewStatus = $"已预览：{group}";
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"预览动作失败：{ex.Message}");
+            MotionPreviewStatus = "预览失败：" + ex.Message;
         }
     }
 
@@ -2197,6 +2388,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private AppConfig CollectConfig()
     {
         SaveExpressionMapForModel(_expressionMapModelDirectory);
+        SaveMotionMapForModel(_expressionMapModelDirectory);
         var config = ConfigJson.CloneAppConfig(_working);
 
         config.ProviderProfiles = Providers.Select(p => p.ToProfile()).ToList();
@@ -2340,7 +2532,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ThinkingExpression = NullIfEmpty(ThinkingExpression),
             SpeakingExpression = NullIfEmpty(SpeakingExpression),
             ErrorExpression = NullIfEmpty(ErrorExpression),
+            ListeningMotionGroup = NullIfEmpty(ListeningMotionGroup),
+            ThinkingMotionGroup = NullIfEmpty(ThinkingMotionGroup),
+            SpeakingMotionGroup = NullIfEmpty(SpeakingMotionGroup),
+            ErrorMotionGroup = NullIfEmpty(ErrorMotionGroup),
             ExpressionByModel = ConfigJson.Clone(_working.Live2D.ExpressionByModel),
+            MotionByModel = ConfigJson.Clone(_working.Live2D.MotionByModel),
             FallbackAvatarTheme = string.IsNullOrWhiteSpace(FallbackAvatarTheme) ? "violet" : FallbackAvatarTheme.Trim(),
             Left = _configStore.Current.Live2D.Left,
             Top = _configStore.Current.Live2D.Top

@@ -242,6 +242,9 @@ internal sealed class Live2DWebHost : IDisposable
 
     public void SendState(string state) => Send(new { type = "setState", state });
 
+    public void SendPreviewMotion(string motionGroup) =>
+        Send(new { type = "previewMotion", group = motionGroup });
+
     public void SendMouth(double value) => Send(new { type = "setMouth", value });
 
     public void SendGaze(double x, double y) => Send(new { type = "setGaze", x, y });
@@ -258,6 +261,7 @@ internal sealed class Live2DWebHost : IDisposable
         string idleMotionGroup,
         bool showBubble,
         IReadOnlyDictionary<string, string?> expressions,
+        IReadOnlyDictionary<string, string?> motions,
         Live2DModelAssetCatalog? modelAssets)
     {
         Send(new
@@ -272,6 +276,7 @@ internal sealed class Live2DWebHost : IDisposable
             idleMotionGroup,
             showBubble,
             expressions,
+            motions,
             modelAssets = modelAssets is null
                 ? null
                 : new
@@ -401,6 +406,20 @@ internal sealed class Live2DWebHost : IDisposable
                         : 0;
                     _logger.Info($"[Live2D] 模型加载完成：{name ?? "(未命名)"}，原始尺寸 {width:0}×{height:0}");
                     ModelLoaded?.Invoke(this, new Live2DModelSizeEventArgs(name ?? "model", width, height));
+                    break;
+                }
+                case "motionPreviewResult":
+                {
+                    var ok = root.TryGetProperty("ok", out var okElement) && okElement.ValueKind == JsonValueKind.True;
+                    var group = root.TryGetProperty("group", out var groupElement) ? groupElement.GetString() : "?";
+                    if (ok)
+                    {
+                        _logger.Info($"[Live2D] 已下发动作预览：{group}");
+                    }
+                    else
+                    {
+                        _logger.Warn($"[Live2D] 动作预览失败：{group}");
+                    }
                     break;
                 }
                 case "debug":

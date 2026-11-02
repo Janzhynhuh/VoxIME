@@ -346,6 +346,39 @@ public sealed class Live2DController : ILive2DController
     }
 
     /// <inheritdoc />
+    public void PreviewMotion(string? motionGroup)
+    {
+        var group = (motionGroup ?? "").Trim();
+        if (group.Length == 0)
+        {
+            return;
+        }
+
+        RunOnUiThread(() =>
+        {
+            if (_disposed || _webHost is null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!_visible)
+                {
+                    ShowCore();
+                }
+
+                _webHost.SendPreviewMotion(group);
+                _logger.Info($"[Live2D] 预览动作：{group}");
+            }
+            catch (Exception ex)
+            {
+                HandleError($"预览动作失败：{group}", ex);
+            }
+        }, "PreviewMotion");
+    }
+
+    /// <inheritdoc />
     public void SetMouthOpen(double value)
     {
         var clamped = double.IsNaN(value) ? 0 : Math.Clamp(value, 0, 1);
@@ -884,6 +917,15 @@ public sealed class Live2DController : ILive2DController
             ["speaking"] = expressionMap.Speaking,
             ["error"] = expressionMap.Error
         };
+        var motionMap = config.ResolveMotionMap(config.ModelDirectory);
+        var motions = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["listening"] = motionMap.Listening,
+            ["thinking"] = motionMap.Thinking,
+            ["speaking"] = motionMap.Speaking,
+            ["error"] = motionMap.Error
+        };
+        var idleMotionGroup = string.IsNullOrWhiteSpace(motionMap.IdleGroup) ? "Idle" : motionMap.IdleGroup!.Trim();
         // 同步 Exp3/Animation 等未登记进 model3.json 的资源，页面加载模型后注入引擎。
         var modelAssets = Live2DModelAssetCatalog.Load(config.ModelDirectory);
         if (modelAssets.Expressions.Count > 0 || modelAssets.Motions.Count > 0)
@@ -900,9 +942,10 @@ public sealed class Live2DController : ILive2DController
             config.Scale,
             config.ModelOffsetX,
             config.ModelOffsetY,
-            string.IsNullOrWhiteSpace(config.IdleMotionGroup) ? "Idle" : config.IdleMotionGroup,
+            idleMotionGroup,
             config.ShowBubble,
             expressions,
+            motions,
             modelAssets);
         // 缩放不再改 WebView2 ZoomFactor：ZoomFactor 会让页面 viewport 重排，JS 重新适配后视觉尺寸
         // 几乎不变且会被拉伸发糊。统一交给页面在 canvas 内缩放，并随缩放提高渲染分辨率。
