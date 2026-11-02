@@ -737,7 +737,15 @@
         // 先停掉当前动作：连续预览不同动作时，已存在的 FORCE 动作会让同组/同索引
         // 的下一次 startMotion 被拒绝。
         try { model.internalModel.motionManager.stopAllMotions(); } catch (e) { /* ignore */ }
+        resetModelParametersToDefault();
         model.motion(group, undefined, 3);
+        // 状态动作结束后 MotionManager 会自动接 Idle；在交接前重置参数，
+        // 避免动作修改的自定义参数残留在待机状态（对所有模型/动作通用）。
+        if (selection && selection !== '__none__' && typeof mm.once === 'function') {
+          mm.once('motionFinish', function () {
+            resetModelParametersToDefault();
+          });
+        }
         if (selection && selection !== '__none__') {
           sendHost({ type: 'debug', message: '状态动作：' + state + ' -> ' + group });
         }
@@ -799,6 +807,7 @@
 
     if (manager) {
       try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
+      resetModelParametersToDefault();
       if (idleGroup && manager.groups) {
         try { manager.groups.idle = idleGroup; } catch (e) { /* ignore */ }
         if (config.idleMotion) {
@@ -857,6 +866,7 @@
 
     try {
       // priority=3（FORCE）：预览要能打断当前待机循环；loop:false 只播一遍。
+      resetModelParametersToDefault();
       var result = model.motion(group, undefined, 3, { loop: false });
       if (result && typeof result.then === 'function') {
         result.then(function (ok) {
