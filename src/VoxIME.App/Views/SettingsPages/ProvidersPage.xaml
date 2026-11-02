@@ -50,10 +50,10 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
                                                TextTrimming="CharacterEllipsis" MaxWidth="150" />
-                                    <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="5"
+                                    <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="5"
                                             Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center"
                                             Visibility="{Binding IsDefault, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock Text="默认" FontSize="10" Foreground="{StaticResource AccentBrush}" />
+                                        <TextBlock Text="默认" FontSize="10" Foreground="{DynamicResource AccentBrush}" />
                                     </Border>
                                 </StackPanel>
                                 <TextBlock Text="{Binding Summary}" Style="{StaticResource MutedText}"
@@ -297,10 +297,10 @@
                                 <TextBlock Text="{Binding TestResultText}" TextWrapping="Wrap" FontSize="12">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsTestSuccess}" Value="True">
-                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

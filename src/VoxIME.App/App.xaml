@@ -6,7 +6,8 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Themes/Colors.xaml" />
+                <!-- 静态资源（字体/圆角/阴影）；调色板由 ThemeManager 在 App.OnStartup 注入。 -->
+                <ResourceDictionary Source="Themes/Base.xaml" />
                 <ResourceDictionary Source="Themes/Controls.xaml" />
             </ResourceDictionary.MergedDictionaries>
 

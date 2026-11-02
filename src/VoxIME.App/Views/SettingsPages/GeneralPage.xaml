@@ -92,7 +92,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Border Width="40" Height="40" CornerRadius="12"
-                                Background="{StaticResource AccentGradient}">
+                                Background="{DynamicResource AccentGradient}">
                             <TextBlock Text="V" FontSize="20" FontWeight="Bold" Foreground="White"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -136,7 +136,7 @@
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10"
                                Text="把启动、录音、上屏、桌宠、朗读等所有设置恢复为默认值；历史记录不受影响。操作前会再次确认。" />
                     <Button Style="{StaticResource SecondaryButton}" Content="恢复默认"
-                            Foreground="{StaticResource DangerBrush}" Padding="14,7"
+                            Foreground="{DynamicResource DangerBrush}" Padding="14,7"
                             HorizontalAlignment="Left" Command="{Binding ResetCommand}" />
                 </StackPanel>
             </Border>

@@ -81,6 +81,9 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
         _logger.Info($"配置：{ConfigStore.ConfigFilePath}");
         _logger.Info($"日志：{_logger.LogFilePath}");
 
+        // 先套用用户主题/配色，再创建 HUD / 托盘等界面，避免窗口先以默认色出现再跳变。
+        ThemeManager.Initialize(Config);
+
         if (Live2D is Live2DController live2DController)
         {
             live2DController.PositionChanged += OnLive2DPositionChanged;
@@ -351,6 +354,9 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
     {
         try
         {
+            // 主题可能随保存/导入/恢复默认变化；其它界面已经通过 DynamicResource 自动重绘。
+            ThemeManager.ApplyConfig(config);
+
             Hud?.RefreshFromConfig();
             if (Hud is not null)
             {

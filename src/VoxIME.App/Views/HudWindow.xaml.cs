@@ -77,6 +77,7 @@ public partial class HudWindow : Window
         _controller.ErrorOccurred -= OnControllerError;
         _configStore.ConfigChanged -= OnConfigChanged;
         _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        _viewModel.Dispose();
 
         _hideTimer.Stop();
         _levelTimer.Stop();

@@ -33,7 +33,8 @@
 | 编辑与历史 | HUD 显示识别结果，可先预览编辑再上屏；完整历史记录、可复制、可清空 |
 | 朗读 | Windows SAPI TTS 朗读识别结果（可选），语速/音色可配 |
 | Live2D 桌宠 | 透明置顶窗口，加载 Cubism 3/4/5 模型（含 MOC3 v5）；待机动画、眨眼、眼动跟随鼠标、聆听/思考/朗读/出错状态联动、麦克风或 TTS 驱动口型、气泡字幕；无模型时内置矢量兜底形象 |
-| 托盘与设置 | 托盘菜单、开机自启、暂停热键、设备选择、VAD 静音自动停止、术语替换、深色主题设置中心 |
+| 托盘与设置 | 托盘菜单、开机自启、暂停热键、设备选择、VAD 静音自动停止、术语替换、设置中心 |
+| 主题与配色 | 明暗主题（跟随系统 / 浅色 / 深色）与 5 套配色：VoxIME 紫罗兰、Catppuccin Latte / Frappé / Macchiato / Mocha；切换立即生效，保存后下次启动保持 |
 | 配置备份 | 设置 → 通用 → 配置导入导出；可备份/迁移服务、热键、录音、上屏、桌宠、朗读等设置，导出时可选是否包含 API Key |
 | 隐私安全 | 配置/历史/日志在本机；API Key 明文保存在本地配置；日志不打印密钥 |
 
@@ -158,7 +159,7 @@ flowchart LR
 
 ```powershell
 dotnet build VoxIME.sln          # 全量构建（0 warning / 0 error）
-dotnet test                       # 354 个离线单元测试
+dotnet test                       # 379 个离线单元测试
 .\scripts\publish-x64.ps1         # 发布 x64 自包含包
 .\scripts\run.ps1                 # 开发模式运行
 .\scripts\e2e-smoke.ps1           # 端到端自检：录音→Mock 识别→上屏到前台文本框，结果写 %TEMP%\voxime-e2e-result.json

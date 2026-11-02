@@ -61,19 +61,23 @@ public partial class MessageDialog : Window
 
     private void ApplyKind(MessageKind kind)
     {
-        var (glyph, color) = kind switch
+        var (glyph, brushKey, fallback) = kind switch
         {
-            MessageKind.Success => ("\uE73E", "#4ADE80"),
-            MessageKind.Warning => ("\uE7BA", "#FBBF24"),
-            MessageKind.Error => ("\uE783", "#FF6B6B"),
-            MessageKind.Question => ("\uE897", "#7C5CFF"),
-            _ => ("\uE946", "#7C5CFF")
+            MessageKind.Success => ("\uE73E", "SuccessBrush", "#4ADE80"),
+            MessageKind.Warning => ("\uE7BA", "WarningBrush", "#FBBF24"),
+            MessageKind.Error => ("\uE783", "DangerBrush", "#FF6B6B"),
+            MessageKind.Question => ("\uE897", "AccentBrush", "#7C5CFF"),
+            _ => ("\uE946", "AccentBrush", "#7C5CFF")
         };
 
         IconGlyph.Text = glyph;
-        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+        // 用当前主题里的语义色，配色切换后图标颜色与界面保持一致。
+        var brush = ThemeBrushes.FindOrFallback(brushKey, fallback);
         IconGlyph.Foreground = brush;
-        IconBadge.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)) { Opacity = 0.16 };
+        var color = brush is SolidColorBrush solid
+            ? solid.Color
+            : (Color)ColorConverter.ConvertFromString(fallback);
+        IconBadge.Background = new SolidColorBrush(Color.FromArgb(0x29, color.R, color.G, color.B));
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

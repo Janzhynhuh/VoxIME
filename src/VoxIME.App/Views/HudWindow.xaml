@@ -16,8 +16,8 @@
         WindowStartupLocation="Manual">
 
     <Border x:Name="Card" Margin="18"
-            Background="#F2171722"
-            BorderBrush="#26FFFFFF"
+            Background="{DynamicResource HudCardBrush}"
+            BorderBrush="{DynamicResource HudBorderBrush}"
             BorderThickness="1"
             CornerRadius="18"
             Padding="14,10,12,12"
@@ -29,7 +29,7 @@
             </Grid.RowDefinitions>
 
             <!-- 拖动把手 -->
-            <Border Grid.Row="0" Height="4" Width="36" CornerRadius="2" Background="#33FFFFFF"
+            <Border Grid.Row="0" Height="4" Width="36" CornerRadius="2" Background="{DynamicResource HudHandleBrush}"
                     HorizontalAlignment="Center" Margin="0,0,0,10"
                     Tag="hud-hit" Cursor="SizeAll"
                     ToolTip="拖动可移动悬浮窗"
@@ -47,7 +47,7 @@
                       Tag="hud-hit" Cursor="SizeAll"
                       ToolTip="拖动可移动悬浮窗"
                       MouseLeftButtonDown="DragHandle_MouseLeftButtonDown">
-                    <Ellipse Width="46" Height="46" Stroke="#FF2A2A3A" StrokeThickness="4" />
+                    <Ellipse Width="46" Height="46" Stroke="{DynamicResource HudRingTrackBrush}" StrokeThickness="4" />
                     <Ellipse Width="46" Height="46" Stroke="{Binding StatusBrush}" StrokeThickness="4"
                              StrokeDashArray="{Binding Level, Converter={StaticResource LevelToDash}}"
                              RenderTransformOrigin="0.5,0.5">
@@ -88,7 +88,7 @@
                     <ProgressBar Grid.Row="3" Height="4" Margin="0,8,0,0"
                                  Minimum="0" Maximum="1" Value="{Binding Level, Mode=OneWay}"
                                  Foreground="{Binding StatusBrush}"
-                                 Background="#1FFFFFFF"
+                                 Background="{DynamicResource HudTrackBrush}"
                                  Visibility="{Binding ShowLevelBar, Converter={StaticResource BoolToVis}}" />
 
                     <TextBox Grid.Row="3" Style="{StaticResource MultilineTextBox}"

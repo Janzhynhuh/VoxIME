@@ -122,35 +122,22 @@ public sealed class LevelToDashArrayConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-/// <summary>AppState → 状态色（字符串颜色）。</summary>
+/// <summary>AppState → 状态色（取当前调色板语义色：强调=聆听、警告=识别、成功=朗读、危险=出错）。</summary>
 public sealed class StateToBrushConverter : IValueConverter
 {
-    private static readonly Brush Idle = Freeze("#8A8AA0");
-    private static readonly Brush Listening = Freeze("#7C5CFF");
-    private static readonly Brush Recognizing = Freeze("#FBBF24");
-    private static readonly Brush Speaking = Freeze("#4ADE80");
-    private static readonly Brush Error = Freeze("#FF6B6B");
-
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var state = value?.ToString();
         return state switch
         {
-            "Listening" => Listening,
-            "Recognizing" => Recognizing,
-            "Speaking" => Speaking,
-            "Error" => Error,
-            _ => Idle
+            "Listening" => ThemeBrushes.FindOrFallback("AccentBrush", "#7C5CFF"),
+            "Recognizing" => ThemeBrushes.FindOrFallback("WarningBrush", "#FBBF24"),
+            "Speaking" => ThemeBrushes.FindOrFallback("SuccessBrush", "#4ADE80"),
+            "Error" => ThemeBrushes.FindOrFallback("DangerBrush", "#FF6B6B"),
+            _ => ThemeBrushes.FindOrFallback("SubtleTextBrush", "#8A8AA0")
         };
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
-
-    private static Brush Freeze(string hex)
-    {
-        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-        brush.Freeze();
-        return brush;
-    }
 }

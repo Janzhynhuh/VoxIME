@@ -11,8 +11,8 @@
         WindowStartupLocation="CenterScreen"
         Icon="{x:Null}">
 
-    <Border Margin="18" Background="{StaticResource BgBrush}"
-            BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+    <Border Margin="18" Background="{DynamicResource BgBrush}"
+            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
             CornerRadius="16" Effect="{StaticResource WindowShadow}">
         <Grid>
             <Grid.RowDefinitions>
@@ -34,9 +34,9 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <Border Width="26" Height="26" CornerRadius="8"
-                            Background="{StaticResource AccentSoftBrush}" VerticalAlignment="Center">
+                            Background="{DynamicResource AccentSoftBrush}" VerticalAlignment="Center">
                         <TextBlock Style="{StaticResource GlyphIcon}" FontSize="12" Text="&#xE81C;"
-                                   Foreground="{StaticResource AccentBrush}" />
+                                   Foreground="{DynamicResource AccentBrush}" />
                     </Border>
                     <TextBlock Grid.Column="1" Text="历史记录" FontSize="14" FontWeight="SemiBold"
                                VerticalAlignment="Center" Margin="10,0,0,0" />
@@ -58,7 +58,7 @@
                     <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                              ToolTip="按文本或服务名搜索" />
                     <TextBlock Text="&#xE721;" Style="{StaticResource GlyphIcon}" FontSize="12"
-                               Foreground="{StaticResource MutedTextBrush}" HorizontalAlignment="Right"
+                               Foreground="{DynamicResource MutedTextBrush}" HorizontalAlignment="Right"
                                Margin="0,0,10,0" IsHitTestVisible="False" />
                 </Grid>
                 <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="刷新"
@@ -68,7 +68,7 @@
             </Grid>
 
             <!-- 列表表头 -->
-            <Border Grid.Row="2" Background="{StaticResource CardBrush}" CornerRadius="10,10,0,0"
+            <Border Grid.Row="2" Background="{DynamicResource CardBrush}" CornerRadius="10,10,0,0"
                     Padding="14,9" Margin="18,0,18,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -94,7 +94,7 @@
                          ItemContainerStyle="{StaticResource HistoryRowStyle}"
                          MouseDoubleClick="RecordsList_MouseDoubleClick"
                          HorizontalContentAlignment="Stretch"
-                         Background="{StaticResource CardBrush}"
+                         Background="{DynamicResource CardBrush}"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          ToolTip="双击复制识别文本">
                     <ListBox.ItemTemplate>
@@ -123,10 +123,10 @@
                                            FontFamily="{StaticResource IconFont}" FontSize="12">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Inserted}" Value="True">
-                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -141,8 +141,8 @@
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
                             Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}">
                     <TextBlock Style="{StaticResource GlyphIcon}" Text="&#xE81C;" FontSize="30"
-                               Foreground="{StaticResource MutedTextBrush}" />
-                    <TextBlock Text="还没有历史记录" Foreground="{StaticResource SubtleTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}" />
+                    <TextBlock Text="还没有历史记录" Foreground="{DynamicResource SubtleTextBrush}"
                                HorizontalAlignment="Center" Margin="0,12,0,4" />
                     <TextBlock Text="用热键说一句话，识别结果会自动出现在这里"
                                Style="{StaticResource MutedText}" HorizontalAlignment="Center" />
@@ -150,7 +150,7 @@
             </Grid>
 
             <!-- 底部 -->
-            <Border Grid.Row="4" Padding="18,10" BorderBrush="{StaticResource BorderBrush}"
+            <Border Grid.Row="4" Padding="18,10" BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="0,1,0,0">
                 <Grid>
                     <TextBlock Text="双击任意一行可复制识别文本" Style="{StaticResource MutedText}"

@@ -11,8 +11,8 @@
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False">
 
-    <Border Margin="18" Background="{StaticResource BgBrush}"
-            BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+    <Border Margin="18" Background="{DynamicResource BgBrush}"
+            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
             CornerRadius="16" Effect="{StaticResource WindowShadow}">
         <StackPanel>
             <!-- 标题栏 -->
@@ -31,8 +31,8 @@
 
             <!-- Logo / 版本 -->
             <StackPanel Orientation="Horizontal" Margin="24,18,24,0">
-                <Border Width="64" Height="64" CornerRadius="20" Background="{StaticResource AccentGradient}"
-                        Effect="{StaticResource AccentGlow}">
+                <Border Width="64" Height="64" CornerRadius="20" Background="{DynamicResource AccentGradient}"
+                        Effect="{DynamicResource AccentGlow}">
                     <TextBlock Text="V" FontSize="32" FontWeight="Bold" Foreground="White"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>

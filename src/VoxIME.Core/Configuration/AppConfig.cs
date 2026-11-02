@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using VoxIME.Core.Appearance;
 
 namespace VoxIME.Core.Configuration;
 
@@ -257,6 +258,8 @@ public sealed class AppConfig
 
         Ui ??= new UiConfig();
         Ui.HistoryLimit = Math.Clamp(Ui.HistoryLimit, 10, 2000);
+        Ui.Theme = ThemeModes.Normalize(Ui.Theme);
+        Ui.ColorScheme = ThemeCatalog.NormalizeId(Ui.ColorScheme);
 
         Overlay ??= new OverlayConfig();
         Overlay.AutoHideMs = Math.Clamp(Overlay.AutoHideMs, 500, 30000);
@@ -544,8 +547,13 @@ public sealed class UiConfig
     public bool ShowTrayIcon { get; set; } = true;
     public bool ShowHistory { get; set; } = true;
     public int HistoryLimit { get; set; } = 100;
-    public string Theme { get; set; } = "dark";
-    public string AccentColor { get; set; } = "#7C5CFF";
+
+    /// <summary>明暗主题模式：<c>system</c>（跟随 Windows 应用模式）/ <c>light</c> / <c>dark</c>。</summary>
+    public string Theme { get; set; } = ThemeModes.Dark;
+
+    /// <summary>配色方案 ID（见 <see cref="ThemeCatalog"/>，如 voxime / catppuccin-mocha）。</summary>
+    public string ColorScheme { get; set; } = ThemeCatalog.DefaultColorSchemeId;
+
     public bool ShowWelcomeOnStartup { get; set; } = true;
 }
 

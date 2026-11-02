@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using VoxIME.App.Infrastructure;
 using VoxIME.Core.Abstractions;
+using VoxIME.Core.Appearance;
 using VoxIME.Core.Configuration;
 using VoxIME.Core.Logging;
 
@@ -10,11 +11,12 @@ namespace VoxIME.App.ViewModels;
 /// <summary>HUD 悬浮窗状态：状态文案 / 状态色 / 麦克风电平 / 预览编辑。</summary>
 public sealed class HudViewModel : ObservableObject
 {
-    private static readonly Brush IdleBrush = CreateBrush("#8A8AA0");
-    private static readonly Brush ListeningBrush = CreateBrush("#7C5CFF");
-    private static readonly Brush RecognizingBrush = CreateBrush("#FBBF24");
-    private static readonly Brush SpeakingBrush = CreateBrush("#4ADE80");
-    private static readonly Brush ErrorBrush = CreateBrush("#FF6B6B");
+    // 状态色跟随当前调色板；切换主题/配色后由 ThemeManager.ThemeChanged 触发重新求值。
+    private static Brush IdleBrush => ThemeBrushes.FindOrFallback("SubtleTextBrush", "#8A8AA0");
+    private static Brush ListeningBrush => ThemeBrushes.FindOrFallback("AccentBrush", "#7C5CFF");
+    private static Brush RecognizingBrush => ThemeBrushes.FindOrFallback("WarningBrush", "#FBBF24");
+    private static Brush SpeakingBrush => ThemeBrushes.FindOrFallback("SuccessBrush", "#4ADE80");
+    private static Brush ErrorBrush => ThemeBrushes.FindOrFallback("DangerBrush", "#FF6B6B");
 
     private readonly IVoiceInputController _controller;
     private readonly IConfigStore _configStore;
@@ -49,6 +51,7 @@ public sealed class HudViewModel : ObservableObject
         DismissPreviewCommand = new RelayCommand(ClearPreview);
         DismissErrorCommand = new RelayCommand(() => ErrorText = "");
         UpdateHint();
+        ThemeManager.ThemeChanged += OnThemeChanged;
     }
 
     public RelayCommand OpenSettingsCommand { get; }
@@ -294,10 +297,15 @@ public sealed class HudViewModel : ObservableObject
         }
     }
 
-    private static Brush CreateBrush(string hex)
+    /// <summary>由 HudWindow 释放时调用：解除主题订阅。</summary>
+    public void Dispose()
     {
-        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-        brush.Freeze();
-        return brush;
+        ThemeManager.ThemeChanged -= OnThemeChanged;
+    }
+
+    private void OnThemeChanged(object? sender, ResolvedTheme theme)
+    {
+        // 调色板已替换：状态色是自绘（非 DynamicResource）属性，需要重新通知绑定求值。
+        OnPropertyChanged(nameof(StatusBrush));
     }
 }

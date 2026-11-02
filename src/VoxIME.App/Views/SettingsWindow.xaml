@@ -15,8 +15,8 @@
         ShowInTaskbar="True"
         KeyDown="Window_KeyDown">
 
-    <Border x:Name="RootBorder" Margin="20" Background="{StaticResource BgBrush}"
-            BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+    <Border x:Name="RootBorder" Margin="20" Background="{DynamicResource BgBrush}"
+            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
             CornerRadius="16" Effect="{StaticResource WindowShadow}">
         <Grid>
             <Grid.RowDefinitions>
@@ -38,7 +38,7 @@
                     </Grid.ColumnDefinitions>
 
                     <Border Width="26" Height="26" CornerRadius="8"
-                            Background="{StaticResource AccentGradient}" VerticalAlignment="Center">
+                            Background="{DynamicResource AccentGradient}" VerticalAlignment="Center">
                         <TextBlock Text="V" FontSize="14" FontWeight="Bold" Foreground="White"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -112,6 +112,12 @@
                                 <TextBlock Style="{StaticResource NavLabelText}" Text="通用" Margin="12,0,0,0" />
                             </StackPanel>
                         </ListBoxItem>
+                        <ListBoxItem>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource NavIconText}" Text="&#xE790;" />
+                                <TextBlock Style="{StaticResource NavLabelText}" Text="外观" Margin="12,0,0,0" />
+                            </StackPanel>
+                        </ListBoxItem>
                     </ListBox>
 
                     <StackPanel Grid.Row="1" Margin="6,12,6,0">
@@ -125,7 +131,7 @@
                     </StackPanel>
                 </Grid>
 
-                <Border Grid.Column="1" Background="{StaticResource BorderBrush}" Margin="0,8,0,8" />
+                <Border Grid.Column="1" Background="{DynamicResource BorderBrush}" Margin="0,8,0,8" />
 
                 <!-- 右侧页面 -->
                 <Grid Grid.Column="2" Margin="26,6,26,0">
@@ -146,12 +152,13 @@
                         <pages:Live2DPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=Live2D}" />
                         <pages:TtsPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=Tts}" />
                         <pages:GeneralPage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=General}" />
+                        <pages:AppearancePage Visibility="{Binding CurrentPage, Converter={StaticResource EnumToVis}, ConverterParameter=Appearance}" />
                     </Grid>
                 </Grid>
             </Grid>
 
             <!-- ===== 底部操作栏 ===== -->
-            <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
+            <Border Grid.Row="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
                     Padding="26,0">
                 <Grid>
                     <Grid.ColumnDefinitions>

@@ -5,6 +5,7 @@ using VoxIME.App.Infrastructure;
 using VoxIME.App.ViewModels;
 using VoxIME.App.Views;
 using VoxIME.Core;
+using VoxIME.Core.Configuration;
 
 namespace VoxIME.App;
 
@@ -20,6 +21,10 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 尽早注入默认调色板：单实例提示框、欢迎引导等窗口都依赖 DynamicResource 主题键，
+        // 不能等到配置加载完成才注入（AppHost.Create 里会再套用用户配置）。
+        ThemeManager.ApplyConfig(AppConfig.CreateDefault());
 
         var arguments = e.Args ?? Array.Empty<string>();
         var settingsMode = HasArgument(arguments, "--settings");
@@ -143,7 +148,7 @@ public partial class App : System.Windows.Application
         {
             var viewModel = new SettingsViewModel(
                 host.ConfigStore, host.Controller, host.AsrRegistry, host.History, host.Logger);
-            foreach (var index in new[] { 0, 1, 2, 3, 4, 5 })
+            foreach (var index in Enumerable.Range(0, (int)SettingsPage.Appearance + 1))
             {
                 viewModel.SelectedPageIndex = index;
             }

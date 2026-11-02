@@ -159,10 +159,33 @@ dotnet build VoxIME.sln
 4. 遇到契约冲突、缺依赖、需要拆分的决策：**立即**发消息给 lead，不要卡住超过 10 分钟。
 5. Lead 会做最终集成与发布；队友不需要打包、不需要写 README。
 
-## 9. 交互/配色（C 的 UI 参考）
+## 9. 交互/配色
 
-- 深色现代风：主背景 `#12121A`，卡片 `#1C1C27`，强调色 `#7C5CFF`（配置里默认 accent），正文 `#E8E8F0`，次要文字 `#8A8AA0`，成功 `#4ADE80`，危险 `#FF6B6B`。
+- 主题与配色自 2026-11-03 起分离为两个维度（见第 10 节）；界面颜色不允许再写死。
+- 默认外观：深色 + VoxIME 紫罗兰（主背景 `#12121A`、卡片 `#1C1C27`、强调 `#7C5CFF`、正文 `#E8E8F0`、次要文字 `#8A8AA0`、成功 `#4ADE80`、危险 `#FF6B6B`、警告 `#FBBF24`）。
 - 字体：`Microsoft YaHei UI`，圆角 12px，无边框窗口可拖动。
 - 中文界面：状态文案："待机 / 聆听中… / 识别中… / 朗读中 / 出错了"。
-- 设置窗口约 980×700，左侧导航（服务、录音、上屏、桌宠、朗读、通用），右侧内容区。
+- 设置窗口约 980×700，左侧导航（服务、录音、上屏、桌宠、朗读、通用、外观），右侧内容区。
 - HUD：屏幕底部居中，胶囊卡片，含麦克风电平环、状态文字、识别预览、插入/复制/取消按钮；点击按钮区域不穿透。
+
+## 10. 主题与配色契约（2026-11-03 新增）
+
+配置文件（`UiConfig`）：
+
+- `theme`：`system`（跟随 Windows 应用模式）/ `light` / `dark`；`AppConfig.Normalize` 负责规范化，非法值回退 `dark`。
+- `colorScheme`：`voxime` / `catppuccin-latte` / `catppuccin-frappe` / `catppuccin-macchiato` / `catppuccin-mocha`；非法值回退 `voxime`。
+- 旧字段 `accentColor` 已移除（此前只是占位、从未接线）。
+
+Core（`VoxIME.Core.Appearance`，无 UI 依赖，可离线单测）：
+
+- `ThemeModes`：规范化主题模式、按「模式 + 系统明暗」判断实际明暗。
+- `ThemeCatalog`：配色方案目录。`voxime` 同时提供浅/深两套色；Catppuccin Latte 仅浅色，Frappé / Macchiato / Mocha 仅深色。
+- `ThemeResolver.Resolve(theme, colorScheme, systemIsLight)` → `ResolvedTheme`；模式失配时同族回退（Catppuccin → Latte/Mocha，其它 → `voxime`）。
+- `ThemeTokens.Build(ThemeColorSet, isLight)` → 完整颜色资源键：普通颜色键以 `Color` 结尾（UI 层自动生成同名 `*Brush`），渐变端点用 `AccentGradient*` / `HeroGradient*`。
+
+App（`VoxIME.App.Infrastructure`）：
+
+- `ThemeManager`：启动/保存时把令牌展开为 `ResourceDictionary` 注入 `Application.Resources`；对外 `Current`（`ResolvedTheme`）与 `ThemeChanged`；`IsSystemLight` 读注册表 `AppsUseLightTheme`，订阅 `SystemEvents.UserPreferenceChanged` 实现跟随系统。
+- XAML 硬性规则：颜色只能写 `{DynamicResource ...}`；**禁止**硬编码十六进制颜色，禁止把颜色资源用 `StaticResource` 烘焙进样式（否则实时换肤失效、浅色主题错色）。新增颜色先加 `ThemeTokens` 派生键，再在 `ThemeCatalog` 各配色里给语义值。
+- 主题无关资源（字体、圆角、黑色阴影、`WhiteBrush`）放 `Themes/Base.xaml`；调色板不落 XAML，由 `ThemeManager` 生成。
+

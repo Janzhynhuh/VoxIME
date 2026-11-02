@@ -191,6 +191,16 @@ sequenceDiagram
 - 事件：`StateChanged`、`TranscriptionReceived`、`MicrophoneLevelChanged`、`ErrorOccurred`。
 - 并发保护：录音生命周期 `lock`；识别用 `SemaphoreSlim` 串行；取消走 `CancellationToken` + `Cancel()`。
 
+### 5.8 主题与配色（`VoxIME.App` + `VoxIME.Core.Appearance`）
+
+- 两个正交维度：**主题模式**（`system` 跟随 Windows「应用模式」/ `light` / `dark`）与**配色方案**（`voxime`、`catppuccin-latte`、`catppuccin-frappe`、`catppuccin-macchiato`、`catppuccin-mocha`）。
+- 数据在 Core（无 UI 依赖、可离线单测）：`ThemeCatalog` 保存每套方案的浅/深语义色（背景、卡片、输入、强调、文字、边框、状态色）；`ThemeTokens` 由语义色派生悬停遮罩、滚动条、导航选中、HUD 半透明卡片、渐变端点等全部派生色；`ThemeResolver` 把「主题 + 配色 + 系统明暗」解析成实际生效的 `ResolvedTheme`，模式失配时按同族回退（Catppuccin → Latte/Mocha，其它 → 默认双主题方案）。
+- 渲染在 App：`Infrastructure.ThemeManager` 在启动时把 `ThemeTokens` 展开成 `ResourceDictionary`（颜色键 + 自动派生 `*Brush` + `AccentGradient` / `HeroGradient` / `AccentGlow`），追加到 `Application.Resources.MergedDictionaries`；切换时替换该字典并触发 `ThemeChanged`。`App.OnStartup` 先注入默认调色板（保证单实例提示框等早期窗口有颜色），`AppHost.Start` 再套用用户配置。
+- XAML 约定：所有颜色一律 `{DynamicResource ...}`；禁止写死十六进制颜色或把颜色用 `StaticResource` 烘焙进样式（否则运行期换肤不生效、浅色主题错色）。字体、圆角、黑色阴影等主题无关资源放 `Themes/Base.xaml`。
+- 跟随系统：`SystemTheme` 读取 `HKCU\...\Themes\Personalize\AppsUseLightTheme`；`ThemeManager` 订阅 `SystemEvents.UserPreferenceChanged`，仅当 `theme=system` 时重新解析。
+- 设置页：「外观」页（`AppearancePage`）实时预览——选择即应用，未保存不写入配置；保存 / 导入 / 恢复默认后由 `AppHost.OnSettingsSaved → ThemeManager.ApplyConfig` 落定。
+- 非资源绑定颜色：HUD 状态色（`HudViewModel.StatusBrush`）、消息框图标色（`MessageDialog.ApplyKind`）通过 `ThemeBrushes` 从当前调色板取语义色，并在 `ThemeManager.ThemeChanged` 时重新求值。
+
 ## 6. 配置与持久化
 
 - `AppConfig` 全部字段带默认值，`Normalize()` 负责钳制范围、修复空 ID/重复 ID、补齐默认服务（Mock）。
@@ -248,7 +258,7 @@ sequenceDiagram
 
 | 层级 | 方式 | 命令/产物 |
 |---|---|---|
-| 单元测试 | 354 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程） | `dotnet test` |
+| 单元测试 | 379 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程/主题解析与配色派生） | `dotnet test` |
 | 窗口级自检 | 构造并显示欢迎/设置/历史/关于/HUD 五个窗口后退出 | `VoxIME.exe --tray --selftest`（日志 `SELFTEST` 行，退出码 0/2） |
 | 端到端 | 真实启动应用 → 录音 3 秒 → 识别 → 上屏到一个真实前台 WinForms 文本框；结果写 JSON；支持 `-ForceAudioWav` 用指定 WAV 走真实厂商接口 | `scripts/e2e-smoke.ps1` → `%TEMP%\voxime-e2e-result.json` |
 | 真实厂商联调 | Windows SAPI 合成中文语音 → 应用完整链路（强制 WAV）→ 小米 MiMo ASR → 上屏；HTTP 200，识别结果与原文逐字一致，上屏内容与识别结果一致 | `docs/verification/e2e-mimo-real-asr.json` |
@@ -268,7 +278,8 @@ sequenceDiagram
 
 - [x] 解压发布包直接运行（无 .NET SDK）
 - [x] 托盘图标/菜单/双击打开设置
-- [x] 设置六页签保存后热键/桌宠/朗读立即生效
+- [x] 设置七页签（含「外观」）保存后热键/桌宠/朗读/主题立即生效
+- [x] 浅色/深色与 Catppuccin 四种配色即时换肤；重启后保持；跟随系统随 Windows 应用模式切换
 - [x] 无模型 → 内置矢量兜底形象；选择 Hiyori 模型 → 透明桌宠 + 待机/口型/眼动/气泡
 - [x] 关闭穿透后桌宠可拖动；点击穿透开启时鼠标事件穿透到桌面
 - [x] 无 WebView2 / 模型损坏 → 自动降级并给出 `LastError`

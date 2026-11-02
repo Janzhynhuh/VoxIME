@@ -11,8 +11,8 @@
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="True">
 
-    <Border Margin="18" Background="{StaticResource BgBrush}"
-            BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+    <Border Margin="18" Background="{DynamicResource BgBrush}"
+            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
             CornerRadius="16" Effect="{StaticResource WindowShadow}">
         <Grid>
             <Grid.RowDefinitions>
@@ -20,16 +20,9 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- 顶部渐变横幅 -->
+            <!-- 顶部渐变横幅（渐变端点由当前配色决定） -->
             <Border Grid.Row="0" CornerRadius="15,15,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown"
-                    Padding="28,26,20,24">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Offset="0" Color="#FF2A2350" />
-                        <GradientStop Offset="0.6" Color="#FF1C1C2B" />
-                        <GradientStop Offset="1" Color="#FF151522" />
-                    </LinearGradientBrush>
-                </Border.Background>
+                    Padding="28,26,20,24" Background="{DynamicResource HeroGradient}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -37,8 +30,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Width="56" Height="56" CornerRadius="18" Background="{StaticResource AccentGradient}"
-                            Effect="{StaticResource AccentGlow}" VerticalAlignment="Center">
+                    <Border Width="56" Height="56" CornerRadius="18" Background="{DynamicResource AccentGradient}"
+                            Effect="{DynamicResource AccentGlow}" VerticalAlignment="Center">
                         <TextBlock Text="V" FontSize="28" FontWeight="Bold" Foreground="White"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -62,10 +55,10 @@
                         <ColumnDefinition Width="34" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource AccentSoftBrush}"
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{DynamicResource AccentSoftBrush}"
                             VerticalAlignment="Top">
                         <TextBlock Text="1" FontSize="12" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBrush}"
+                                   Foreground="{DynamicResource AccentBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" Margin="8,1,0,0">
@@ -79,10 +72,10 @@
                         <ColumnDefinition Width="34" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource AccentSoftBrush}"
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{DynamicResource AccentSoftBrush}"
                             VerticalAlignment="Top">
                         <TextBlock Text="2" FontSize="12" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBrush}"
+                                   Foreground="{DynamicResource AccentBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" Margin="8,1,0,0">
@@ -97,10 +90,10 @@
                         <ColumnDefinition Width="34" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource AccentSoftBrush}"
+                    <Border Width="26" Height="26" CornerRadius="13" Background="{DynamicResource AccentSoftBrush}"
                             VerticalAlignment="Top">
                         <TextBlock Text="3" FontSize="12" FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentBrush}"
+                                   Foreground="{DynamicResource AccentBrush}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Grid.Column="1" Margin="8,1,0,0">

@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using VoxIME.App.Infrastructure;
 using VoxIME.Core;
 using VoxIME.Core.Abstractions;
+using VoxIME.Core.Appearance;
 using VoxIME.Core.Configuration;
 using VoxIME.Core.History;
 using VoxIME.Core.Logging;
@@ -141,6 +142,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private int _historyLimit;
     private Choice? _selectedLogLevel;
 
+    // ---- 外观（主题 + 配色） ----
+    private string _selectedThemeMode = ThemeModes.Dark;
+    private string _selectedColorSchemeId = ThemeCatalog.DefaultColorSchemeId;
+    private bool _appearanceInitializing;
+    private bool _appearanceApplying;
+
     public SettingsViewModel(
         IConfigStore configStore,
         IVoiceInputController controller,
@@ -216,9 +223,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             OverlayPositionResetRequested?.Invoke(this, EventArgs.Empty);
             StatusText = "已重置悬浮窗位置，将在下次显示时回到屏幕底部居中";
         });
+        SelectColorSchemeCommand = new RelayCommand(param => SelectColorScheme(param as ColorSchemeOption));
 
         InitializeFrom(_working);
         _controller.MicrophoneLevelChanged += OnMicrophoneLevelChanged;
+        ThemeManager.ThemeChanged += OnThemeManagerChanged;
         SelectedPageIndex = 0;
     }
 
@@ -262,7 +271,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
             if (SetProperty(ref _selectedPageIndex, value))
             {
-                CurrentPage = (SettingsPage)Math.Clamp(value, 0, (int)SettingsPage.General);
+                CurrentPage = (SettingsPage)Math.Clamp(value, 0, (int)SettingsPage.Appearance);
             }
         }
     }
@@ -274,6 +283,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SettingsPage.Insertion => "上屏",
         SettingsPage.Live2D => "桌宠",
         SettingsPage.Tts => "朗读",
+        SettingsPage.Appearance => "外观",
         _ => "通用"
     };
 
@@ -284,6 +294,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SettingsPage.Insertion => "识别结果如何送入当前应用，以及悬浮提示窗的行为。",
         SettingsPage.Live2D => "桌宠模型、尺寸、透明度、点击穿透与动作联动。",
         SettingsPage.Tts => "使用 Windows 内置语音合成朗读识别结果。",
+        SettingsPage.Appearance => "明暗主题与配色方案，选择后立即预览；保存后下次启动保持。",
         _ => "启动方式、数据目录、历史与日志、版本与许可。"
     };
 
@@ -1249,6 +1260,183 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _selectedLogLevel, value);
     }
 
+    // ==================== 外观（主题 + 配色） ====================
+
+    /// <summary>当前主题模式（system/light/dark）。</summary>
+    public string SelectedThemeMode => _selectedThemeMode;
+
+    /// <summary>当前选中的配色方案 ID（实际生效值，可能因明暗不匹配已回退）。</summary>
+    public string SelectedColorSchemeId => _selectedColorSchemeId;
+
+    /// <summary>跟随系统（RadioButton 三态绑定之一）。</summary>
+    public bool IsThemeSystem
+    {
+        get => _selectedThemeMode == ThemeModes.System;
+        set
+        {
+            if (value)
+            {
+                SelectThemeMode(ThemeModes.System);
+            }
+        }
+    }
+
+    /// <summary>浅色主题。</summary>
+    public bool IsThemeLight
+    {
+        get => _selectedThemeMode == ThemeModes.Light;
+        set
+        {
+            if (value)
+            {
+                SelectThemeMode(ThemeModes.Light);
+            }
+        }
+    }
+
+    /// <summary>深色主题。</summary>
+    public bool IsThemeDark
+    {
+        get => _selectedThemeMode == ThemeModes.Dark;
+        set
+        {
+            if (value)
+            {
+                SelectThemeMode(ThemeModes.Dark);
+            }
+        }
+    }
+
+    /// <summary>当前明暗可用的配色方案卡片。</summary>
+    public ObservableCollection<ColorSchemeOption> ColorSchemes { get; } = new();
+
+    /// <summary>选择配色方案（参数为 <see cref="ColorSchemeOption"/>）。</summary>
+    public RelayCommand SelectColorSchemeCommand { get; }
+
+    /// <summary>当前生效外观文案。</summary>
+    public string AppearanceStatusText
+    {
+        get
+        {
+            var resolved = ThemeResolver.Resolve(_selectedThemeMode, _selectedColorSchemeId, ThemeManager.IsSystemLight);
+            var modeText = ThemeModes.Normalize(_selectedThemeMode) switch
+            {
+                ThemeModes.System => $"跟随系统（系统当前：{(resolved.IsLight ? "浅色" : "深色")}）",
+                ThemeModes.Light => "浅色",
+                _ => "深色"
+            };
+            return $"当前生效：{modeText} · {resolved.Scheme.DisplayName}";
+        }
+    }
+
+    /// <summary>配色卡片区提示（解释为什么只列出部分方案）。</summary>
+    public string ColorSchemeHint
+    {
+        get
+        {
+            var isLight = ThemeModes.IsLight(_selectedThemeMode, ThemeManager.IsSystemLight);
+            return isLight
+                ? "当前是浅色主题，只列出支持浅色的配色；Catppuccin 的 Frappé / Macchiato / Mocha 是深色专用，切到深色后出现。"
+                : "当前是深色主题，只列出支持深色的配色；Catppuccin Latte 是浅色专用，切到浅色后出现。";
+        }
+    }
+
+    private void SelectThemeMode(string mode)
+    {
+        var normalized = ThemeModes.Normalize(mode);
+        if (string.Equals(_selectedThemeMode, normalized, StringComparison.Ordinal))
+        {
+            OnPropertiesChanged(nameof(IsThemeSystem), nameof(IsThemeLight), nameof(IsThemeDark));
+            return;
+        }
+
+        _selectedThemeMode = normalized;
+        OnPropertiesChanged(nameof(IsThemeSystem), nameof(IsThemeLight), nameof(IsThemeDark));
+        RefreshColorSchemeOptions(applyTheme: !_appearanceInitializing);
+    }
+
+    private void SelectColorScheme(ColorSchemeOption? option)
+    {
+        if (option is null)
+        {
+            return;
+        }
+
+        _selectedColorSchemeId = option.SchemeId;
+        foreach (var item in ColorSchemes)
+        {
+            item.IsSelected = string.Equals(item.SchemeId, option.SchemeId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        OnPropertiesChanged(nameof(SelectedColorSchemeId), nameof(AppearanceStatusText));
+        ApplyAppearancePreview();
+    }
+
+    /// <summary>按当前主题模式重建配色卡片，并把选择回退到实际生效方案。</summary>
+    private void RefreshColorSchemeOptions(bool applyTheme)
+    {
+        var systemIsLight = ThemeManager.IsSystemLight;
+        var isLight = ThemeModes.IsLight(_selectedThemeMode, systemIsLight);
+        var resolved = ThemeResolver.Resolve(_selectedThemeMode, _selectedColorSchemeId, systemIsLight);
+        _selectedColorSchemeId = resolved.ColorSchemeId;
+
+        var options = ThemeCatalog.ForMode(isLight)
+            .Select(scheme => new ColorSchemeOption(
+                scheme,
+                isLight,
+                string.Equals(scheme.Id, _selectedColorSchemeId, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        ColorSchemes.Clear();
+        foreach (var option in options)
+        {
+            ColorSchemes.Add(option);
+        }
+
+        OnPropertiesChanged(nameof(SelectedColorSchemeId), nameof(AppearanceStatusText), nameof(ColorSchemeHint));
+        if (applyTheme)
+        {
+            ApplyAppearancePreview();
+        }
+    }
+
+    /// <summary>把当前选择实时应用到界面（未保存时是预览，保存后写入配置）。</summary>
+    private void ApplyAppearancePreview()
+    {
+        if (_appearanceInitializing)
+        {
+            return;
+        }
+
+        _appearanceApplying = true;
+        try
+        {
+            ThemeManager.Apply(_selectedThemeMode, _selectedColorSchemeId);
+        }
+        finally
+        {
+            _appearanceApplying = false;
+        }
+
+        OnPropertiesChanged(nameof(AppearanceStatusText));
+    }
+
+    private void OnThemeManagerChanged(object? sender, ResolvedTheme theme)
+    {
+        if (_disposed || _appearanceApplying)
+        {
+            return;
+        }
+
+        // 跟随系统模式：系统明暗切换后主题已由 ThemeManager 应用，这里只刷新可用配色与文案。
+        if (ThemeModes.Normalize(_selectedThemeMode) != ThemeModes.System)
+        {
+            return;
+        }
+
+        RefreshColorSchemeOptions(applyTheme: false);
+    }
+
     // ==================== 初始化 ====================
 
     private void InitializeFrom(AppConfig config)
@@ -1407,6 +1595,23 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SelectedLogLevel = LogLevels.FirstOrDefault(l =>
                                 string.Equals(l.Value, config.Logging.Level, StringComparison.OrdinalIgnoreCase))
                             ?? LogLevels[2];
+
+        // 外观（主题 + 配色）
+        _selectedThemeMode = ThemeModes.Normalize(config.Ui.Theme);
+        _selectedColorSchemeId = ThemeCatalog.NormalizeId(config.Ui.ColorScheme);
+        _appearanceInitializing = true;
+        try
+        {
+            RefreshColorSchemeOptions(applyTheme: false);
+        }
+        finally
+        {
+            _appearanceInitializing = false;
+        }
+
+        OnPropertiesChanged(nameof(SelectedThemeMode), nameof(SelectedColorSchemeId),
+            nameof(IsThemeSystem), nameof(IsThemeLight), nameof(IsThemeDark),
+            nameof(AppearanceStatusText), nameof(ColorSchemeHint));
 
         ValidateHotkeys();
         _expressionMapModelDirectory = NormalizeModelDirectory(ModelDirectory);
@@ -2645,8 +2850,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ShowTrayIcon = ShowTrayIcon,
             ShowHistory = true,
             HistoryLimit = HistoryLimit,
-            Theme = "dark",
-            AccentColor = "#7C5CFF",
+            Theme = _selectedThemeMode,
+            ColorScheme = _selectedColorSchemeId,
             ShowWelcomeOnStartup = ShowWelcomeOnStartup
         };
 
@@ -2812,5 +3017,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         _disposed = true;
         _controller.MicrophoneLevelChanged -= OnMicrophoneLevelChanged;
+        ThemeManager.ThemeChanged -= OnThemeManagerChanged;
     }
 }

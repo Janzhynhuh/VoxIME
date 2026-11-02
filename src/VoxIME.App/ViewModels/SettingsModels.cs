@@ -13,7 +13,8 @@ public enum SettingsPage
     Insertion,
     Live2D,
     Tts,
-    General
+    General,
+    Appearance
 }
 
 /// <summary>通用下拉选项（显示文案 + 配置值）。</summary>
