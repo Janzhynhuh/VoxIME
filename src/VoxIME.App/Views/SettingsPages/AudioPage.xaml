@@ -163,7 +163,7 @@
                 <StackPanel>
                     <TextBlock Text="录音模式" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10"
-                               Text="按住说话：按住热键时录音，松开立即识别。切换模式：按一下开始，再按一下结束。" />
+                               Text="按住说话：按住热键时录音，松开立即识别。切换模式：按一下开始，再按一下结束；选择该模式会自动启用上方“切换录音”热键，点击保存后生效。" />
                     <StackPanel Orientation="Horizontal">
                         <RadioButton Content="按住说话" GroupName="RecordingMode"
                                      IsChecked="{Binding IsPushToTalkMode, Mode=TwoWay}" />

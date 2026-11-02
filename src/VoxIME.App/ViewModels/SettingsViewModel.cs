@@ -536,13 +536,25 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public bool EnablePushToTalk
     {
         get => _enablePushToTalk;
-        set => SetProperty(ref _enablePushToTalk, value);
+        set
+        {
+            if (SetProperty(ref _enablePushToTalk, value))
+            {
+                ValidateHotkeys();
+            }
+        }
     }
 
     public bool EnableToggle
     {
         get => _enableToggle;
-        set => SetProperty(ref _enableToggle, value);
+        set
+        {
+            if (SetProperty(ref _enableToggle, value))
+            {
+                ValidateHotkeys();
+            }
+        }
     }
 
     public RecordingMode RecordingMode
@@ -552,7 +564,18 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             if (SetProperty(ref _recordingMode, value))
             {
+                // 选择“按一下开始/结束”时必须启用切换热键，否则模式无法使用。
+                if (value == RecordingMode.Toggle)
+                {
+                    EnableToggle = true;
+                }
+                else
+                {
+                    EnablePushToTalk = true;
+                }
+
                 OnPropertiesChanged(nameof(IsPushToTalkMode), nameof(IsToggleMode));
+                ValidateHotkeys();
             }
         }
     }
@@ -1417,6 +1440,15 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ApplyHotkeyConflict(push, toggle, "按住说话", "切换录音", ref pushError, ref toggleError);
         ApplyHotkeyConflict(push, cancel, "按住说话", "取消录音", ref pushError, ref cancelError);
         ApplyHotkeyConflict(toggle, cancel, "切换录音", "取消录音", ref toggleError, ref cancelError);
+
+        if (RecordingMode == RecordingMode.Toggle && !EnableToggle)
+        {
+            toggleError ??= "当前为“按一下开始/结束”模式，请勾选切换录音的“启用”";
+        }
+        else if (RecordingMode == RecordingMode.PushToTalk && !EnablePushToTalk)
+        {
+            pushError ??= "当前为“按住说话”模式，请勾选按住说话的“启用”";
+        }
 
         PushToTalkError = pushError;
         ToggleHotkeyError = toggleError;

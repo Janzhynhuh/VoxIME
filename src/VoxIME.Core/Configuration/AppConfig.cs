@@ -182,6 +182,17 @@ public sealed class AppConfig
         Hotkeys.Toggle = Hotkeys.ToggleGestures[0];
         Hotkeys.Cancel = Hotkeys.CancelGestures[0];
 
+        // “按一下开始/结束”模式依赖切换热键；如果旧配置里禁用着切换热键，
+        // 会出现“模式选对了但热键完全没反应”，这里按默认模式自动启用对应热键。
+        if (Hotkeys.DefaultMode == RecordingMode.Toggle)
+        {
+            Hotkeys.EnableToggle = true;
+        }
+        else
+        {
+            Hotkeys.EnablePushToTalk = true;
+        }
+
         Audio ??= new AudioConfig();
         Audio.SampleRate = 16000;
         Audio.MaxDurationSeconds = Math.Clamp(Audio.MaxDurationSeconds, 5, 600);

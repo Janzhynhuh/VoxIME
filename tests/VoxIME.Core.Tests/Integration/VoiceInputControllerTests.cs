@@ -248,6 +248,19 @@ public sealed class VoiceInputControllerTests
     }
 
     [Fact]
+    public void ToggleMode_WithDisabledToggleHotkey_IsEnabledByNormalize()
+    {
+        _configStore.Current.Hotkeys.DefaultMode = RecordingMode.Toggle;
+        _configStore.Current.Hotkeys.EnableToggle = false;
+        _controller.Initialize();
+
+        Assert.True(_configStore.Current.Hotkeys.EnableToggle);
+
+        _hotkeys.Raise(HotkeyAction.TogglePressed);
+        Assert.Equal(AppState.Listening, _controller.State);
+    }
+
+    [Fact]
     public void CancelWhileListening_StopsAndResetsState()
     {
         _controller.Initialize();

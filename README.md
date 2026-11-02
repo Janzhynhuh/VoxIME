@@ -84,7 +84,7 @@ dotnet run --project src/VoxIME.App
 ## 🎮 使用说明
 
 - **按住说话**：按住 `Ctrl+Alt`（可改），松手后识别并上屏；`Esc` 取消。
-- **切换模式**：`Ctrl+Alt+M` 开始/结束（可在设置中改成默认模式）。
+- **切换模式**：`Ctrl+Alt+M` 开始/结束（可在设置中改成默认模式；选择该模式会自动启用切换热键，避免“模式选对了但热键未启用”）。
 - **鼠标侧键**：设置 → 录音 → 把光标放进热键输入框后按鼠标侧键/中键，即可录成 `MouseX1` / `MouseX2` / `MouseMiddle`（也支持 `Ctrl+MouseX1` 等组合）。每个功能可以点「+ 添加一个热键」配置多个热键，任意一个触发即可；鼠标侧键命中已配置热键时 VoxIME 会拦截该键，避免同时触发浏览器前进/后退。
 - **HUD**：屏幕底部状态条显示聆听/识别状态；开启「预览确认」时可先编辑再按回车插入。
 - **托盘菜单**：显示/隐藏桌宠、暂停热键、设置、历史记录、打开日志目录、退出。
@@ -145,7 +145,7 @@ flowchart LR
 
 ```powershell
 dotnet build VoxIME.sln          # 全量构建（0 warning / 0 error）
-dotnet test                       # 333 个离线单元测试
+dotnet test                       # 335 个离线单元测试
 .\scripts\publish-x64.ps1         # 发布 x64 自包含包
 .\scripts\run.ps1                 # 开发模式运行
 .\scripts\e2e-smoke.ps1           # 端到端自检：录音→Mock 识别→上屏到前台文本框，结果写 %TEMP%\voxime-e2e-result.json

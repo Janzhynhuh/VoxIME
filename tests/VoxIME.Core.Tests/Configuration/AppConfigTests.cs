@@ -39,6 +39,22 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void Normalize_EnablesHotkeyRequiredByRecordingMode()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Hotkeys.DefaultMode = RecordingMode.Toggle;
+        config.Hotkeys.EnableToggle = false;
+        config.Normalize();
+        Assert.True(config.Hotkeys.EnableToggle);
+
+        config = AppConfig.CreateDefault();
+        config.Hotkeys.DefaultMode = RecordingMode.PushToTalk;
+        config.Hotkeys.EnablePushToTalk = false;
+        config.Normalize();
+        Assert.True(config.Hotkeys.EnablePushToTalk);
+    }
+
+    [Fact]
     public void Normalize_ClampsOutOfRangeValues()
     {
         var config = new AppConfig
