@@ -281,7 +281,7 @@
                 <StackPanel>
                     <TextBlock Text="状态动作映射（可选）" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10" TextWrapping="Wrap"
-                               Text="自动 = 找与状态同名的动作组（如 Listening）；不播放 = 切状态时不触发动作。动作组来自 model3.json 和 Animation 文件夹，可随时点“预览”在桌宠上试播。" />
+                               Text="自动 = 找与状态同名的动作组（如 Listening）；不播放 = 切状态时不触发动作。动作组来自 model3.json 和 Animation 文件夹，可随时点“预览”在桌宠上试播；预览只播一遍，结束后回到待机。" />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />

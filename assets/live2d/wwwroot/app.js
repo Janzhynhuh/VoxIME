@@ -696,8 +696,15 @@
     try {
       // 连续预览时先停掉上一个动作，避免 FORCE 动作仍占用 state 导致下一次被拒绝。
       try { model.internalModel.motionManager.stopAllMotions(); } catch (e) { /* ignore */ }
-      // priority=3（FORCE）：预览要能打断当前待机循环。
-      var result = model.motion(group, undefined, 3);
+      // priority=3（FORCE）：预览要能打断当前待机循环。loop:false 让预览只播一遍，
+      // 否则 VTube Studio 动作文件里的 Meta.Loop=true 会让预览一直重复。
+      var manager = model.internalModel.motionManager;
+      if (manager && typeof manager.once === 'function') {
+        manager.once('motionFinish', function () {
+          sendHost({ type: 'debug', message: '预览结束：' + group });
+        });
+      }
+      var result = model.motion(group, undefined, 3, { loop: false });
       if (result && typeof result.then === 'function') {
         result.then(function (ok) {
           sendHost({ type: 'motionPreviewResult', group: group, ok: ok !== false });
