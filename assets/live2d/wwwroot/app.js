@@ -61,6 +61,15 @@
   var stateMotions = { listening: null, thinking: null, speaking: null, error: null };
   // C# 扫描到的 Exp3/Animation 资源（可能未登记在 model3.json 中），模型加载后注入引擎。
   var pendingModelAssets = null;
+  // 预览冷却：动作播完 / 表情应用后停 3 秒，再恢复默认。
+  var previewSession = {
+    motionTimer: null,
+    motionFallbackTimer: null,
+    expressionTimer: null,
+    idleGroup: null,
+    finishHandler: null,
+    token: 0
+  };
 
   var pixiApp = null;
   var pixiInitPromise = null;
@@ -631,6 +640,14 @@
     }
     if (previous === state && !force) return;
 
+    // 正常状态切换优先于预览：清掉预览冷却，避免 3 秒计时器覆盖真实状态。
+    if (!force) {
+      cancelExpressionPreview();
+      if (previewSession.idleGroup || previewSession.motionTimer) {
+        cancelMotionPreview(true);
+      }
+    }
+
     // 1) 表情：配置提供时应用；模型不含该表情时静默降级。
     var expression = stateExpressions[state];
     try {
@@ -689,30 +706,129 @@
     }
   }
 
-  /** 设置页“动作预览”：直接播放指定动作组。 */
+  /** 取消动作预览/冷却，恢复被暂时挂起的待机动作组。 */
+  function cancelMotionPreview(restoreIdle) {
+    var session = previewSession;
+    if (session.motionTimer) {
+      clearTimeout(session.motionTimer);
+      session.motionTimer = null;
+    }
+    if (session.motionFallbackTimer) {
+      clearTimeout(session.motionFallbackTimer);
+      session.motionFallbackTimer = null;
+    }
+    session.token++;
+
+    var manager = model && model.internalModel ? model.internalModel.motionManager : null;
+    if (session.finishHandler && manager && typeof manager.off === 'function') {
+      try { manager.off('motionFinish', session.finishHandler); } catch (e) { /* ignore */ }
+    }
+    session.finishHandler = null;
+
+    if (session.idleGroup && manager && manager.groups) {
+      try { manager.groups.idle = session.idleGroup; } catch (e) { /* ignore */ }
+    }
+    session.idleGroup = null;
+
+    if (restoreIdle && manager) {
+      try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
+    }
+  }
+
+  /** 3 秒冷却结束：停掉预览动作，恢复待机动作。 */
+  function finishMotionPreview(token) {
+    if (token !== previewSession.token) {
+      return;
+    }
+
+    clearTimeout(previewSession.motionTimer);
+    clearTimeout(previewSession.motionFallbackTimer);
+    previewSession.motionTimer = null;
+    previewSession.motionFallbackTimer = null;
+
+    var manager = model && model.internalModel ? model.internalModel.motionManager : null;
+    if (previewSession.finishHandler && manager && typeof manager.off === 'function') {
+      try { manager.off('motionFinish', previewSession.finishHandler); } catch (e) { /* ignore */ }
+    }
+    previewSession.finishHandler = null;
+
+    var idleGroup = previewSession.idleGroup;
+    previewSession.idleGroup = null;
+    previewSession.token++;
+
+    if (manager) {
+      try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
+      if (idleGroup && manager.groups) {
+        try { manager.groups.idle = idleGroup; } catch (e) { /* ignore */ }
+        if (config.idleMotion) {
+          try { model.motion(idleGroup, undefined, 1); } catch (e) { /* ignore */ }
+        }
+      }
+    }
+    sendHost({ type: 'debug', message: '预览冷却结束，已恢复待机动作' });
+  }
+
+  function cancelExpressionPreview() {
+    if (previewSession.expressionTimer) {
+      clearTimeout(previewSession.expressionTimer);
+      previewSession.expressionTimer = null;
+    }
+  }
+
+  /** 设置页“动作预览”：播放一次，播完后保持 3 秒再回待机。 */
   function previewMotion(motionGroup) {
     var group = String(motionGroup || '').trim();
     if (!group || !model) return;
+
+    cancelMotionPreview(false);
+    var session = previewSession;
+    var token = ++session.token;
+    var manager = model.internalModel.motionManager;
+    if (!manager) return;
+
     try {
-      // 连续预览时先停掉上一个动作，避免 FORCE 动作仍占用 state 导致下一次被拒绝。
-      try { model.internalModel.motionManager.stopAllMotions(); } catch (e) { /* ignore */ }
-      // priority=3（FORCE）：预览要能打断当前待机循环。loop:false 让预览只播一遍，
-      // 否则 VTube Studio 动作文件里的 Meta.Loop=true 会让预览一直重复。
-      var manager = model.internalModel.motionManager;
-      if (manager && typeof manager.once === 'function') {
-        manager.once('motionFinish', function () {
-          sendHost({ type: 'debug', message: '预览结束：' + group });
-        });
-      }
+      // 预览期间把 idle 组临时换成不存在的组名，防止动作结束后 MotionManager
+      // 立刻自动进入下一段待机动作，从而无法保持最后姿态 3 秒。
+      session.idleGroup = (manager.groups && manager.groups.idle) || (config.idleMotionGroup || 'Idle');
+      if (manager.groups) manager.groups.idle = '__voxime_preview_hold__';
+      manager.stopAllMotions();
+    } catch (e) {
+      session.idleGroup = null;
+    }
+
+    var finishHandler = function () {
+      if (token !== session.token) return;
+      session.finishHandler = null;
+      sendHost({ type: 'debug', message: '预览结束：' + group + '，3 秒后恢复默认' });
+      session.motionTimer = setTimeout(function () {
+        finishMotionPreview(token);
+      }, 3000);
+    };
+    session.finishHandler = finishHandler;
+    if (typeof manager.once === 'function') {
+      manager.once('motionFinish', finishHandler);
+    }
+
+    // 某些动作没有 finish 事件时兜底（大肥鱼动作最长 13.15s）。
+    session.motionFallbackTimer = setTimeout(function () {
+      if (token === session.token) finishMotionPreview(token);
+    }, 20000);
+
+    try {
+      // priority=3（FORCE）：预览要能打断当前待机循环；loop:false 只播一遍。
       var result = model.motion(group, undefined, 3, { loop: false });
       if (result && typeof result.then === 'function') {
         result.then(function (ok) {
           sendHost({ type: 'motionPreviewResult', group: group, ok: ok !== false });
+          if (!ok && token === session.token) {
+            finishMotionPreview(token);
+          }
         }).catch(function (err) {
           sendHost({
             type: 'motionPreviewResult', group: group, ok: false,
             message: String((err && err.message) || err)
           });
+          if (token === session.token) finishMotionPreview(token);
         });
       } else {
         sendHost({ type: 'motionPreviewResult', group: group, ok: true });
@@ -723,15 +839,30 @@
         type: 'motionPreviewResult', group: group, ok: false,
         message: String((e && e.message) || e)
       });
+      finishMotionPreview(token);
     }
   }
 
-  /** 设置页“表情预览”：直接应用指定表情。 */
+  /** 设置页“表情预览”：应用后停 3 秒恢复默认表情。 */
   function previewExpression(expression) {
     var name = String(expression || '').trim();
     if (!name || !model) return;
+    cancelExpressionPreview();
     try {
       var result = model.expression(name);
+      previewSession.expressionTimer = setTimeout(function () {
+        previewSession.expressionTimer = null;
+        if (!model) return;
+        try {
+          var manager = model.internalModel.motionManager;
+          if (manager && manager.expressionManager) {
+            manager.expressionManager.resetExpression();
+          }
+          sendHost({ type: 'debug', message: '表情预览冷却结束，已恢复默认表情' });
+        } catch (e) {
+          log('恢复默认表情失败（忽略）', e);
+        }
+      }, 3000);
       if (result && typeof result.then === 'function') {
         result.then(function (ok) {
           sendHost({ type: 'expressionPreviewResult', name: name, ok: ok !== false });
