@@ -50,9 +50,9 @@
 3. 回到任意输入框，按住 `Ctrl+Alt` 说话，松开后文字自动上屏。
 4. 桌宠默认出现在屏幕右下角；`设置 → 桌宠` 可换模型、调大小/透明度/点击穿透。
 
-### 方式二：绿色压缩包
+### 方式二：免安装版（Portable ZIP）
 
-1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.3.1.zip`，解压到任意目录（不要放在 C:\Program Files 下，避免写入权限问题）。
+1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.3.1.zip`，解压到任意普通目录（不要放在 C:\Program Files 下，避免写入权限问题）。
 2. 双击 `VoxIME.exe` 启动，后续设置步骤同上。
 
 ### 方式三：源码构建
