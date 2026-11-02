@@ -25,7 +25,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root 'src\VoxIME.App\VoxIME.App.csproj'
-$version = '0.3.0'
+$version = '0.3.1'
 
 if (-not (Test-Path $project)) {
     throw "找不到应用项目：$project"
