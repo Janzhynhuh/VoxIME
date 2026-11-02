@@ -15,6 +15,8 @@
                                Text="选择录音输入设备；“系统默认设备”会跟随 Windows 的声音设置。" />
                     <ComboBox ItemsSource="{Binding AudioDevices}" DisplayMemberPath="Name"
                               SelectedItem="{Binding SelectedAudioDevice, Mode=TwoWay}" />
+                    <TextBlock Text="{Binding AudioDeviceHint}" Style="{StaticResource HintText}"
+                               Margin="0,6,0,0" TextWrapping="Wrap" />
 
                     <Grid Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>

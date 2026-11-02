@@ -108,7 +108,8 @@ sequenceDiagram
 
 ### 5.1 音频（`VoxIME.Core.Audio`）
 
-- `WasapiAudioCaptureService`：`WasapiCapture` 采集默认/指定设备 → `MediaFoundationResampler`/`WdlResamplingSampleProvider` 转 16kHz 单声道 → 缓存 PCM16 → 25Hz 计算 RMS 触发 `LevelChanged`；默认设备优先取 Windows「默认设备（Console 角色）」，避免 Communications 角色被 UU 远程等虚拟麦克风占用导致无声。
+- `WasapiAudioCaptureService`：`WasapiCapture` 采集默认/指定设备 → `MediaFoundationResampler`/`WdlResamplingSampleProvider` 转 16kHz 单声道 → 缓存 PCM16 → 25Hz 计算 RMS 触发 `LevelChanged`；默认设备取 Windows「默认设备（Communications 角色）」；如果系统默认被 UU 远程等虚拟麦克风占用，设置页会显示实际设备名并提示改选真实麦克风。
+- 设置页「测试麦克风」期间临时关闭提示音（避免虚拟/回录设备把提示音当人声），并显示实际设备名与最大电平。
 - `VoiceActivityDetector`（public，可单测）：能量阈值 + 噪声底自适应；静音帧持续计数触发结束判断。默认绝对阈值 0.003（旧默认 0.014 会在 Normalize 时迁移），适配笔记本内置麦克风/远场输入。
 - 结束流程：`StopAsync` 停止采集、返回 `RecordingResult`（含是否检测到语音、输入峰值 RMS；无语音时状态提示会带峰值与阈值，便于判断是设备没声音还是阈值偏高）；`Cancel` 丢弃缓冲。
 

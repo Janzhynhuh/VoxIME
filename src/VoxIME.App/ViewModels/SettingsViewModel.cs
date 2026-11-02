@@ -44,6 +44,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     // ---- 录音 ----
     private AudioDeviceInfo? _selectedAudioDevice;
+    private string _audioDeviceHint = "";
     private string? _pushToTalkError;
     private string? _toggleHotkeyError;
     private string? _cancelHotkeyError;
@@ -319,9 +320,26 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public string HistoryPath => _historyStore.FilePath;
 
-    /// <summary>重新枚举麦克风与语音包（每次打开设置窗口时调用）。</summary>
-    public void RefreshDevices()
+    private static bool LooksLikeVirtualMicrophone(string? name)
     {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var value = name.ToLowerInvariant();
+        return value.Contains("虚拟", StringComparison.Ordinal)
+               || value.Contains("virtual", StringComparison.Ordinal)
+               || value.Contains("remote", StringComparison.Ordinal)
+               || value.Contains("远程", StringComparison.Ordinal)
+               || value.Contains("uu", StringComparison.Ordinal)
+               || value.Contains("vb-audio", StringComparison.Ordinal)
+               || value.Contains("cable", StringComparison.Ordinal)
+               || value.Contains("loopback", StringComparison.Ordinal);
+    }
+
+    /// <summary>重新枚举麦克风与语音包（每次打开设置窗口时调用）。</summary>
+    public void RefreshDevices()    {
         try
         {
             var selectedDeviceId = SelectedAudioDevice?.Id;
@@ -335,6 +353,20 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             SelectedAudioDevice = AudioDevices.FirstOrDefault(d =>
                                       string.Equals(d.Id, selectedDeviceId, StringComparison.Ordinal))
                                   ?? AudioDevices[0];
+
+            var defaultDevice = AudioDevices.Skip(1).FirstOrDefault(d => d.IsDefault);
+            if (defaultDevice is null)
+            {
+                AudioDeviceHint = "";
+            }
+            else if (LooksLikeVirtualMicrophone(defaultDevice.Name))
+            {
+                AudioDeviceHint = $"当前 Windows 默认输入：{defaultDevice.Name}（看起来是虚拟/远程音频设备，可能采集不到本机说话声；请选择真实麦克风并点击保存）";
+            }
+            else
+            {
+                AudioDeviceHint = $"当前 Windows 默认输入：{defaultDevice.Name}";
+            }
         }
         catch (Exception ex)
         {
@@ -480,6 +512,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         get => _selectedAudioDevice;
         set => SetProperty(ref _selectedAudioDevice, value);
+    }
+
+    /// <summary>当前 Windows 默认输入设备说明；虚拟/远程设备时提示可能采集不到人声。</summary>
+    public string AudioDeviceHint
+    {
+        get => _audioDeviceHint;
+        private set => SetProperty(ref _audioDeviceHint, value);
     }
 
     public ObservableCollection<HotkeyBindingViewModel> PushToTalkHotkeys { get; } = new();
@@ -1590,8 +1629,23 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var config = _configStore.Current;
+        var originalPlayCues = config.Audio.PlayCues;
+        string DeviceLabel()
+        {
+            var id = config.Audio.DeviceId;
+            var device = !string.IsNullOrWhiteSpace(id)
+                ? AudioDevices.FirstOrDefault(d => string.Equals(d.Id, id, StringComparison.Ordinal))
+                : AudioDevices.Skip(1).FirstOrDefault(d => d.IsDefault);
+            return device?.Name ?? "系统默认设备";
+        }
+
         try
         {
+            // 测试时不要播放提示音：虚拟声卡/远程回录设备会把提示音当成人声，
+            // 造成“测试有电平、正常说话没声”的假阳性。
+            config.Audio.PlayCues = false;
+
             if (!_controller.StartRecording())
             {
                 MicTestStatus = "无法开始录音：麦克风可能被占用或不可用。";
@@ -1612,9 +1666,19 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 _controller.Cancel();
             }
 
-            MicTestStatus = _micTestMaxLevel > 0.001
-                ? $"录音测试完成：本次最大电平 {_micTestMaxLevel:P1}；电平有波动说明麦克风工作正常。"
-                : "录音测试完成：几乎没有采集到电平。请检查 Windows 麦克风权限/设备选择，或在 设置 → 录音 里换一个麦克风。";
+            var deviceName = DeviceLabel();
+            var lowLevel = _micTestMaxLevel <= 0.001;
+            if (!lowLevel)
+            {
+                MicTestStatus = $"录音测试完成（设备：{deviceName}）：本次最大电平 {_micTestMaxLevel:P1}；电平有波动说明麦克风工作正常。";
+            }
+            else
+            {
+                var extra = LooksLikeVirtualMicrophone(deviceName)
+                    ? "这是虚拟/远程音频设备，可能采集不到本机说话声，请改选真实麦克风并保存。"
+                    : "请检查 Windows 麦克风权限/设备选择，或在 设置 → 录音 里换一个麦克风。";
+                MicTestStatus = $"录音测试完成（设备：{deviceName}）：几乎没有采集到电平。{extra}";
+            }
         }
         catch (Exception ex)
         {
@@ -1623,6 +1687,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            config.Audio.PlayCues = originalPlayCues;
             IsMicTesting = false;
             MicTestLevel = 0;
         }
