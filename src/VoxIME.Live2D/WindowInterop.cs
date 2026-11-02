@@ -19,6 +19,16 @@ internal static class WindowInterop
     private const int WmNcHitTest = 0x0084;
     private const int HtTransparent = -1;
 
+    private static readonly IntPtr HwndTopmost = new(-1);
+    private static readonly IntPtr HwndNotTopmost = new(-2);
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoActivate = 0x0010;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(
+        IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int GetWindowLong(IntPtr hwnd, int index);
 
@@ -100,9 +110,26 @@ internal static class WindowInterop
         }
     }
 
-    /// <summary>开启/关闭整窗点击穿透。</summary>
-    public static void SetClickThrough(IntPtr hwnd, bool clickThrough)
+    /// <summary>用 Win32 重新断言置顶（WPF Topmost 偶发被其它顶层窗口/远程桌面覆盖时使用）。</summary>
+    public static void SetTopmost(IntPtr hwnd, bool topmost)
     {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _ = SetWindowPos(
+            hwnd,
+            topmost ? HwndTopmost : HwndNotTopmost,
+            0,
+            0,
+            0,
+            0,
+            SwpNoSize | SwpNoMove | SwpNoActivate);
+    }
+
+    /// <summary>开启/关闭整窗点击穿透。</summary>
+    public static void SetClickThrough(IntPtr hwnd, bool clickThrough)    {
         if (hwnd == IntPtr.Zero)
         {
             return;

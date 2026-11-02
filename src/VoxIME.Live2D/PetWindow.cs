@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using System.Runtime.InteropServices;
 
 namespace VoxIME.Live2D;
@@ -60,6 +61,7 @@ internal sealed class PetWindow : Window
     private readonly FallbackAvatar _avatar;
     private readonly Border _dragLayer;
     private readonly BubbleView _bubble;
+    private readonly DispatcherTimer _topmostTimer;
     private FrameworkElement? _webView;
     private IntPtr _hwnd;
     private bool _clickThrough = true;
@@ -118,6 +120,20 @@ internal sealed class PetWindow : Window
             ApplyAvatarTransform();
         };
         SourceInitialized += OnSourceInitialized;
+
+        _topmostTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(3)
+        };
+        _topmostTimer.Tick += (_, _) => ReassertTopmost();
+        Loaded += (_, _) =>
+        {
+            if (Topmost)
+            {
+                _topmostTimer.Start();
+            }
+        };
+        Closed += (_, _) => _topmostTimer.Stop();
     }
 
     private readonly Grid _root;
@@ -219,6 +235,18 @@ internal sealed class PetWindow : Window
         Height = Math.Clamp(height, 160, 1600);
         Opacity = Math.Clamp(opacity, 0.2, 1.0);
         Topmost = topmost;
+        if (_topmostTimer is not null)
+        {
+            if (topmost)
+            {
+                _topmostTimer.Start();
+            }
+            else
+            {
+                _topmostTimer.Stop();
+            }
+        }
+
         ClickThrough = clickThrough;
         _bubble.UpdateMaxWidth(Width);
 
@@ -464,9 +492,19 @@ internal sealed class PetWindow : Window
     {
         _hwnd = new WindowInteropHelper(this).Handle;
         WindowInterop.ApplyToolWindowStyle(_hwnd);
+        ReassertTopmost();
         var source = HwndSource.FromHwnd(_hwnd);
         source?.AddHook(WndProc);
         ApplyInteropStyles();
+    }
+
+    /// <summary>用 Win32 重新断言置顶（WPF Topmost 在远程桌面/其它顶层窗口出现时偶发被覆盖）。</summary>
+    public void ReassertTopmost()
+    {
+        if (_hwnd != IntPtr.Zero)
+        {
+            WindowInterop.SetTopmost(_hwnd, Topmost);
+        }
     }
 
     private void ApplyInteropStyles()
