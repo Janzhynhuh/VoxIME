@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using VoxIME.Core.Abstractions;
 using VoxIME.Core.Configuration;
 using VoxIME.Core.Logging;
+using VoxIME.Core.Services;
 
 namespace VoxIME.Live2D;
 
@@ -875,13 +876,22 @@ public sealed class Live2DController : ILive2DController
     private void SendConfigToPage()
     {
         var config = GetConfig();
+        var expressionMap = config.ResolveExpressionMap(config.ModelDirectory);
         var expressions = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
-            ["listening"] = config.ListeningExpression,
-            ["thinking"] = config.ThinkingExpression,
-            ["speaking"] = config.SpeakingExpression,
-            ["error"] = config.ErrorExpression
+            ["listening"] = expressionMap.Listening,
+            ["thinking"] = expressionMap.Thinking,
+            ["speaking"] = expressionMap.Speaking,
+            ["error"] = expressionMap.Error
         };
+        // 同步 Exp3/Animation 等未登记进 model3.json 的资源，页面加载模型后注入引擎。
+        var modelAssets = Live2DModelAssetCatalog.Load(config.ModelDirectory);
+        if (modelAssets.Expressions.Count > 0 || modelAssets.Motions.Count > 0)
+        {
+            _logger.Info(
+                $"[Live2D] 模型资源扫描：{modelAssets.Expressions.Count} 个表情 / {modelAssets.Motions.Count} 个动作" +
+                $"（{Path.GetFileName(modelAssets.ModelJsonPath) ?? "未找到 model3.json"}）");
+        }
 
         _webHost?.SendConfig(
             config.EyeFollow,
@@ -892,7 +902,8 @@ public sealed class Live2DController : ILive2DController
             config.ModelOffsetY,
             string.IsNullOrWhiteSpace(config.IdleMotionGroup) ? "Idle" : config.IdleMotionGroup,
             config.ShowBubble,
-            expressions);
+            expressions,
+            modelAssets);
         // 缩放不再改 WebView2 ZoomFactor：ZoomFactor 会让页面 viewport 重排，JS 重新适配后视觉尺寸
         // 几乎不变且会被拉伸发糊。统一交给页面在 canvas 内缩放，并随缩放提高渲染分辨率。
         _webHost?.SetZoom(1.0);

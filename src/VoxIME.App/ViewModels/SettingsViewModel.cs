@@ -104,6 +104,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string _errorExpression = "";
     private string _fallbackAvatarTheme = "violet";
     private string _live2DStatusText = "";
+    private string _expressionCatalogHint = "";
+    private string _expressionMapModelDirectory = "";
     private Live2DModelInfo? _selectedLive2DModel;
     private string _modelLibraryDirectory = AppInfo.DefaultModelDirectory;
 
@@ -995,6 +997,16 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _errorExpression, value);
     }
 
+    /// <summary>当前所选模型可用的表情名（来自 model3.json + Exp3 文件夹）。</summary>
+    public ObservableCollection<string> AvailableExpressions { get; } = new();
+
+    /// <summary>表情/动作扫描结果说明。</summary>
+    public string ExpressionCatalogHint
+    {
+        get => _expressionCatalogHint;
+        private set => SetProperty(ref _expressionCatalogHint, value);
+    }
+
     public string FallbackAvatarTheme
     {
         get => _fallbackAvatarTheme;
@@ -1043,7 +1055,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                 var directory = value.Directory ?? "";
                 if (!string.Equals((ModelDirectory ?? "").Trim(), directory, StringComparison.OrdinalIgnoreCase))
                 {
+                    SaveExpressionMapForModel(_expressionMapModelDirectory);
                     ModelDirectory = directory;
+                    _expressionMapModelDirectory = NormalizeModelDirectory(directory);
+                    LoadExpressionMapForModel(_expressionMapModelDirectory, clearWhenMissing: true);
                     StatusText = directory.Length == 0
                         ? "已选择内置兜底形象，点击“保存”后生效。"
                         : $"已选择模型“{value.Name}”，点击“保存”后生效。";
@@ -1051,6 +1066,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
                 _eyeFollowInvertY = ResolveEyeFollowInvertYPreference(ModelDirectory) ?? false;
                 OnPropertyChanged(nameof(EyeFollowInvertY));
+                RefreshExpressionCatalog();
             }
 
             DeleteLive2DModelCommand.RaiseCanExecuteChanged();
@@ -1306,6 +1322,90 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                             ?? LogLevels[2];
 
         ValidateHotkeys();
+        _expressionMapModelDirectory = NormalizeModelDirectory(ModelDirectory);
+        LoadExpressionMapForModel(_expressionMapModelDirectory, clearWhenMissing: false);
+        RefreshExpressionCatalog();
+    }
+
+    private static string NormalizeModelDirectory(string? directory) => (directory ?? "").Trim();
+
+    private void SaveExpressionMapForModel(string? modelDirectory)
+    {
+        var key = NormalizeModelDirectory(modelDirectory);
+        if (key.Length == 0)
+        {
+            return;
+        }
+
+        _working.Live2D.ExpressionByModel[key] = new Live2DExpressionMap
+        {
+            Listening = EmptyToNull(ListeningExpression),
+            Thinking = EmptyToNull(ThinkingExpression),
+            Speaking = EmptyToNull(SpeakingExpression),
+            Error = EmptyToNull(ErrorExpression)
+        };
+    }
+
+    private void LoadExpressionMapForModel(string? modelDirectory, bool clearWhenMissing)
+    {
+        var key = NormalizeModelDirectory(modelDirectory);
+        if (key.Length > 0 && _working.Live2D.ExpressionByModel.TryGetValue(key, out var map) && map is not null)
+        {
+            ListeningExpression = map.Listening ?? "";
+            ThinkingExpression = map.Thinking ?? "";
+            SpeakingExpression = map.Speaking ?? "";
+            ErrorExpression = map.Error ?? "";
+            return;
+        }
+
+        if (clearWhenMissing)
+        {
+            ListeningExpression = "";
+            ThinkingExpression = "";
+            SpeakingExpression = "";
+            ErrorExpression = "";
+        }
+    }
+
+    private static string? EmptyToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private void RefreshExpressionCatalog()
+    {
+        try
+        {
+            var catalog = Live2DModelAssetCatalog.Load(ModelDirectory);
+            AvailableExpressions.Clear();
+            foreach (var expression in catalog.Expressions)
+            {
+                if (!AvailableExpressions.Contains(expression.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    AvailableExpressions.Add(expression.Name);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(ModelDirectory))
+            {
+                ExpressionCatalogHint = "当前使用内置兜底形象，没有表情文件；可留空或手动输入。";
+            }
+            else if (catalog.Expressions.Count == 0)
+            {
+                ExpressionCatalogHint = $"未在模型中找到表情文件（已扫描 model3.json/Exp3）；可手动输入表情名。"
+                    + (catalog.Motions.Count > 0 ? $" 已发现 {catalog.Motions.Count} 个动作文件。" : "");
+            }
+            else
+            {
+                ExpressionCatalogHint = $"已发现 {catalog.Expressions.Count} 个表情"
+                    + (catalog.Motions.Count > 0 ? $"、{catalog.Motions.Count} 个动作" : "")
+                    + "；可从下拉框选择，也可手动输入，留空表示不切换。";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"扫描模型表情失败：{ex.Message}");
+            AvailableExpressions.Clear();
+            ExpressionCatalogHint = "读取模型表情失败，可手动输入表情名。";
+        }
     }
 
     private void SetMouthSync(bool value)
@@ -2096,6 +2196,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private AppConfig CollectConfig()
     {
+        SaveExpressionMapForModel(_expressionMapModelDirectory);
         var config = ConfigJson.CloneAppConfig(_working);
 
         config.ProviderProfiles = Providers.Select(p => p.ToProfile()).ToList();
@@ -2239,6 +2340,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ThinkingExpression = NullIfEmpty(ThinkingExpression),
             SpeakingExpression = NullIfEmpty(SpeakingExpression),
             ErrorExpression = NullIfEmpty(ErrorExpression),
+            ExpressionByModel = ConfigJson.Clone(_working.Live2D.ExpressionByModel),
             FallbackAvatarTheme = string.IsNullOrWhiteSpace(FallbackAvatarTheme) ? "violet" : FallbackAvatarTheme.Trim(),
             Left = _configStore.Current.Live2D.Left,
             Top = _configStore.Current.Live2D.Top

@@ -55,6 +55,22 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void ExpressionMap_ResolvesPerModelWithGlobalFallback()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.ListeningExpression = "global-listening";
+        config.Live2D.ExpressionByModel["E:\\models\\a"] = new Live2DExpressionMap
+        {
+            Listening = "a-listening",
+            Thinking = "a-thinking"
+        };
+
+        Assert.Equal("a-listening", config.Live2D.ResolveExpressionMap("E:\\models\\a").Listening);
+        Assert.Equal("global-listening", config.Live2D.ResolveExpressionMap("E:\\models\\b").Listening);
+        Assert.Null(config.Live2D.ResolveExpressionMap(null).Speaking);
+    }
+
+    [Fact]
     public void Normalize_ClampsOutOfRangeValues()
     {
         var config = new AppConfig

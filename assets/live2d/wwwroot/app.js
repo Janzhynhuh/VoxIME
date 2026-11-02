@@ -57,6 +57,8 @@
   };
 
   var stateExpressions = { listening: null, thinking: null, speaking: null, error: null };
+  // C# 扫描到的 Exp3/Animation 资源（可能未登记在 model3.json 中），模型加载后注入引擎。
+  var pendingModelAssets = null;
 
   var pixiApp = null;
   var pixiInitPromise = null;
@@ -455,7 +457,22 @@
       }
 
       log('开始加载模型: ' + resolved);
-      var loaded = await PIXI.live2d.Live2DModel.from(resolved, {
+      var modelSource = resolved;
+      if (pendingModelAssets) {
+        try {
+          var settingsResponse = await fetch(resolved, { cache: 'no-store' });
+          if (settingsResponse.ok) {
+            var settings = await settingsResponse.json();
+            settings.url = resolved;
+            mergeModelAssetsIntoSettings(settings, pendingModelAssets);
+            modelSource = settings;
+            log('已合并模型资源到 settings: ' + resolved);
+          }
+        } catch (settingsError) {
+          log('读取 model3.json 失败，按原 URL 加载: ' + (settingsError && settingsError.message));
+        }
+      }
+      var loaded = await PIXI.live2d.Live2DModel.from(modelSource, {
         autoHitTest: false,
         autoFocus: false,
         autoUpdate: true,
@@ -471,6 +488,7 @@
       app.stage.addChild(model);
       model.internalModel.on('beforeModelUpdate', applyMouthOverride);
       setupMouthParameters();
+      applyModelAssets(pendingModelAssets);
       modelGroups = setupIdleGroup() || [];
       // 初始化时应用缩放与对应的后备分辨率（模型自带尺寸可能很大）。
       resizePixi();
@@ -494,6 +512,80 @@
     } catch (err) {
       handleModelError(err, raw);
       return false;
+    }
+  }
+
+  // 把扫描到的资源合并进原始 model3.json。必须在 Live2DModel.from 之前做，
+  // 否则模型没有 Expressions 时引擎不会创建 expressionManager，后续无法注入表情。
+  function mergeModelAssetsIntoSettings(settings, assets) {
+    if (!settings || !assets) return settings;
+    var refs = settings.FileReferences;
+    if (!refs || typeof refs !== 'object') {
+      refs = {};
+      settings.FileReferences = refs;
+    }
+    var expressions = Array.isArray(assets.expressions) ? assets.expressions : [];
+    if (expressions.length) {
+      if (!Array.isArray(refs.Expressions)) refs.Expressions = [];
+      expressions.forEach(function (item) {
+        if (!item || !item.name || !item.file) return;
+        var exists = refs.Expressions.some(function (e) { return e && e.Name === item.name; });
+        if (!exists) refs.Expressions.push({ Name: String(item.name), File: String(item.file) });
+      });
+    }
+    var motions = Array.isArray(assets.motions) ? assets.motions : [];
+    if (motions.length) {
+      if (!refs.Motions || typeof refs.Motions !== 'object') refs.Motions = {};
+      motions.forEach(function (item) {
+        if (!item || !item.group || !item.file) return;
+        var group = String(item.group);
+        if (!Array.isArray(refs.Motions[group])) refs.Motions[group] = [];
+        var exists = refs.Motions[group].some(function (m) { return m && m.File === item.file; });
+        if (!exists) refs.Motions[group].push({ File: String(item.file) });
+      });
+    }
+    return settings;
+  }
+
+  // 把模型目录里扫描到的 Exp3 / Animation 资源注入引擎：
+  // 很多 VTube Studio 模型有这些文件，但 model3.json 没登记。
+  function applyModelAssets(assets) {
+    if (!model || !assets || typeof assets !== 'object') return;
+    var exprs = Array.isArray(assets.expressions) ? assets.expressions : [];
+    var motions = Array.isArray(assets.motions) ? assets.motions : [];
+    try {
+      var motionManager = model.internalModel.motionManager;
+      sendHost({
+        type: 'debug',
+        message: 'applyModelAssets: expr=' + exprs.length + ', motion=' + motions.length
+          + ', motionManager=' + !!motionManager
+          + ', expressionManager=' + !!(motionManager && motionManager.expressionManager)
+      });
+      if (exprs.length && motionManager && motionManager.expressionManager) {
+        var manager = motionManager.expressionManager;
+        var definitions = Array.isArray(manager.definitions) ? manager.definitions.slice() : [];
+        exprs.forEach(function (item) {
+          if (!item || !item.name || !item.file) return;
+          var exists = definitions.some(function (d) { return d && d.Name === item.name; });
+          if (!exists) definitions.push({ Name: String(item.name), File: String(item.file) });
+        });
+        manager.definitions = definitions;
+        if (model.internalModel.settings) model.internalModel.settings.expressions = definitions;
+        sendHost({ type: 'debug', message: '资源注入：表情 ' + definitions.length + ' 个，动作 ' + motions.length + ' 个' });
+      }
+      if (motions.length && motionManager) {
+        if (!motionManager.definitions) motionManager.definitions = {};
+        motions.forEach(function (item) {
+          if (!item || !item.group || !item.file) return;
+          var group = String(item.group);
+          var list = Array.isArray(motionManager.definitions[group]) ? motionManager.definitions[group] : [];
+          var exists = list.some(function (m) { return m && m.File === item.file; });
+          if (!exists) list.push({ File: String(item.file) });
+          motionManager.definitions[group] = list;
+        });
+      }
+    } catch (e) {
+      log('注入模型资源失败（忽略）: ' + (e && e.message));
     }
   }
 
@@ -541,7 +633,17 @@
     var expression = stateExpressions[state];
     try {
       if (expression) {
-        model.expression(expression);
+        var applyResult = model.expression(expression);
+        if (applyResult && typeof applyResult.then === 'function') {
+          applyResult.then(function (ok) {
+            sendHost({ type: 'expressionResult', state: state, name: expression, ok: ok !== false });
+          }).catch(function (err) {
+            sendHost({
+              type: 'expressionResult', state: state, name: expression, ok: false,
+              message: String((err && err.message) || err)
+            });
+          });
+        }
       } else if (state === 'idle' && model.internalModel.motionManager.expressionManager) {
         model.internalModel.motionManager.expressionManager.resetExpression();
       }
@@ -613,8 +715,15 @@
     if (msg.showBubble !== undefined) config.showBubble = !!msg.showBubble;
     if (msg.expressions && typeof msg.expressions === 'object') {
       Object.keys(stateExpressions).forEach(function (key) {
-        if (msg.expressions[key]) stateExpressions[key] = String(msg.expressions[key]);
+        if (Object.prototype.hasOwnProperty.call(msg.expressions, key)) {
+          var value = msg.expressions[key];
+          stateExpressions[key] = value ? String(value) : null;
+        }
       });
+    }
+    if (msg.modelAssets && typeof msg.modelAssets === 'object') {
+      pendingModelAssets = msg.modelAssets;
+      if (model) applyModelAssets(pendingModelAssets);
     }
     if (!config.mouthSync) live.mouth = 0;
     if (model) {

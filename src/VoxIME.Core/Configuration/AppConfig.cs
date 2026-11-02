@@ -225,6 +225,7 @@ public sealed class AppConfig
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
         Live2D.EyeFollowFps = Math.Clamp(Live2D.EyeFollowFps, 5, 300);
         Live2D.EyeFollowInvertYByModel ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        Live2D.ExpressionByModel ??= new Dictionary<string, Live2DExpressionMap>(StringComparer.OrdinalIgnoreCase);
         Live2D.ModelLibraryDirectory = string.IsNullOrWhiteSpace(Live2D.ModelLibraryDirectory)
             ? null
             : Live2D.ModelLibraryDirectory.Trim();
@@ -427,7 +428,39 @@ public sealed class Live2DConfig
     public string? ThinkingExpression { get; set; }
     public string? SpeakingExpression { get; set; }
     public string? ErrorExpression { get; set; }
+
+    /// <summary>按模型目录记住的状态表情映射；旧配置没有此字段时回退到上面四个全局字段。</summary>
+    public Dictionary<string, Live2DExpressionMap> ExpressionByModel { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>取指定模型的表情映射；没有按模型记录时返回全局字段。</summary>
+    public Live2DExpressionMap ResolveExpressionMap(string? modelDirectory)
+    {
+        var key = (modelDirectory ?? "").Trim();
+        if (key.Length > 0 && ExpressionByModel.TryGetValue(key, out var map) && map is not null)
+        {
+            return map;
+        }
+
+        return new Live2DExpressionMap
+        {
+            Listening = ListeningExpression,
+            Thinking = ThinkingExpression,
+            Speaking = SpeakingExpression,
+            Error = ErrorExpression
+        };
+    }
+
     public string FallbackAvatarTheme { get; set; } = "violet";
+}
+
+/// <summary>一个模型对应的四个状态表情名。</summary>
+public sealed class Live2DExpressionMap
+{
+    public string? Listening { get; set; }
+    public string? Thinking { get; set; }
+    public string? Speaking { get; set; }
+    public string? Error { get; set; }
 }
 
 public sealed class TtsConfig

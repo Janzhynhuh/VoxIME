@@ -6,6 +6,7 @@ using Microsoft.Web.WebView2.Wpf;
 using VoxIME.Core;
 using VoxIME.Core.Abstractions;
 using VoxIME.Core.Logging;
+using VoxIME.Core.Services;
 
 namespace VoxIME.Live2D;
 
@@ -256,7 +257,8 @@ internal sealed class Live2DWebHost : IDisposable
         double offsetY,
         string idleMotionGroup,
         bool showBubble,
-        IReadOnlyDictionary<string, string?> expressions)
+        IReadOnlyDictionary<string, string?> expressions,
+        Live2DModelAssetCatalog? modelAssets)
     {
         Send(new
         {
@@ -269,7 +271,14 @@ internal sealed class Live2DWebHost : IDisposable
             offsetY,
             idleMotionGroup,
             showBubble,
-            expressions
+            expressions,
+            modelAssets = modelAssets is null
+                ? null
+                : new
+                {
+                    expressions = modelAssets.Expressions.Select(item => new { name = item.Name, file = item.File }).ToArray(),
+                    motions = modelAssets.Motions.Select(item => new { group = item.Group, file = item.File }).ToArray()
+                }
         });
     }
 
@@ -392,6 +401,32 @@ internal sealed class Live2DWebHost : IDisposable
                         : 0;
                     _logger.Info($"[Live2D] 模型加载完成：{name ?? "(未命名)"}，原始尺寸 {width:0}×{height:0}");
                     ModelLoaded?.Invoke(this, new Live2DModelSizeEventArgs(name ?? "model", width, height));
+                    break;
+                }
+                case "debug":
+                {
+                    var message = root.TryGetProperty("message", out var debugElement)
+                        ? debugElement.GetString()
+                        : "";
+                    _logger.Info($"[Live2D] 页面调试：{message}");
+                    break;
+                }
+                case "expressionResult":
+                {
+                    var ok = root.TryGetProperty("ok", out var okElement) && okElement.ValueKind == JsonValueKind.True;
+                    var state = root.TryGetProperty("state", out var stateElement) ? stateElement.GetString() : "?";
+                    var name = root.TryGetProperty("name", out var exprElement) ? exprElement.GetString() : "?";
+                    if (ok)
+                    {
+                        _logger.Info($"[Live2D] 表情已应用：{state} -> {name}");
+                    }
+                    else
+                    {
+                        var message = root.TryGetProperty("message", out var messageElement)
+                            ? messageElement.GetString()
+                            : "未找到或加载失败";
+                        _logger.Warn($"[Live2D] 表情应用失败：{state} -> {name}（{message}）");
+                    }
                     break;
                 }
                 case "error":
