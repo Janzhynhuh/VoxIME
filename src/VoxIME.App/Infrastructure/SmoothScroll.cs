@@ -8,12 +8,12 @@ using VoxIME.Core.Services;
 namespace VoxIME.App.Infrastructure;
 
 /// <summary>
-/// 高性能平滑滚动（视觉层 / 逻辑层分离，参考 FluentWpfCore 的 v3 方案）：
-/// - 视觉层：每帧只改 <see cref="ScrollContentPresenter"/> 的 TranslateTransform，不触发布局，
-///   跟随显示器刷新率更新；
-/// - 逻辑层：约 24Hz 低频调用 <c>ScrollToVerticalOffset</c> 同步真实偏移，
+/// 高性能平滑滚动（视觉层 / 逻辑层分离，参考 FluentWpfCore 的 SmoothScrollViewer）：
+/// - 视觉层：每帧只改 ScrollViewer.Content 的 TranslateTransform（不触发布局，跟随刷新率）；
+///   位移加在内容上而不是 ScrollContentPresenter 上，这样 presenter 的视口裁剪保持不动，
+///   内容不会滑出滚动区域；
+/// - 逻辑层：约 24Hz 低频调用 <c>ScrollToVerticalOffset</c> 并强制 UpdateLayout 同步真实偏移，
 ///   保证滚动条、虚拟化与命中测试正确。
-/// 这样就避免了「每一帧都 ScrollToVerticalOffset → 每帧布局」导致的卡顿。
 /// 动画曲线来自 <see cref="ScrollMotion"/>（300ms Fluent ease-out）。
 /// </summary>
 public static class SmoothScroll
@@ -46,9 +46,9 @@ public static class SmoothScroll
         }
 
         var state = GetState(viewer);
-        EnsurePresenter(viewer, state);
+        EnsureContent(viewer, state);
 
-        if (state.Presenter is null)
+        if (state.Content is null)
         {
             // 模板尚未应用（极少数情况）：退化为一次性滚动，避免吞掉滚轮。
             viewer.ScrollToVerticalOffset(Math.Clamp(
@@ -160,7 +160,7 @@ public static class SmoothScroll
 
         foreach (var (viewer, state) in States)
         {
-            if (!state.Animating || state.Presenter is null)
+            if (!state.Animating || state.Content is null)
             {
                 continue;
             }
@@ -215,7 +215,7 @@ public static class SmoothScroll
 
     private static void ApplyVisualDelta(ScrollViewer viewer, ScrollState state)
     {
-        if (state.Presenter is null)
+        if (state.Content is null)
         {
             return;
         }
@@ -232,10 +232,12 @@ public static class SmoothScroll
         }
 
         state.Transform ??= new TranslateTransform();
-        if (!ReferenceEquals(state.Presenter.RenderTransform, state.Transform))
+        if (!ReferenceEquals(state.Content.RenderTransform, state.Transform))
         {
-            state.OriginalTransform = state.Presenter.RenderTransform;
-            state.Presenter.RenderTransform = state.Transform;
+            state.OriginalTransform = state.Content.RenderTransform;
+            state.OriginalTransformOrigin = state.Content.RenderTransformOrigin;
+            state.Content.RenderTransformOrigin = new Point(0, 0);
+            state.Content.RenderTransform = state.Transform;
         }
 
         state.Transform.Y = -delta;
@@ -249,8 +251,7 @@ public static class SmoothScroll
             viewer.ScrollToVerticalOffset(state.VisualOffset);
 
             // ScrollToVerticalOffset 会立刻更新 VerticalOffset，但内容要等下一次布局才真正移动。
-            // 如果此时就把视觉补偿清零，会先闪一帧旧位置；这里强制完成布局，保证
-            // “逻辑位置、实际呈现、视觉补偿”三者在同一帧内一致，避免组件抽搐。
+            // 强制在本帧内完成布局，再按实际呈现重算视觉补偿，保证三者同帧一致。
             viewer.UpdateLayout();
         }
         finally
@@ -258,42 +259,57 @@ public static class SmoothScroll
             state.Syncing = false;
         }
 
-        // 布局完成后重算视觉补偿量，保证画面不跳。
         ApplyVisualDelta(viewer, state);
     }
 
     private static void ResetVisualOffset(ScrollViewer viewer, ScrollState state)
     {
-        if (state.Presenter is null)
+        _ = viewer;
+        if (state.Content is null)
         {
             return;
         }
 
-        if (state.Transform is not null && ReferenceEquals(state.Presenter.RenderTransform, state.Transform))
+        if (state.Transform is not null && ReferenceEquals(state.Content.RenderTransform, state.Transform))
         {
-            state.Presenter.RenderTransform = state.OriginalTransform;
+            state.Content.RenderTransform = state.OriginalTransform;
+            state.Content.RenderTransformOrigin = state.OriginalTransformOrigin;
         }
 
         state.Transform = null;
         state.OriginalTransform = null;
     }
 
-    private static void EnsurePresenter(ScrollViewer viewer, ScrollState state)
+    private static void EnsureContent(ScrollViewer viewer, ScrollState state)
     {
-        if (state.Presenter is not null && state.Presenter.IsLoaded)
+        if (state.Content is not null && state.Content.IsLoaded)
         {
             return;
         }
 
-        state.Presenter = FindDescendant<ScrollContentPresenter>(viewer);
-        if (state.Presenter is null)
+        state.Content = viewer.Content as FrameworkElement;
+        if (state.Content is null)
+        {
+            // 少数模板会把内容包一层，取 presenter 的第一个可视子元素作为位移目标。
+            var presenter = FindDescendant<ScrollContentPresenter>(viewer);
+            state.Content = presenter is null
+                ? null
+                : VisualTreeHelper.GetChild(presenter, 0) as FrameworkElement;
+        }
+
+        if (state.Content is null)
         {
             return;
         }
 
-        // 位移后必须裁剪在视口内，避免内容画到 ScrollViewer 外面。
-        state.Presenter.ClipToBounds = true;
-        state.OriginalTransform = state.Presenter.RenderTransform;
+        // 视口裁剪由 ScrollContentPresenter 负责；内容自身再有 transform 不会把裁剪区域带走。
+        if (FindDescendant<ScrollContentPresenter>(viewer) is { } clipHost)
+        {
+            clipHost.ClipToBounds = true;
+        }
+
+        state.OriginalTransform = state.Content.RenderTransform;
+        state.OriginalTransformOrigin = state.Content.RenderTransformOrigin;
         state.Transform = null;
     }
 
@@ -422,10 +438,13 @@ public static class SmoothScroll
         /// <summary>正在同步逻辑偏移时置位，避免被 ScrollChanged 误判为外部滚动。</summary>
         public bool Syncing { get; set; }
 
-        public ScrollContentPresenter? Presenter { get; set; }
+        /// <summary>被位移的 ScrollViewer.Content。</summary>
+        public FrameworkElement? Content { get; set; }
 
         public TranslateTransform? Transform { get; set; }
 
         public Transform? OriginalTransform { get; set; }
+
+        public Point OriginalTransformOrigin { get; set; }
     }
 }
