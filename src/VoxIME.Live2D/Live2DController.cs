@@ -87,6 +87,7 @@ public sealed class Live2DController : ILive2DController
     private double? _userLeft;
     private double? _userTop;
     private bool _systemParametersSubscribed;
+    private bool _diagnosticSystemEventsSubscribed;
 
     public Live2DController(IAppLogger logger)
     {
@@ -225,27 +226,68 @@ public sealed class Live2DController : ILive2DController
         {
             _logger.Debug($"[Live2D] 订阅显示器配置变化失败：{ex.Message}");
         }
+
+        try
+        {
+            // 临时诊断：确认 RDP/远控切换是否触发 WM_DISPLAYCHANGE。
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDiagnosticDisplaySettingsChanged;
+            _diagnosticSystemEventsSubscribed = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"[Live2D][诊断] 订阅 SystemEvents 失败：{ex.Message}");
+        }
     }
 
     private void UnsubscribeDisplaySettings()
     {
-        if (!_systemParametersSubscribed)
+        if (_systemParametersSubscribed)
+        {
+            try
+            {
+                SystemParameters.StaticPropertyChanged -= OnSystemParametersChanged;
+            }
+            catch (Exception)
+            {
+                // 进程退出阶段忽略。
+            }
+            finally
+            {
+                _systemParametersSubscribed = false;
+            }
+        }
+
+        if (_diagnosticSystemEventsSubscribed)
+        {
+            try
+            {
+                Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDiagnosticDisplaySettingsChanged;
+            }
+            catch (Exception)
+            {
+                // 进程退出阶段忽略。
+            }
+            finally
+            {
+                _diagnosticSystemEventsSubscribed = false;
+            }
+        }
+    }
+
+    private void OnDiagnosticDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
         {
             return;
         }
 
-        try
+        RunOnUiThread(() =>
         {
-            SystemParameters.StaticPropertyChanged -= OnSystemParametersChanged;
-        }
-        catch (Exception)
-        {
-            // 进程退出阶段忽略。
-        }
-        finally
-        {
-            _systemParametersSubscribed = false;
-        }
+            if (_window is not null)
+            {
+                _logger.Info($"[Live2D][诊断] SystemEvents.DisplaySettingsChanged：{_window.GetDisplayDiagnostics()}");
+            }
+        }, "DiagnosticDisplaySettingsChanged");
     }
 
     private void OnSystemParametersChanged(object? sender, PropertyChangedEventArgs e)
@@ -266,12 +308,23 @@ public sealed class Live2DController : ILive2DController
             return;
         }
 
-        RunOnUiThread(EnsureWindowVisibleOnDisplayChange, "DisplaySettingsChanged");
+        RunOnUiThread(
+            () => EnsureWindowVisibleOnDisplayChange("SystemParameters:" + e.PropertyName),
+            "DisplaySettingsChanged");
     }
 
-    private void EnsureWindowVisibleOnDisplayChange()
+    private void EnsureWindowVisibleOnDisplayChange(string source)
     {
-        if (_disposed || _window is null || _window.IsVisibleOnCurrentDesktop())
+        if (_disposed || _window is null)
+        {
+            return;
+        }
+
+        var visible = _window.IsVisibleOnCurrentDesktop();
+        _logger.Info(
+            $"[Live2D][诊断] 显示变化({source}) visibleOnVirtualDesktop={visible} " +
+            _window.GetDisplayDiagnostics());
+        if (visible)
         {
             return;
         }
