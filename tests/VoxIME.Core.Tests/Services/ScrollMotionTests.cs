@@ -5,88 +5,102 @@ namespace VoxIME.Core.Tests.Services;
 public sealed class ScrollMotionTests
 {
     [Fact]
-    public void EaseOutFluent_HasExpectedEndpointsAndIsMonotonic()
+    public void VelocityForDelta_ConvertsPixelsToVelocityWithDecayConstant()
     {
-        Assert.Equal(0, ScrollMotion.EaseOutFluent(0));
-        Assert.Equal(1, ScrollMotion.EaseOutFluent(1), 10);
+        Assert.Equal(100 / ScrollMotion.DecayTimeConstantSeconds, ScrollMotion.VelocityForDelta(100), 6);
+        Assert.Equal(0, ScrollMotion.VelocityForDelta(0));
+        Assert.Equal(-ScrollMotion.VelocityForDelta(80), ScrollMotion.VelocityForDelta(-80), 6);
+    }
 
-        var previous = 0d;
-        for (var i = 0; i <= 20; i++)
+    [Fact]
+    public void VelocityForDelta_IsClamped()
+    {
+        Assert.Equal(ScrollMotion.MaxVelocity, ScrollMotion.VelocityForDelta(999999));
+        Assert.Equal(-ScrollMotion.MaxVelocity, ScrollMotion.VelocityForDelta(-999999));
+    }
+
+    [Fact]
+    public void SingleWheelImpulse_MovesAboutRequestedPixels()
+    {
+        // 速度从 v0 = delta/tau 起按 e^(-t/tau) 衰减，总位移收敛到 delta。
+        var offset = 0d;
+        var velocity = ScrollMotion.VelocityForDelta(100);
+        var completed = false;
+        var iterations = 0;
+        while (!completed && iterations++ < 10000)
         {
-            var value = ScrollMotion.EaseOutFluent(i / 20d);
-            Assert.InRange(value, previous, 1d);
-            previous = value;
+            var step = ScrollMotion.Next(offset, velocity, 1d / 144d, 0, 10000);
+            offset = step.Offset;
+            velocity = step.Velocity;
+            completed = step.Completed;
         }
+
+        Assert.True(completed);
+        Assert.InRange(offset, 99, 101);
     }
 
     [Fact]
-    public void EaseOutFluent_StartsFastAndEndsSoft()
+    public void Next_DecaysMonotonicallyToStop()
     {
-        // 起步阶段速度应明显高于尾段（Fluent 手感）。
-        var first = ScrollMotion.EaseOutFluent(0.2) - ScrollMotion.EaseOutFluent(0.1);
-        var last = ScrollMotion.EaseOutFluent(0.9) - ScrollMotion.EaseOutFluent(0.8);
-        Assert.True(first > last * 3, $"起步速度应远高于收尾：{first:0.###} vs {last:0.###}");
+        var offset = 0d;
+        var velocity = ScrollMotion.VelocityForDelta(300);
+        var previous = offset;
+        var completed = false;
+        var iterations = 0;
+        while (!completed && iterations++ < 10000)
+        {
+            var step = ScrollMotion.Next(offset, velocity, 1d / 144d, 0, 10000);
+            Assert.True(step.Offset >= previous, "单方向滚动不应反向");
+            Assert.InRange(step.Velocity, 0, velocity);
+            offset = step.Offset;
+            velocity = step.Velocity;
+            previous = offset;
+            completed = step.Completed;
+        }
+
+        Assert.True(completed);
+        Assert.InRange(offset, 299, 301);
     }
 
     [Fact]
-    public void Next_StartsAtStartOffset()
+    public void Next_ClampsAtBoundsAndStops()
     {
-        var step = ScrollMotion.Next(startOffset: 120, target: 400, elapsedSeconds: 0);
+        var step = ScrollMotion.Next(offset: 0, velocity: -2000, deltaSeconds: 0.05, minOffset: 0, maxOffset: 1000);
+        Assert.True(step.Completed);
+        Assert.Equal(0, step.Offset);
+        Assert.Equal(0, step.Velocity);
+
+        var top = ScrollMotion.Next(offset: 1000, velocity: 2000, deltaSeconds: 0.05, minOffset: 0, maxOffset: 1000);
+        Assert.True(top.Completed);
+        Assert.Equal(1000, top.Offset);
+        Assert.Equal(0, top.Velocity);
+    }
+
+    [Fact]
+    public void Next_ZeroElapsedAtBoundary_DoesNotComplete()
+    {
+        // 起始恰好在顶部、速度向下、dt=0：这一帧还没移动，不能误判为"撞边界结束"。
+        var step = ScrollMotion.Next(offset: 0, velocity: 900, deltaSeconds: 0, minOffset: 0, maxOffset: 2700);
 
         Assert.False(step.Completed);
-        Assert.Equal(120, step.Offset, 6);
+        Assert.Equal(0, step.Offset, 6);
+    }
+    [Fact]
+    public void Next_ClampsDeltaSeconds()
+    {
+        var step = ScrollMotion.Next(offset: 0, velocity: 1000, deltaSeconds: 999, minOffset: 0, maxOffset: 10000);
+
+        Assert.True(step.Offset <= 1000 * ScrollMotion.MaxDeltaSeconds);
+        Assert.True(step.Velocity > 0);
     }
 
     [Fact]
-    public void Next_CompletesAtTargetAfterDuration()
+    public void Next_ZeroVelocity_CompletesImmediately()
     {
-        var step = ScrollMotion.Next(startOffset: 120, target: 400, elapsedSeconds: ScrollMotion.DurationSeconds);
+        var step = ScrollMotion.Next(offset: 500, velocity: 0, deltaSeconds: 1d / 144, minOffset: 0, maxOffset: 1000);
 
         Assert.True(step.Completed);
-        Assert.Equal(400, step.Offset);
-    }
-
-    [Fact]
-    public void Next_IsMonotonicAndNeverOvershoots_Downward()
-    {
-        var previous = 120d;
-        for (var i = 1; i < 100; i++)
-        {
-            var elapsed = ScrollMotion.DurationSeconds * i / 100d;
-            var step = ScrollMotion.Next(120, 400, elapsed);
-            Assert.InRange(step.Offset, previous, 400d);
-            previous = step.Offset;
-        }
-    }
-
-    [Fact]
-    public void Next_IsMonotonicAndNeverOvershoots_Upward()
-    {
-        var previous = 400d;
-        for (var i = 1; i < 100; i++)
-        {
-            var elapsed = ScrollMotion.DurationSeconds * i / 100d;
-            var step = ScrollMotion.Next(400, 120, elapsed);
-            Assert.InRange(step.Offset, 120d, previous);
-            previous = step.Offset;
-        }
-    }
-
-    [Fact]
-    public void Next_AlreadyAtTarget_StaysThere()
-    {
-        var step = ScrollMotion.Next(startOffset: 200, target: 200, elapsedSeconds: 0.1);
-
-        Assert.False(step.Completed);
-        Assert.Equal(200, step.Offset, 6);
-    }
-
-    [Fact]
-    public void Next_NegativeElapsedTreatedAsZero()
-    {
-        var step = ScrollMotion.Next(startOffset: 50, target: 300, elapsedSeconds: -1);
-
-        Assert.False(step.Completed);
-        Assert.Equal(50, step.Offset, 6);
+        Assert.Equal(500, step.Offset, 6);
+        Assert.Equal(0, step.Velocity, 6);
     }
 }

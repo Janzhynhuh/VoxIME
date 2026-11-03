@@ -12,17 +12,15 @@ namespace VoxIME.App.Infrastructure;
 /// - 视觉层：每帧只改 ScrollViewer.Content 的 TranslateTransform（不触发布局，跟随刷新率）；
 ///   位移加在内容上而不是 ScrollContentPresenter 上，这样 presenter 的视口裁剪保持不动，
 ///   内容不会滑出滚动区域；
-/// - 逻辑层：约 24Hz 低频调用 <c>ScrollToVerticalOffset</c> 并强制 UpdateLayout 同步真实偏移，
-///   保证滚动条、虚拟化与命中测试正确。
-/// 动画曲线来自 <see cref="ScrollMotion"/>（300ms Fluent ease-out）。
+/// - 逻辑层：动画结束后调用 <c>ScrollToVerticalOffset</c> 并强制 UpdateLayout 同步真实偏移，
+///   滚动过程中完全不触发布局（滚动条在停止后跟上）。
+/// 运动模型来自 <see cref="ScrollMotion"/>：滚轮冲量 + 指数衰减惯性，连续滚动时速度叠加，
+/// 不会每个滚轮重新起步，因此没有逐格顿挫。
 /// </summary>
 public static class SmoothScroll
 {
     /// <summary>一格滚轮（120 单位）对应的目标滚动距离（像素）。</summary>
     private const double PixelsPerNotch = 100;
-
-    /// <summary>逻辑偏移同步间隔（秒）：约 24Hz，避免高频布局。</summary>
-    private const double LogicalSyncIntervalSeconds = 1d / 24d;
 
     private static readonly Dictionary<ScrollViewer, ScrollState> States = new();
     private static bool _renderingHooked;
@@ -59,14 +57,16 @@ public static class SmoothScroll
         var now = Environment.TickCount64;
         if (!state.Animating)
         {
+            // 从当前真实位置起滚；连续滚轮时速度叠加，不会每格重新起步。
             state.VisualOffset = viewer.VerticalOffset;
-            state.TargetOffset = state.VisualOffset;
+            state.Velocity = 0;
         }
 
-        state.TargetOffset = Math.Clamp(state.TargetOffset + deltaPixels, 0, viewer.ScrollableHeight);
-        state.StartOffset = state.VisualOffset;
-        state.StartTick = now;
-        state.LastLogicalSyncTick = now;
+        state.Velocity = Math.Clamp(
+            state.Velocity + ScrollMotion.VelocityForDelta(deltaPixels),
+            -ScrollMotion.MaxVelocity,
+            ScrollMotion.MaxVelocity);
+        state.LastTick = now;
         state.Animating = true;
         HookRendering();
     }
@@ -166,23 +166,19 @@ public static class SmoothScroll
             }
 
             hasActive = true;
-            var elapsed = (now - state.StartTick) / 1000d;
-            var step = ScrollMotion.Next(state.StartOffset, state.TargetOffset, elapsed);
-            state.VisualOffset = Math.Clamp(step.Offset, 0, viewer.ScrollableHeight);
+            var elapsed = (now - state.LastTick) / 1000d;
+            state.LastTick = now;
+            var step = ScrollMotion.Next(
+                state.VisualOffset, state.Velocity, elapsed, 0, viewer.ScrollableHeight);
+            state.VisualOffset = step.Offset;
+            state.Velocity = step.Velocity;
             ApplyVisualDelta(viewer, state);
 
             if (step.Completed)
             {
-                // 落位时保留视觉补偿，等 ScrollChanged（布局完成）确认逻辑偏移后再清除，
-                // 避免最后一步出现视觉回跳。
-                state.VisualOffset = state.TargetOffset;
+                // 滚动过程中不触发布局：只在动画结束时同步一次逻辑偏移，避免布局抖动。
                 SyncLogicalOffset(viewer, state);
                 state.Animating = false;
-            }
-            else if ((now - state.LastLogicalSyncTick) / 1000d >= LogicalSyncIntervalSeconds)
-            {
-                SyncLogicalOffset(viewer, state);
-                state.LastLogicalSyncTick = now;
             }
         }
 
@@ -209,7 +205,7 @@ public static class SmoothScroll
         }
 
         state.VisualOffset = viewer.VerticalOffset;
-        state.TargetOffset = state.VisualOffset;
+        state.Velocity = 0;
         ResetVisualOffset(viewer, state);
     }
 
@@ -423,17 +419,11 @@ public static class SmoothScroll
         /// <summary>当前视觉偏移（用户看到的位置）。</summary>
         public double VisualOffset { get; set; }
 
-        /// <summary>动画目标偏移。</summary>
-        public double TargetOffset { get; set; }
+        /// <summary>当前滚动速度（像素/秒），由滚轮冲量累积、按指数衰减。</summary>
+        public double Velocity { get; set; }
 
-        /// <summary>动画起点偏移。</summary>
-        public double StartOffset { get; set; }
-
-        /// <summary>动画起点 Environment.TickCount64。</summary>
-        public long StartTick { get; set; }
-
-        /// <summary>上次同步逻辑偏移的时间戳。</summary>
-        public long LastLogicalSyncTick { get; set; }
+        /// <summary>上一帧时间戳（Environment.TickCount64）。</summary>
+        public long LastTick { get; set; }
 
         /// <summary>正在同步逻辑偏移时置位，避免被 ScrollChanged 误判为外部滚动。</summary>
         public bool Syncing { get; set; }
