@@ -538,7 +538,11 @@ internal sealed class PetWindow : Window
     /// 按物理像素重新贴到当前显示器任务栏上沿（或屏幕底边）。
     /// 用于远控/DPI 变化后 WPF 逻辑坐标与物理像素不一致的场景。
     /// </summary>
-    public bool SnapToBottomEdgePhysical(double widthDip, double heightDip, bool keepAboveTaskbar)
+    public bool SnapToBottomEdgePhysical(
+        double widthDip,
+        double heightDip,
+        bool keepAboveTaskbar,
+        bool resizeWindow = true)
     {
         try
         {
@@ -548,6 +552,8 @@ internal sealed class PetWindow : Window
                 return false;
             }
 
+            var currentWidth = Math.Max(1, current.Right - current.Left);
+            var currentHeight = Math.Max(1, current.Bottom - current.Top);
             var scale = GetPhysicalDisplayScale();
             if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale))
             {
@@ -569,8 +575,14 @@ internal sealed class PetWindow : Window
                 return false;
             }
 
-            var targetWidth = Math.Max(1, (int)Math.Round(widthDip * scale));
-            var targetHeight = Math.Max(1, (int)Math.Round(heightDip * scale));
+            // 拖拽吸附只移动 Y，不重设尺寸；否则会把模型窗口物理尺寸放大，
+            // 表现为“拖一两下角色变大”，退出远控后也回不来。
+            var targetWidth = resizeWindow
+                ? Math.Max(1, (int)Math.Round(widthDip * scale))
+                : currentWidth;
+            var targetHeight = resizeWindow
+                ? Math.Max(1, (int)Math.Round(heightDip * scale))
+                : currentHeight;
             targetWidth = Math.Min(targetWidth, Math.Max(1, info.rcWork.Right - info.rcWork.Left));
             targetHeight = Math.Min(targetHeight, Math.Max(1, info.rcWork.Bottom - info.rcWork.Top));
 
@@ -604,8 +616,12 @@ internal sealed class PetWindow : Window
             // SetWindowPos 后同步 WPF 坐标，确保 PositionChanged 持久化的是新位置。
             Left = targetX / scale;
             Top = targetY / scale;
-            Width = widthDip;
-            Height = heightDip;
+            if (resizeWindow)
+            {
+                Width = widthDip;
+                Height = heightDip;
+            }
+
             return true;
         }
         catch (Exception)
@@ -658,7 +674,11 @@ internal sealed class PetWindow : Window
                 return false;
             }
 
-            return SnapToBottomEdgePhysical(widthDip, heightDip, keepAboveTaskbar);
+            return SnapToBottomEdgePhysical(
+                widthDip,
+                heightDip,
+                keepAboveTaskbar,
+                resizeWindow: false);
         }
         catch (Exception)
         {
