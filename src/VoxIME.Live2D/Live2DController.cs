@@ -1656,8 +1656,13 @@ public sealed class Live2DController : ILive2DController
             var config = GetConfig();
             // 只做下边吸附；向上拖动时不再把窗口往下拽，用户可以自由移到上半屏。
             var movingUp = previousTop.HasValue && e.Top < previousTop.Value - 0.5;
-            if (config.SnapToEdge && !movingUp && _window is not null
-                && _window.TrySnapToBottomEdge(config.KeepAboveTaskbar))
+            var snapped = config.SnapToEdge && !movingUp && _window is not null
+                && (_window.TrySnapToBottomEdge(config.KeepAboveTaskbar)
+                    || _window.TrySnapToBottomEdgePhysical(
+                        config.Width,
+                        config.Height,
+                        config.KeepAboveTaskbar));
+            if (snapped && _window is not null)
             {
                 _userLeft = _window.Left;
                 _userTop = _window.Top;

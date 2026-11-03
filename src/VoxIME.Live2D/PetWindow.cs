@@ -615,6 +615,58 @@ internal sealed class PetWindow : Window
     }
 
     /// <summary>
+    /// 拖拽时的物理像素吸附：只有窗口物理底边已经靠近当前显示器任务栏上沿
+    /// （阈值按当前 DPI 换算）才触发，避免每次拖拽都强制拉到底部。
+    /// </summary>
+    public bool TrySnapToBottomEdgePhysical(
+        double widthDip,
+        double heightDip,
+        bool keepAboveTaskbar,
+        double threshold = 100)
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var current))
+            {
+                return false;
+            }
+
+            var scale = GetPhysicalDisplayScale();
+            if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale))
+            {
+                return false;
+            }
+
+            var monitor = IsVisibleOnCurrentDesktop()
+                ? MonitorFromWindow(hwnd, MonitorDefaultToNearest)
+                : MonitorFromPoint(default, MonitorDefaultToPrimary);
+            if (monitor == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            if (!GetMonitorInfo(monitor, ref info))
+            {
+                return false;
+            }
+
+            var bottom = keepAboveTaskbar ? info.rcWork.Bottom : info.rcMonitor.Bottom;
+            if (Math.Abs(bottom - current.Bottom) > threshold * scale)
+            {
+                return false;
+            }
+
+            return SnapToBottomEdgePhysical(widthDip, heightDip, keepAboveTaskbar);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// 判断窗口是否在当前虚拟桌面上留下了足够可见区域。
     /// 用于显示器分辨率/布局变化后，把落到屏幕外的桌宠自动找回来。
     /// </summary>
