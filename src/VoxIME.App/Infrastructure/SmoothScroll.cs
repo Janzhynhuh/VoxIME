@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using VoxIME.Core.Services;
 
 namespace VoxIME.App.Infrastructure;
 
@@ -109,6 +110,13 @@ public static class SmoothScroll
         var state = GetState(viewer);
         var from = state.Animating ? state.Target : viewer.VerticalOffset;
         state.Target = Math.Clamp(from - e.Delta / 120d * PixelsPerNotch, 0, viewer.ScrollableHeight);
+        state.Direction = ScrollMotion.DirectionFor(viewer.VerticalOffset, state.Target);
+        if (state.Direction == 0)
+        {
+            // 目标与当前一致（例如已在顶部/底部继续滚）：不用启动动画。
+            state.Animating = false;
+            return;
+        }
 
         if (!state.Animating)
         {
@@ -137,18 +145,16 @@ public static class SmoothScroll
                 : 1d / 60d;
             state.LastTimestamp = now;
 
-            var current = viewer.VerticalOffset;
-            var distance = state.Target - current;
-            if (Math.Abs(distance) < 0.5)
-            {
-                viewer.ScrollToVerticalOffset(state.Target);
-                state.Animating = false;
-                state.LastTimestamp = null;
-                continue;
-            }
-
             var alpha = 1d - Math.Exp(-dt / TimeConstantSeconds);
-            viewer.ScrollToVerticalOffset(current + distance * alpha);
+            var step = ScrollMotion.Next(viewer.VerticalOffset, state.Target, state.Direction, alpha);
+            viewer.ScrollToVerticalOffset(step.Offset);
+
+            if (step.Completed)
+            {
+                state.Animating = false;
+                state.Direction = 0;
+                state.LastTimestamp = null;
+            }
         }
 
         if (!hasActive)
@@ -162,6 +168,7 @@ public static class SmoothScroll
         if (States.TryGetValue(viewer, out var state))
         {
             state.Animating = false;
+            state.Direction = 0;
             States.Remove(viewer);
         }
 
@@ -247,5 +254,8 @@ public static class SmoothScroll
         public double Target { get; set; }
 
         public double? LastTimestamp { get; set; }
+
+        /// <summary>期望移动方向：+1 向下、-1 向上、0 未定。</summary>
+        public int Direction { get; set; }
     }
 }
