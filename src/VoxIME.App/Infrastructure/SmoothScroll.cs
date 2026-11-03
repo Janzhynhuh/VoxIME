@@ -8,25 +8,19 @@ using VoxIME.Core.Services;
 namespace VoxIME.App.Infrastructure;
 
 /// <summary>
-/// 滚动惯性：把鼠标滚轮滚动改成与显示器刷新同步、按时间衰减的平滑滚动。
+/// 平滑滚动：PCL 风格的 300ms Fluent ease-out（1-(1-t)^6）步进。
 /// 用法：XAML 给 ScrollViewer 挂 <c>inf:SmoothScroll.IsEnabled="True"</c>；
 /// 挂在 ListBox 等容器上时会自动找到内部 ScrollViewer。只处理纵向滚动，
 /// ScrollBar 拖拽与文本框滚动保持系统原生行为。
-/// 窗口阴影已改为静态层（<see cref="WindowShadowLayer"/>），滚动不再触碰任何 Effect。
+///
+/// 与旧实现的区别：不再按"当前偏移 → 目标"做逐帧指数逼近，而是滚轮事件累积目标、
+/// 重锚起点与计时，然后按固定时长缓出。这样既没有反向补帧（不会回弹），
+/// 也接近 PCL 的动画手感；绘制帧率仍受 WPF 透明窗口软件渲染上限约束。
 /// </summary>
 public static class SmoothScroll
 {
     /// <summary>一格滚轮（120 单位）对应的目标滚动距离（像素）。</summary>
     private const double PixelsPerNotch = 100;
-
-    /// <summary>指数衰减的时间常数（秒）：越小越跟手，越大惯性越长。</summary>
-    private const double TimeConstantSeconds = 0.09;
-
-    /// <summary>
-    /// 动画最小更新间隔（秒）：高刷屏（144/240Hz）下限制到约 60–75fps，
-    /// 避免把 WPF 透明窗口的软件渲染逼到掉帧/卡顿。
-    /// </summary>
-    private const double MinFrameIntervalSeconds = 1d / 75d;
 
     private static readonly Dictionary<ScrollViewer, ScrollState> States = new();
     private static bool _renderingHooked;
@@ -114,28 +108,29 @@ public static class SmoothScroll
 
         e.Handled = true;
         var state = GetState(viewer);
-        var from = state.Animating ? state.Target : viewer.VerticalOffset;
-        state.Target = Math.Clamp(from - e.Delta / 120d * PixelsPerNotch, 0, viewer.ScrollableHeight);
-        state.Direction = ScrollMotion.DirectionFor(viewer.VerticalOffset, state.Target);
-        if (state.Direction == 0)
+        var current = viewer.VerticalOffset;
+        var delta = -e.Delta / 120d * PixelsPerNotch;
+
+        // 动画中继续滚轮：在已累积的目标上继续加，起点重锚到当前实际偏移与当前时间，
+        // 这样连续滚动会保持"每段 300ms 缓出"的跟手感（PCL 的动画组叠加思路）。
+        var from = state.Animating ? state.Target : current;
+        state.Target = Math.Clamp(from + delta, 0, viewer.ScrollableHeight);
+        state.StartOffset = current;
+        state.StartTick = Environment.TickCount64;
+
+        if (Math.Abs(state.Target - current) <= 0.01)
         {
-            // 目标与当前一致（例如已在顶部/底部继续滚）：不用启动动画。
             state.Animating = false;
             return;
         }
 
-        if (!state.Animating)
-        {
-            state.Animating = true;
-            state.LastTimestamp = null;
-            HookRendering();
-        }
+        state.Animating = true;
+        HookRendering();
     }
 
-    /// <summary>按显示器刷新节奏推进动画，使用时间增量做指数衰减（帧率无关，避免定时器抖动）。</summary>
+    /// <summary>按渲染帧推进：固定 300ms、Fluent ease-out，单调逼近目标，时间到直接落位。</summary>
     private static void OnRendering(object? sender, EventArgs e)
     {
-        var now = e is RenderingEventArgs args ? args.RenderingTime.TotalSeconds : 0;
         var hasActive = false;
 
         foreach (var (viewer, state) in States)
@@ -146,26 +141,13 @@ public static class SmoothScroll
             }
 
             hasActive = true;
-
-            // 高刷屏限帧：不到最小间隔就跳过本帧，动画进度按实际经过时间推进。
-            var elapsed = state.LastTimestamp is double last ? now - last : double.PositiveInfinity;
-            if (elapsed < MinFrameIntervalSeconds)
-            {
-                continue;
-            }
-
-            var dt = double.IsPositiveInfinity(elapsed) ? 1d / 60d : Math.Clamp(elapsed, 1d / 240d, 0.12d);
-            state.LastTimestamp = now;
-
-            var alpha = 1d - Math.Exp(-dt / TimeConstantSeconds);
-            var step = ScrollMotion.Next(viewer.VerticalOffset, state.Target, state.Direction, alpha);
+            var elapsed = (Environment.TickCount64 - state.StartTick) / 1000d;
+            var step = ScrollMotion.Next(state.StartOffset, state.Target, elapsed);
             viewer.ScrollToVerticalOffset(step.Offset);
 
             if (step.Completed)
             {
                 state.Animating = false;
-                state.Direction = 0;
-                state.LastTimestamp = null;
             }
         }
 
@@ -180,7 +162,6 @@ public static class SmoothScroll
         if (States.TryGetValue(viewer, out var state))
         {
             state.Animating = false;
-            state.Direction = 0;
             States.Remove(viewer);
         }
 
@@ -263,11 +244,13 @@ public static class SmoothScroll
     {
         public bool Animating { get; set; }
 
+        /// <summary>本轮动画的目标偏移。</summary>
         public double Target { get; set; }
 
-        public double? LastTimestamp { get; set; }
+        /// <summary>本轮动画的起点偏移。</summary>
+        public double StartOffset { get; set; }
 
-        /// <summary>期望移动方向：+1 向下、-1 向上、0 未定。</summary>
-        public int Direction { get; set; }
+        /// <summary>本轮动画起点的 Environment.TickCount64。</summary>
+        public long StartTick { get; set; }
     }
 }

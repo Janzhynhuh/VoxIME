@@ -2,59 +2,43 @@ namespace VoxIME.Core.Services;
 
 /// <summary>
 /// 平滑滚动的纯步进逻辑（无 UI 依赖，可离线单测）。
-/// UI 层每帧把当前偏移、目标偏移、期望方向与缓动系数传进来，得到下一帧偏移。
-///
-/// 关键规则（解决缓慢滚动时的"回弹"）：
-/// 1. 距离目标小于阈值 → 直接落位，不再补动画；
-/// 2. 实际偏移已经越过目标（WPF 滚动偏移会取整/夹取）或方向与期望相反 →
-///    直接落位，绝不反向补动画；
-/// 3. 正常插值不允许越过目标。
+/// 采用 PCL 风格的固定时长 + Fluent ease-out（参考其 AniEaseOutFluent(6) 手感）：
+/// 每个动画周期固定 300ms，进度按 1-(1-t)^6 缓出，起步快、收尾柔和；滚轮事件累积目标、
+/// 重锚起点，因此不会出现"追着当前偏移补帧"导致的回弹。
 /// </summary>
 public static class ScrollMotion
 {
-    /// <summary>距离目标小于该值时直接落位（像素）。</summary>
-    public const double SnapThreshold = 1.5;
+    /// <summary>单个动画周期时长（秒）。</summary>
+    public const double DurationSeconds = 0.3;
 
-    /// <summary>插值后距离目标小于该值时直接落到目标（像素）。</summary>
-    public const double TailSnapThreshold = 1.0;
+    /// <summary>Fluent ease-out 的幂次（与 PCL 的 AniEaseOutFluent(6) 一致）。</summary>
+    public const int EasePower = 6;
 
     /// <summary>一次步进的结果。</summary>
-    /// <param name="Completed">是否已结束本轮滚动（直接落位）。</param>
-    /// <param name="Offset">下一帧应滚动到的偏移。</param>
+    /// <param name="Completed">本轮动画是否已结束（应直接落到目标）。</param>
+    /// <param name="Offset">本帧应滚动到的偏移。</param>
     public readonly record struct Step(bool Completed, double Offset);
 
-    /// <summary>期望方向：目标在当前之上为 -1，之下为 +1，相等为 0。</summary>
-    public static int DirectionFor(double current, double target) => Math.Sign(target - current);
+    /// <summary>Fluent ease-out：0→0、1→1，起步快、尾段缓慢。</summary>
+    public static double EaseOutFluent(double progress)
+    {
+        var value = Math.Clamp(progress, 0d, 1d);
+        return 1d - Math.Pow(1d - value, EasePower);
+    }
 
     /// <summary>
-    /// 计算下一帧滚动偏移。
+    /// 根据「起点偏移、目标偏移、已播放时间」计算下一帧偏移。
+    /// 单调逼近目标、不会越过目标；时间到 300ms 后直接落位。
     /// </summary>
-    /// <param name="current">当前实际偏移。</param>
-    /// <param name="target">目标偏移。</param>
-    /// <param name="direction">期望方向（+1 向下 / -1 向上 / 0 未定）。</param>
-    /// <param name="alpha">本帧缓动比例 0..1（由时间增量算出）。</param>
-    public static Step Next(double current, double target, int direction, double alpha)
+    public static Step Next(double startOffset, double target, double elapsedSeconds)
     {
-        var distance = target - current;
-
-        // 到位/越界/方向不符：直接落位，避免反向动画（回弹）。
-        if (direction == 0
-            || Math.Sign(distance) != direction
-            || Math.Abs(distance) <= SnapThreshold)
+        if (elapsedSeconds >= DurationSeconds)
         {
             return new Step(true, target);
         }
 
-        var ratio = Math.Clamp(alpha, 0d, 1d);
-        var next = current + distance * ratio;
-        var remaining = target - next;
-
-        // 不允许越过目标：剩余距离方向反转或已经很小时直接落到目标。
-        if (Math.Abs(remaining) <= TailSnapThreshold || Math.Sign(remaining) != Math.Sign(distance))
-        {
-            return new Step(true, target);
-        }
-
-        return new Step(false, next);
+        var progress = elapsedSeconds <= 0 ? 0 : elapsedSeconds / DurationSeconds;
+        var eased = EaseOutFluent(progress);
+        return new Step(false, startOffset + (target - startOffset) * eased);
     }
 }

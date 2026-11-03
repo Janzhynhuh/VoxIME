@@ -5,92 +5,88 @@ namespace VoxIME.Core.Tests.Services;
 public sealed class ScrollMotionTests
 {
     [Fact]
-    public void DirectionFor_UsesOffsetDeltaSign()
+    public void EaseOutFluent_HasExpectedEndpointsAndIsMonotonic()
     {
-        Assert.Equal(1, ScrollMotion.DirectionFor(10, 110));
-        Assert.Equal(-1, ScrollMotion.DirectionFor(110, 10));
-        Assert.Equal(0, ScrollMotion.DirectionFor(42, 42));
-    }
+        Assert.Equal(0, ScrollMotion.EaseOutFluent(0));
+        Assert.Equal(1, ScrollMotion.EaseOutFluent(1), 10);
 
-    [Fact]
-    public void Next_DoesNotCrossTarget_AndStopsAtTarget()
-    {
-        var current = 0d;
-        var target = 300d;
-        var completed = false;
-        var iterations = 0;
-
-        while (!completed && iterations++ < 1000)
+        var previous = 0d;
+        for (var i = 0; i <= 20; i++)
         {
-            var step = ScrollMotion.Next(current, target, 1, 0.5);
-            Assert.InRange(step.Offset, current, target);
-            Assert.True(step.Offset >= current, "向下滚动不应反向移动");
-            current = step.Offset;
-            completed = step.Completed;
+            var value = ScrollMotion.EaseOutFluent(i / 20d);
+            Assert.InRange(value, previous, 1d);
+            previous = value;
         }
-
-        Assert.True(completed);
-        Assert.Equal(target, current);
     }
 
     [Fact]
-    public void Next_UpwardScroll_IsMonotonicAndNeverNegative()
+    public void EaseOutFluent_StartsFastAndEndsSoft()
     {
-        var current = 300d;
-        var target = 0d;
-        var completed = false;
-        var iterations = 0;
+        // 起步阶段速度应明显高于尾段（Fluent 手感）。
+        var first = ScrollMotion.EaseOutFluent(0.2) - ScrollMotion.EaseOutFluent(0.1);
+        var last = ScrollMotion.EaseOutFluent(0.9) - ScrollMotion.EaseOutFluent(0.8);
+        Assert.True(first > last * 3, $"起步速度应远高于收尾：{first:0.###} vs {last:0.###}");
+    }
 
-        while (!completed && iterations++ < 1000)
+    [Fact]
+    public void Next_StartsAtStartOffset()
+    {
+        var step = ScrollMotion.Next(startOffset: 120, target: 400, elapsedSeconds: 0);
+
+        Assert.False(step.Completed);
+        Assert.Equal(120, step.Offset, 6);
+    }
+
+    [Fact]
+    public void Next_CompletesAtTargetAfterDuration()
+    {
+        var step = ScrollMotion.Next(startOffset: 120, target: 400, elapsedSeconds: ScrollMotion.DurationSeconds);
+
+        Assert.True(step.Completed);
+        Assert.Equal(400, step.Offset);
+    }
+
+    [Fact]
+    public void Next_IsMonotonicAndNeverOvershoots_Downward()
+    {
+        var previous = 120d;
+        for (var i = 1; i < 100; i++)
         {
-            var step = ScrollMotion.Next(current, target, -1, 0.4);
-            Assert.InRange(step.Offset, target, current);
-            current = step.Offset;
-            completed = step.Completed;
+            var elapsed = ScrollMotion.DurationSeconds * i / 100d;
+            var step = ScrollMotion.Next(120, 400, elapsed);
+            Assert.InRange(step.Offset, previous, 400d);
+            previous = step.Offset;
         }
-
-        Assert.True(completed);
-        Assert.Equal(target, current);
     }
 
     [Fact]
-    public void Next_WhenOvershot_CompletesInsteadOfAnimatingBackwards()
+    public void Next_IsMonotonicAndNeverOvershoots_Upward()
     {
-        // 实际偏移已经越过目标（例如 WPF 取整/夹取造成的轻微越界），期望方向仍向下：
-        // 应直接落位结束，而不是继续往反方向做动画。
-        var step = ScrollMotion.Next(current: 101, target: 100, direction: 1, alpha: 0.5);
-
-        Assert.True(step.Completed);
-        Assert.Equal(100, step.Offset);
+        var previous = 400d;
+        for (var i = 1; i < 100; i++)
+        {
+            var elapsed = ScrollMotion.DurationSeconds * i / 100d;
+            var step = ScrollMotion.Next(400, 120, elapsed);
+            Assert.InRange(step.Offset, 120d, previous);
+            previous = step.Offset;
+        }
     }
 
     [Fact]
-    public void Next_NearTargetJustSnaps()
+    public void Next_AlreadyAtTarget_StaysThere()
     {
-        var step = ScrollMotion.Next(current: 99.2, target: 100, direction: 1, alpha: 0.25);
+        var step = ScrollMotion.Next(startOffset: 200, target: 200, elapsedSeconds: 0.1);
 
-        Assert.True(step.Completed);
-        Assert.Equal(100, step.Offset);
+        Assert.False(step.Completed);
+        Assert.Equal(200, step.Offset, 6);
     }
 
     [Fact]
-    public void Next_UnknownDirectionCompletes()
+    public void Next_NegativeElapsedTreatedAsZero()
     {
-        var step = ScrollMotion.Next(current: 10, target: 200, direction: 0, alpha: 0.5);
+        var step = ScrollMotion.Next(startOffset: 50, target: 300, elapsedSeconds: -1);
 
-        Assert.True(step.Completed);
-        Assert.Equal(200, step.Offset);
-    }
-
-    [Fact]
-    public void Next_AlphaIsClamped()
-    {
-        var tiny = ScrollMotion.Next(current: 0, target: 100, direction: 1, alpha: -5);
-        Assert.False(tiny.Completed);
-        Assert.Equal(0, tiny.Offset, 6);
-
-        var huge = ScrollMotion.Next(current: 0, target: 100, direction: 1, alpha: 5);
-        Assert.True(huge.Completed);
-        Assert.Equal(100, huge.Offset);
+        Assert.False(step.Completed);
+        Assert.Equal(50, step.Offset, 6);
     }
 }
