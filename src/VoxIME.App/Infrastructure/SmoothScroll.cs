@@ -14,8 +14,8 @@ namespace VoxIME.App.Infrastructure;
 ///   内容不会滑出滚动区域；
 /// - 逻辑层：动画结束后调用 <c>ScrollToVerticalOffset</c> 并强制 UpdateLayout 同步真实偏移，
 ///   滚动过程中完全不触发布局（滚动条在停止后跟上）。
-/// 运动模型来自 <see cref="ScrollMotion"/>：滚轮冲量 + 指数衰减惯性，连续滚动时速度叠加，
-/// 不会每个滚轮重新起步，因此没有逐格顿挫。
+/// 运动模型来自 <see cref="ScrollMotion"/>：滚轮累加目标偏移，视觉偏移按指数曲线连续跟随目标，
+/// 消除"每格重新起步再停下"的脉冲感。
 /// </summary>
 public static class SmoothScroll
 {
@@ -57,15 +57,12 @@ public static class SmoothScroll
         var now = Environment.TickCount64;
         if (!state.Animating)
         {
-            // 从当前真实位置起滚；连续滚轮时速度叠加，不会每格重新起步。
+            // 从当前真实位置起滚；连续滚轮时目标持续领先，视觉偏移连续跟随。
             state.VisualOffset = viewer.VerticalOffset;
-            state.Velocity = 0;
+            state.TargetOffset = state.VisualOffset;
         }
 
-        state.Velocity = Math.Clamp(
-            state.Velocity + ScrollMotion.VelocityForDelta(deltaPixels),
-            -ScrollMotion.MaxVelocity,
-            ScrollMotion.MaxVelocity);
+        state.TargetOffset = Math.Clamp(state.TargetOffset + deltaPixels, 0, viewer.ScrollableHeight);
         state.LastTick = now;
         state.Animating = true;
         HookRendering();
@@ -168,10 +165,8 @@ public static class SmoothScroll
             hasActive = true;
             var elapsed = (now - state.LastTick) / 1000d;
             state.LastTick = now;
-            var step = ScrollMotion.Next(
-                state.VisualOffset, state.Velocity, elapsed, 0, viewer.ScrollableHeight);
+            var step = ScrollMotion.Next(state.VisualOffset, state.TargetOffset, elapsed);
             state.VisualOffset = step.Offset;
-            state.Velocity = step.Velocity;
             ApplyVisualDelta(viewer, state);
 
             if (step.Completed)
@@ -205,7 +200,7 @@ public static class SmoothScroll
         }
 
         state.VisualOffset = viewer.VerticalOffset;
-        state.Velocity = 0;
+        state.TargetOffset = state.VisualOffset;
         ResetVisualOffset(viewer, state);
     }
 
@@ -419,8 +414,8 @@ public static class SmoothScroll
         /// <summary>当前视觉偏移（用户看到的位置）。</summary>
         public double VisualOffset { get; set; }
 
-        /// <summary>当前滚动速度（像素/秒），由滚轮冲量累积、按指数衰减。</summary>
-        public double Velocity { get; set; }
+        /// <summary>滚轮累加出来的目标偏移；视觉偏移连续跟随它。</summary>
+        public double TargetOffset { get; set; }
 
         /// <summary>上一帧时间戳（Environment.TickCount64）。</summary>
         public long LastTick { get; set; }
