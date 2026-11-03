@@ -88,6 +88,7 @@ public sealed class Live2DController : ILive2DController
     private double? _userTop;
     private bool _systemParametersSubscribed;
     private bool _diagnosticSystemEventsSubscribed;
+    private bool _physicalSnapRetryPending;
 
     public Live2DController(IAppLogger logger)
     {
@@ -339,6 +340,7 @@ public sealed class Live2DController : ILive2DController
                 $"[Live2D] 显示器/DPI 变化，按物理像素重新吸附到底部：" +
                 $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
             PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
+            SchedulePhysicalSnapRetry();
             return;
         }
 
@@ -349,6 +351,58 @@ public sealed class Live2DController : ILive2DController
 
         _logger.Info("[Live2D] 显示器布局变化，桌宠窗口已不在可见区域，自动回位。");
         ResetWindowToVisiblePosition(config);
+    }
+
+    /// <summary>
+    /// DPI 刚切换时 GetDpiForWindow 可能还是旧值；第一次物理吸附会按旧缩放算。
+    /// 延迟到 WPF 完成 DPI 更新后，再按最终缩放补一次。
+    /// </summary>
+    private void SchedulePhysicalSnapRetry()
+    {
+        if (_physicalSnapRetryPending)
+        {
+            return;
+        }
+
+        _physicalSnapRetryPending = true;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(350).ConfigureAwait(false);
+                RunOnUiThread(() =>
+                {
+                    _physicalSnapRetryPending = false;
+                    if (_disposed || _window is null)
+                    {
+                        return;
+                    }
+
+                    var config = GetConfig();
+                    if (!config.SnapToEdge
+                        || !_window.SnapToBottomEdgePhysical(
+                            config.Width,
+                            config.Height,
+                            config.KeepAboveTaskbar))
+                    {
+                        return;
+                    }
+
+                    _userLeft = _window.Left;
+                    _userTop = _window.Top;
+                    _logger.Info(
+                        $"[Live2D] DPI 稳定后再次吸附到底部：" +
+                        $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
+                    PositionChanged?.Invoke(
+                        this,
+                        new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
+                }, "RetryPhysicalSnap");
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug($"[Live2D] 延迟物理吸附失败：{ex.Message}");
+            }
+        });
     }
 
     /// <summary>把窗口移到当前屏的可见位置，并通知上层持久化新坐标。</summary>
