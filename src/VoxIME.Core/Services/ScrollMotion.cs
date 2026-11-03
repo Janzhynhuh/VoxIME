@@ -9,7 +9,7 @@ namespace VoxIME.Core.Services;
 public static class ScrollMotion
 {
     /// <summary>平滑时间常数（秒）：越小越跟手，越大越顺滑。</summary>
-    public const double SmoothingTimeConstantSeconds = 0.02;
+    public const double SmoothingTimeConstantSeconds = 0.05;
 
     /// <summary>距目标小于该值时直接落位（像素）。</summary>
     public const double SnapThreshold = 0.75;

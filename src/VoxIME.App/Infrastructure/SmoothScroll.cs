@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -21,6 +22,9 @@ public static class SmoothScroll
     private static readonly Dictionary<ScrollViewer, ScrollState> States = new();
     private static bool _renderingHooked;
 
+    /// <summary>Stopwatch 时间戳换算成秒的系数（高精度计时，避免 Environment.TickCount64 的 15.6ms 粒度）。</summary>
+    private static readonly double TimestampToSeconds = 1d / Stopwatch.Frequency;
+
     public static readonly DependencyProperty IsEnabledProperty = DependencyProperty.RegisterAttached(
         "IsEnabled", typeof(bool), typeof(SmoothScroll), new PropertyMetadata(false, OnIsEnabledChanged));
 
@@ -38,7 +42,7 @@ public static class SmoothScroll
         }
 
         var state = GetState(viewer);
-        var now = Environment.TickCount64;
+        var now = Stopwatch.GetTimestamp();
         if (!state.Animating)
         {
             // 从当前真实偏移起滚；连续滚轮时目标持续领先，视觉偏移连续跟随。
@@ -47,7 +51,7 @@ public static class SmoothScroll
         }
 
         state.Target = Math.Clamp(state.Target + deltaPixels, 0, viewer.ScrollableHeight);
-        state.LastTick = now;
+        state.LastTimestamp = now;
         state.Animating = true;
         HookRendering();
     }
@@ -137,7 +141,7 @@ public static class SmoothScroll
     private static void OnRendering(object? sender, EventArgs e)
     {
         var hasActive = false;
-        var now = Environment.TickCount64;
+        var now = Stopwatch.GetTimestamp();
 
         foreach (var (viewer, state) in States)
         {
@@ -147,8 +151,8 @@ public static class SmoothScroll
             }
 
             hasActive = true;
-            var elapsed = (now - state.LastTick) / 1000d;
-            state.LastTick = now;
+            var elapsed = (now - state.LastTimestamp) * TimestampToSeconds;
+            state.LastTimestamp = now;
             var step = ScrollMotion.Next(state.Offset, state.Target, elapsed);
             state.Offset = step.Offset;
             viewer.ScrollToVerticalOffset(state.Offset);
@@ -270,6 +274,6 @@ public static class SmoothScroll
         /// <summary>滚轮累加出来的目标偏移。</summary>
         public double Target { get; set; }
 
-        public long LastTick { get; set; }
+        public long LastTimestamp { get; set; }
     }
 }
