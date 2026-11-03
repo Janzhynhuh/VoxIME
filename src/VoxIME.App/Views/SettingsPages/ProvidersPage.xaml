@@ -112,7 +112,7 @@
         <!-- ===== 右：编辑表单 ===== -->
         <ScrollViewer inf:SmoothScroll.IsEnabled="True" Grid.Column="2" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
-            <StackPanel>
+            <StackPanel Margin="0,0,0,20">
                 <!-- 未选择 -->
                 <Border Style="{StaticResource Card}"
                         Visibility="{Binding HasSelectedProvider, Converter={StaticResource BoolToVis}, ConverterParameter=invert}">

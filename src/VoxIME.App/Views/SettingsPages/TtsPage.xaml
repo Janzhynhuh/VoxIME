@@ -5,7 +5,7 @@
 
     <ScrollViewer inf:SmoothScroll.IsEnabled="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                   Padding="0,0,8,0">
-        <StackPanel>
+        <StackPanel Margin="0,0,0,20">
 
             <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>
