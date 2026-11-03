@@ -321,15 +321,32 @@ public sealed class Live2DController : ILive2DController
         }
 
         var visible = _window.IsVisibleOnCurrentDesktop();
+        var needsRepair = _window.NeedsDisplayGeometryRepair();
         _logger.Info(
             $"[Live2D][诊断] 显示变化({source}) visibleOnVirtualDesktop={visible} " +
-            _window.GetDisplayDiagnostics());
+            $"needsGeometryRepair={needsRepair} " + _window.GetDisplayDiagnostics());
+
+        var config = GetConfig();
+        if (config.SnapToEdge && (needsRepair || !visible)
+            && _window.SnapToBottomEdgePhysical(
+                config.Width,
+                config.Height,
+                config.KeepAboveTaskbar))
+        {
+            _userLeft = _window.Left;
+            _userTop = _window.Top;
+            _logger.Info(
+                $"[Live2D] 显示器/DPI 变化，按物理像素重新吸附到底部：" +
+                $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
+            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
+            return;
+        }
+
         if (visible)
         {
             return;
         }
 
-        var config = GetConfig();
         _logger.Info("[Live2D] 显示器布局变化，桌宠窗口已不在可见区域，自动回位。");
         ResetWindowToVisiblePosition(config);
     }

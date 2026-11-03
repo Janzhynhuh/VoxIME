@@ -19,6 +19,13 @@ internal sealed class PetWindow : Window
     private const int HtTransparent = -1;
     private const double AutoPositionMarginRight = 28;
     private const uint MonitorDefaultToNearest = 2;
+    private const uint MonitorDefaultToPrimary = 1;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+    private const int SmXVirtualScreen = 76;
+    private const int SmYVirtualScreen = 77;
+    private const int SmCxVirtualScreen = 78;
+    private const int SmCyVirtualScreen = 79;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
@@ -59,6 +66,12 @@ internal sealed class PetWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     private readonly Grid _contentHost;
     private readonly FallbackAvatar _avatar;
@@ -477,26 +490,181 @@ internal sealed class PetWindow : Window
         }
     }
 
+    private double GetPhysicalDisplayScale()
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero && ActualWidth > 1 && GetWindowRect(hwnd, out var rect))
+            {
+                var physicalWidth = rect.Right - rect.Left;
+                if (physicalWidth > 0)
+                {
+                    var scale = physicalWidth / ActualWidth;
+                    if (scale is > 0.5 and < 4.0)
+                    {
+                        return scale;
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // 回退到 DPI API。
+        }
+
+        return GetWindowScale();
+    }
+
+    /// <summary>
+    /// 远控/DPI 切换后，WPF 可能保留旧物理尺寸（ActualWidth 与 Width 不一致）。
+    /// 这种情况下必须按物理像素重新施加几何，否则吸附会按错误的 DIP 计算。
+    /// </summary>
+    public bool NeedsDisplayGeometryRepair()
+    {
+        try
+        {
+            return ActualWidth > 1 && ActualHeight > 1
+                   && (Math.Abs(ActualWidth - Width) > 0.75
+                       || Math.Abs(ActualHeight - Height) > 0.75);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 按物理像素重新贴到当前显示器任务栏上沿（或屏幕底边）。
+    /// 用于远控/DPI 变化后 WPF 逻辑坐标与物理像素不一致的场景。
+    /// </summary>
+    public bool SnapToBottomEdgePhysical(double widthDip, double heightDip, bool keepAboveTaskbar)
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var current))
+            {
+                return false;
+            }
+
+            var scale = GetPhysicalDisplayScale();
+            if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale))
+            {
+                return false;
+            }
+
+            var visible = IsVisibleOnCurrentDesktop();
+            var monitor = visible
+                ? MonitorFromWindow(hwnd, MonitorDefaultToNearest)
+                : MonitorFromPoint(default, MonitorDefaultToPrimary);
+            if (monitor == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            if (!GetMonitorInfo(monitor, ref info))
+            {
+                return false;
+            }
+
+            var targetWidth = Math.Max(1, (int)Math.Round(widthDip * scale));
+            var targetHeight = Math.Max(1, (int)Math.Round(heightDip * scale));
+            targetWidth = Math.Min(targetWidth, Math.Max(1, info.rcWork.Right - info.rcWork.Left));
+            targetHeight = Math.Min(targetHeight, Math.Max(1, info.rcWork.Bottom - info.rcWork.Top));
+
+            var targetX = visible
+                ? current.Left
+                : info.rcWork.Right - targetWidth - (int)Math.Round(AutoPositionMarginRight * scale);
+            targetX = Math.Clamp(
+                targetX,
+                info.rcWork.Left,
+                Math.Max(info.rcWork.Left, info.rcWork.Right - targetWidth));
+
+            var bottom = keepAboveTaskbar ? info.rcWork.Bottom : info.rcMonitor.Bottom;
+            var targetY = bottom - targetHeight;
+            targetY = Math.Clamp(
+                targetY,
+                info.rcWork.Top,
+                Math.Max(info.rcWork.Top, bottom - targetHeight));
+
+            if (!SetWindowPos(
+                    hwnd,
+                    IntPtr.Zero,
+                    targetX,
+                    targetY,
+                    targetWidth,
+                    targetHeight,
+                    SwpNoZOrder | SwpNoActivate))
+            {
+                return false;
+            }
+
+            // SetWindowPos 后同步 WPF 坐标，确保 PositionChanged 持久化的是新位置。
+            Left = targetX / scale;
+            Top = targetY / scale;
+            Width = widthDip;
+            Height = heightDip;
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// 判断窗口是否在当前虚拟桌面上留下了足够可见区域。
     /// 用于显示器分辨率/布局变化后，把落到屏幕外的桌宠自动找回来。
     /// </summary>
     public bool IsVisibleOnCurrentDesktop(double minVisibleSize = 120)
     {
+        // 远程桌面/DPI 切换时 WPF 的 Left/Top/Width 与物理窗口可能不一致；
+        // 可见性以 Win32 物理矩形和系统虚拟屏为准。
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out var physical))
+            {
+                var scale = GetPhysicalDisplayScale();
+                if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale))
+                {
+                    scale = 1.0;
+                }
+
+                var virtualLeft = GetSystemMetrics(SmXVirtualScreen);
+                var virtualTop = GetSystemMetrics(SmYVirtualScreen);
+                var virtualRight = virtualLeft + GetSystemMetrics(SmCxVirtualScreen);
+                var virtualBottom = virtualTop + GetSystemMetrics(SmCyVirtualScreen);
+                var visibleWidth = Math.Min(physical.Right, virtualRight) - Math.Max(physical.Left, virtualLeft);
+                var visibleHeight = Math.Min(physical.Bottom, virtualBottom) - Math.Max(physical.Top, virtualTop);
+                var threshold = minVisibleSize * scale;
+                var physicalWidth = physical.Right - physical.Left;
+                var physicalHeight = physical.Bottom - physical.Top;
+                return visibleWidth >= Math.Min(physicalWidth, threshold)
+                       && visibleHeight >= Math.Min(physicalHeight, threshold);
+            }
+        }
+        catch (Exception)
+        {
+            // 回退到 WPF 逻辑坐标。
+        }
+
         if (!IsFinite(Left) || !IsFinite(Top) || !IsFinite(Width) || !IsFinite(Height))
         {
             return false;
         }
 
-        var virtualLeft = SystemParameters.VirtualScreenLeft;
-        var virtualTop = SystemParameters.VirtualScreenTop;
-        var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
-        var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+        var logicalVirtualLeft = SystemParameters.VirtualScreenLeft;
+        var logicalVirtualTop = SystemParameters.VirtualScreenTop;
+        var logicalVirtualRight = logicalVirtualLeft + SystemParameters.VirtualScreenWidth;
+        var logicalVirtualBottom = logicalVirtualTop + SystemParameters.VirtualScreenHeight;
 
-        var visibleWidth = Math.Min(Left + Width, virtualRight) - Math.Max(Left, virtualLeft);
-        var visibleHeight = Math.Min(Top + Height, virtualBottom) - Math.Max(Top, virtualTop);
-        return visibleWidth >= Math.Min(Width, minVisibleSize)
-               && visibleHeight >= Math.Min(Height, minVisibleSize);
+        var logicalVisibleWidth = Math.Min(Left + Width, logicalVirtualRight) - Math.Max(Left, logicalVirtualLeft);
+        var logicalVisibleHeight = Math.Min(Top + Height, logicalVirtualBottom) - Math.Max(Top, logicalVirtualTop);
+        return logicalVisibleWidth >= Math.Min(Width, minVisibleSize)
+               && logicalVisibleHeight >= Math.Min(Height, minVisibleSize);
     }
 
     /// <summary>把窗口限制在虚拟桌面范围内（避免拖到屏幕外再也找不回来）。</summary>
