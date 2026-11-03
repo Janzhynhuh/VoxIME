@@ -22,6 +22,12 @@ public static class SmoothScroll
     /// <summary>指数衰减的时间常数（秒）：越小越跟手，越大惯性越长。</summary>
     private const double TimeConstantSeconds = 0.09;
 
+    /// <summary>
+    /// 动画最小更新间隔（秒）：高刷屏（144/240Hz）下限制到约 60–75fps，
+    /// 避免把 WPF 透明窗口的软件渲染逼到掉帧/卡顿。
+    /// </summary>
+    private const double MinFrameIntervalSeconds = 1d / 75d;
+
     private static readonly Dictionary<ScrollViewer, ScrollState> States = new();
     private static bool _renderingHooked;
 
@@ -140,9 +146,15 @@ public static class SmoothScroll
             }
 
             hasActive = true;
-            var dt = state.LastTimestamp is double last
-                ? Math.Clamp(now - last, 1d / 240d, 0.12d)
-                : 1d / 60d;
+
+            // 高刷屏限帧：不到最小间隔就跳过本帧，动画进度按实际经过时间推进。
+            var elapsed = state.LastTimestamp is double last ? now - last : double.PositiveInfinity;
+            if (elapsed < MinFrameIntervalSeconds)
+            {
+                continue;
+            }
+
+            var dt = double.IsPositiveInfinity(elapsed) ? 1d / 60d : Math.Clamp(elapsed, 1d / 240d, 0.12d);
             state.LastTimestamp = now;
 
             var alpha = 1d - Math.Exp(-dt / TimeConstantSeconds);

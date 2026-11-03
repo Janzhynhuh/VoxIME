@@ -7,8 +7,8 @@ namespace VoxIME.App.Infrastructure;
 
 /// <summary>
 /// 静态窗口阴影层：替换窗口根容器的 <see cref="DropShadowEffect"/>。
-/// 首次显示时按窗口尺寸把阴影渲染成位图并缓存（只渲染一次），之后滚动/动画/内容变化
-/// 都不会重新计算阴影——避开透明（layered）窗口下 Effect 逐帧重算导致的掉帧和闪烁。
+/// 首次显示时按窗口尺寸把阴影渲染成位图并缓存（只渲染一次）；绘制时只画四周的
+/// 8 个条形/角区域、跳过中间的透明区域，减少透明（layered）窗口软件渲染的每帧开销。
 /// </summary>
 public sealed class WindowShadowLayer : FrameworkElement
 {
@@ -27,7 +27,7 @@ public sealed class WindowShadowLayer : FrameworkElement
         nameof(CornerRadius), typeof(double), typeof(WindowShadowLayer),
         new FrameworkPropertyMetadata(16d, FrameworkPropertyMetadataOptions.AffectsRender));
 
-    private static readonly Dictionary<(int Width, int Height, double Inset, double Radius), BitmapSource> Cache = new();
+    private static readonly Dictionary<(int Width, int Height, double Inset, double Radius), ShadowLayout> Cache = new();
 
     public double Inset
     {
@@ -55,13 +55,68 @@ public sealed class WindowShadowLayer : FrameworkElement
         var inset = Math.Max(0, Inset);
         var radius = Math.Max(0, CornerRadius);
         var key = (width, height, Math.Round(inset, 1), Math.Round(radius, 1));
-        if (!Cache.TryGetValue(key, out var shadow))
+        if (!Cache.TryGetValue(key, out var layout))
         {
-            shadow = CreateShadowBitmap(width, height, inset, radius);
-            Cache[key] = shadow;
+            layout = CreateLayout(width, height, inset, radius);
+            Cache[key] = layout;
         }
 
-        drawingContext.DrawImage(shadow, new Rect(0, 0, ActualWidth, ActualHeight));
+        if (layout.Parts is null)
+        {
+            drawingContext.DrawImage(layout.Bitmap!, new Rect(0, 0, ActualWidth, ActualHeight));
+            return;
+        }
+
+        foreach (var part in layout.Parts)
+        {
+            drawingContext.DrawImage(part.Image, part.Destination);
+        }
+    }
+
+    private static ShadowLayout CreateLayout(int width, int height, double inset, double radius)
+    {
+        var shadow = CreateShadowBitmap(width, height, inset, radius);
+        var edge = (int)Math.Ceiling(Math.Min(
+            Math.Min(inset + BlurRadius + ShadowDepth + 6, width / 2.0),
+            height / 2.0));
+
+        if (edge < 8)
+        {
+            return new ShadowLayout(shadow, null);
+        }
+
+        var parts = new List<ShadowPart>(8);
+        AddShadowPart(parts, shadow, 0, 0, edge, edge, 0, 0);
+        AddShadowPart(parts, shadow, width - edge, 0, edge, edge, width - edge, 0);
+        AddShadowPart(parts, shadow, 0, height - edge, edge, edge, 0, height - edge);
+        AddShadowPart(parts, shadow, width - edge, height - edge, edge, edge, width - edge, height - edge);
+
+        AddShadowPart(parts, shadow, edge, 0, width - edge * 2, edge, edge, 0);
+        AddShadowPart(parts, shadow, edge, height - edge, width - edge * 2, edge, edge, height - edge);
+        AddShadowPart(parts, shadow, 0, edge, edge, height - edge * 2, 0, edge);
+        AddShadowPart(parts, shadow, width - edge, edge, edge, height - edge * 2, width - edge, edge);
+
+        return new ShadowLayout(shadow, parts);
+    }
+
+    private static void AddShadowPart(
+        List<ShadowPart> parts,
+        BitmapSource source,
+        int sourceX,
+        int sourceY,
+        int sourceWidth,
+        int sourceHeight,
+        int destinationX,
+        int destinationY)
+    {
+        if (sourceWidth <= 0 || sourceHeight <= 0)
+        {
+            return;
+        }
+
+        var cropped = new CroppedBitmap(source, new Int32Rect(sourceX, sourceY, sourceWidth, sourceHeight));
+        cropped.Freeze();
+        parts.Add(new ShadowPart(cropped, new Rect(destinationX, destinationY, sourceWidth, sourceHeight)));
     }
 
     /// <summary>
@@ -157,4 +212,8 @@ public sealed class WindowShadowLayer : FrameworkElement
 
         return true;
     }
+
+    private sealed record ShadowLayout(BitmapSource? Bitmap, List<ShadowPart>? Parts);
+
+    private readonly record struct ShadowPart(BitmapSource Image, Rect Destination);
 }

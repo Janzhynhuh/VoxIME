@@ -208,8 +208,8 @@ sequenceDiagram
 - **玻璃质感**：自定义背景时，`ThemeManager` 按 `surfaceOpacity` 把 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷改为半透明，让背景透出来；消息框使用不透明的 `DialogCardBrush`，不参与玻璃化。
 - **动效**：`UiConfig.Motion` 三档（明显 / 克制 / 关闭）。`Infrastructure.Motion` 统一时长/位移/缓动（明显档 160–280ms、上浮 16–18px、缩放 0.92–0.97；克制档时长 ×0.62、幅度 ×0.5；关闭档瞬时完成），提供窗口入场/退场、设置页滑入、对话框回弹、卡片抬起、按钮按压等 helper。窗口在 `IsVisibleChanged` 播放入场、关闭/隐藏时先播退场再真正关闭（退出流程 `AllowClose=true` 直接关闭，不延迟退出）；设置页切换由 `SettingsWindow` 监听 `CurrentPage` 播放滑入。
 - **明暗匹配**：文字颜色完全由主题的浅色/深色决定（浅色主题=深色字 + 浅色玻璃卡片，深色主题反之）。外观页提供「按背景亮度匹配主题」：`BackgroundTone` 估算纯色/渐变/图片背景的平均亮度（图片按 32px 采样），自动切换到匹配的明暗主题。
-- **静态窗口阴影**：4 个设置类窗口不再在根容器挂 `DropShadowEffect`，改用 `Infrastructure.WindowShadowLayer`：首次显示时按窗口尺寸把圆角矩形阴影渲染成位图并缓存（实测 980×700 首次约几十毫秒、之后走缓存），把源形状像素挖掉只留外圈阴影；之后滚动/动画/内容变化都不会重新计算阴影，透明窗口的软件渲染不再被整窗模糊拖慢。消息框体量小，仍保留小范围 `WindowShadow` Effect。
-- **滚动惯性**：`Infrastructure.SmoothScroll` 挂到页面根 `ScrollViewer`，与 `CompositionTarget.Rendering` 同步、按时间增量指数衰减（约 100px/格、时间常数 90ms，帧率无关）；滚动不再触碰任何窗口特效（阴影已是静态层），文本框与拖动滚动条保持原生行为。步进逻辑抽到 `VoxIME.Core.Services.ScrollMotion`（纯函数、离线单测）：到位/方向不符/越过目标时直接落位，绝不反向补动画，修复缓慢滚动时的轻微回弹。
+- **静态窗口阴影**：4 个设置类窗口不再在根容器挂 `DropShadowEffect`，改用 `Infrastructure.WindowShadowLayer`：首次显示时按窗口尺寸把圆角矩形阴影渲染成位图并缓存（实测 980×700 首次约几十毫秒、之后走缓存），把源形状像素挖掉只留外圈阴影；之后滚动/动画/内容变化都不会重新计算阴影，绘制时还只画四周 8 个区域、跳过中间的透明区域，进一步降低透明窗口的软件渲染开销。消息框体量小，仍保留小范围 `WindowShadow` Effect。
+- **滚动惯性**：`Infrastructure.SmoothScroll` 挂到页面根 `ScrollViewer`，与 `CompositionTarget.Rendering` 同步、按时间增量指数衰减（约 100px/格、时间常数 90ms，帧率无关）；滚动不再触碰任何窗口特效（阴影已是静态层），文本框与拖动滚动条保持原生行为。滚动动画在高刷屏（144/240Hz）下限制到约 60–75fps，避免把软件渲染逼到掉帧；步进逻辑抽到 `VoxIME.Core.Services.ScrollMotion`（纯函数、离线单测）：到位/方向不符/越过目标时直接落位，绝不反向补动画，修复缓慢滚动时的轻微回弹。
 - **性能取舍**：按项目当前定位不做 GPU/远程桌面自动降级；只动画 `Opacity` 与 `RenderTransform`（不触发布局重算），图片模糊只做一次缓存，避免实时特效与逐帧重算。
 ## 6. 配置与持久化
 
