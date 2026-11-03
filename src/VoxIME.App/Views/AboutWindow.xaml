@@ -1,6 +1,7 @@
 <Window x:Class="VoxIME.App.Views.AboutWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:inf="clr-namespace:VoxIME.App.Infrastructure"
         Title="关于 VoxIME 声语"
         Width="540"
         SizeToContent="Height"
@@ -11,9 +12,11 @@
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False">
 
-    <Border x:Name="RootBorder" Margin="18" Background="{DynamicResource WindowBackgroundBrush}"
-            BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
-            CornerRadius="16" Effect="{StaticResource WindowShadow}">
+    <Grid>
+        <inf:WindowShadowLayer IsHitTestVisible="False" Inset="18" />
+        <Border x:Name="RootBorder" Margin="18" Background="{DynamicResource WindowBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
+                CornerRadius="16">
         <Grid>
             <!-- 自定义背景暗化遮罩：保证文字对比度（主题色模式下为全透明） -->
             <Border CornerRadius="16" Background="{DynamicResource WindowDimBrush}" IsHitTestVisible="False" />
@@ -98,5 +101,6 @@
             </Grid>
         </StackPanel>
         </Grid>
-    </Border>
+        </Border>
+    </Grid>
 </Window>

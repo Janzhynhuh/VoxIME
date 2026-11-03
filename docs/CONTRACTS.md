@@ -210,4 +210,5 @@ App：
 - `Infrastructure.Motion`：动效 token（明显档时长/位移，克制档按时长 ×0.62、幅度 ×0.5），提供 `PlayEnter/PlayExit/PlaySlideIn/PlayDialogEnter/PlayLift/PlayPress`；只动画 `Opacity` 与 `RenderTransform`，XAML 不写 Storyboard 时长。
 - `Infrastructure.BackgroundRenderer`：把背景配置展开为 `WindowBackgroundBrush` / `WindowDimBrush` 两个 DynamicResource；图片先按 980 宽解码 + `RenderTargetBitmap` 预烘焙模糊并缓存，不挂实时 `BlurEffect`；图片模式会让 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷按 `surfaceOpacity` 变半透明（玻璃质感）。消息框使用不受玻璃影响的 `DialogCardBrush`。
 - `Infrastructure.BackgroundImageStore`：背景图片本机存储（复制/清理旧图，只保留最近 8 张）。
-- 窗口 XAML 约定：低频窗口根 `Border.Background` 用 `{DynamicResource WindowBackgroundBrush}`，内部第一层加 `{DynamicResource WindowDimBrush}` 遮罩（`CornerRadius` 必须与窗口一致，主题色模式下为透明）；HUD/桌宠保持原样。`ScrollViewer` 用 `inf:SmoothScroll.IsEnabled="True"` 启用滚轮平滑惯性：与 `CompositionTarget.Rendering` 同步、按时间指数衰减（帧率无关），滚动期间临时移除窗口根阴影以提升透明窗口的软件渲染帧率，停止滚动 420ms 后才恢复（避免连续滚轮时阴影反复闪烁）；只处理纵向滚轮，文本输入框与拖拽滚动条保持原生。
+- 窗口 XAML 约定：低频窗口根 `Border.Background` 用 `{DynamicResource WindowBackgroundBrush}`，内部第一层加 `{DynamicResource WindowDimBrush}` 遮罩（`CornerRadius` 必须与窗口一致，主题色模式下为透明）；HUD/桌宠保持原样。`ScrollViewer` 用 `inf:SmoothScroll.IsEnabled="True"` 启用滚轮平滑惯性：与 `CompositionTarget.Rendering` 同步、按时间指数衰减（帧率无关），滚动不再触碰任何窗口特效；只处理纵向滚轮，文本输入框与拖拽滚动条保持原生。
+- 窗口阴影：设置/历史/关于/欢迎用 `inf:WindowShadowLayer`（静态阴影位图，首次显示生成并缓存，禁止在根容器上挂 `DropShadowEffect`）；消息框等小窗口可继续用 `WindowShadow` 资源。

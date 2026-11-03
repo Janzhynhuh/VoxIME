@@ -3,8 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
-using System.Windows.Threading;
 
 namespace VoxIME.App.Infrastructure;
 
@@ -13,8 +11,7 @@ namespace VoxIME.App.Infrastructure;
 /// 用法：XAML 给 ScrollViewer 挂 <c>inf:SmoothScroll.IsEnabled="True"</c>；
 /// 挂在 ListBox 等容器上时会自动找到内部 ScrollViewer。只处理纵向滚动，
 /// ScrollBar 拖拽与文本框滚动保持系统原生行为。
-/// 滚动期间会临时去掉窗口根容器的阴影特效（透明窗口是软件渲染，大范围模糊会显著拉低帧率），
-/// 停止后恢复。
+/// 窗口阴影已改为静态层（<see cref="WindowShadowLayer"/>），滚动不再触碰任何 Effect。
 /// </summary>
 public static class SmoothScroll
 {
@@ -110,8 +107,6 @@ public static class SmoothScroll
 
         e.Handled = true;
         var state = GetState(viewer);
-        // 新一轮滚轮到来时，保持阴影暂时关闭（不要每格滚轮都切一次效果，否则窗口阴影会闪）。
-        state.RestoreTimer?.Stop();
         var from = state.Animating ? state.Target : viewer.VerticalOffset;
         state.Target = Math.Clamp(from - e.Delta / 120d * PixelsPerNotch, 0, viewer.ScrollableHeight);
 
@@ -119,7 +114,6 @@ public static class SmoothScroll
         {
             state.Animating = true;
             state.LastTimestamp = null;
-            SuppressWindowEffect(state, viewer);
             HookRendering();
         }
     }
@@ -148,7 +142,8 @@ public static class SmoothScroll
             if (Math.Abs(distance) < 0.5)
             {
                 viewer.ScrollToVerticalOffset(state.Target);
-                Finish(state);
+                state.Animating = false;
+                state.LastTimestamp = null;
                 continue;
             }
 
@@ -162,61 +157,11 @@ public static class SmoothScroll
         }
     }
 
-    private static void Finish(ScrollState state)
-    {
-        state.Animating = false;
-        state.LastTimestamp = null;
-        // 不立刻恢复阴影：等这一轮滚动彻底停下来再恢复，避免连续滚轮时阴影反复闪烁。
-        ScheduleRestore(state);
-    }
-
-    private static void ScheduleRestore(ScrollState state)
-    {
-        if (state.Root is null || state.SavedEffect is null)
-        {
-            return;
-        }
-
-        state.RestoreTimer ??= CreateRestoreTimer(state);
-        state.RestoreTimer.Stop();
-        state.RestoreTimer.Start();
-    }
-
-    private static DispatcherTimer CreateRestoreTimer(ScrollState state)
-    {
-        var timer = new DispatcherTimer(DispatcherPriority.Background)
-        {
-            Interval = TimeSpan.FromMilliseconds(420)
-        };
-        timer.Tick += (_, _) =>
-        {
-            timer.Stop();
-            if (!state.Animating)
-            {
-                RestoreEffect(state);
-            }
-        };
-        return timer;
-    }
-
-    private static void RestoreEffect(ScrollState state)
-    {
-        if (state.Root is not null && state.SavedEffect is not null)
-        {
-            state.Root.Effect = state.SavedEffect;
-        }
-
-        state.Root = null;
-        state.SavedEffect = null;
-    }
-
     private static void Stop(ScrollViewer viewer)
     {
         if (States.TryGetValue(viewer, out var state))
         {
             state.Animating = false;
-            state.RestoreTimer?.Stop();
-            RestoreEffect(state);
             States.Remove(viewer);
         }
 
@@ -257,28 +202,6 @@ public static class SmoothScroll
 
         _renderingHooked = false;
         CompositionTarget.Rendering -= OnRendering;
-    }
-
-    /// <summary>
-    /// 透明（AllowsTransparency）窗口走软件渲染，根容器的大范围 DropShadowEffect 会让滚动明显掉帧，
-    /// 滚动期间临时移除、停下后恢复。
-    /// </summary>
-    private static void SuppressWindowEffect(ScrollState state, ScrollViewer viewer)
-    {
-        try
-        {
-            var window = Window.GetWindow(viewer);
-            if (window?.FindName("RootBorder") is FrameworkElement root && root.Effect is not null)
-            {
-                state.Root = root;
-                state.SavedEffect = root.Effect;
-                root.Effect = null;
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[SmoothScroll] 暂停窗口阴影失败：{ex.Message}");
-        }
     }
 
     private static bool IsInsideTextInput(DependencyObject? source)
@@ -324,11 +247,5 @@ public static class SmoothScroll
         public double Target { get; set; }
 
         public double? LastTimestamp { get; set; }
-
-        public FrameworkElement? Root { get; set; }
-
-        public Effect? SavedEffect { get; set; }
-
-        public DispatcherTimer? RestoreTimer { get; set; }
     }
 }
