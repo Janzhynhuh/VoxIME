@@ -56,12 +56,6 @@ public sealed class BackgroundConfig
     /// </summary>
     public double SurfaceOpacity { get; set; } = 0.82;
 
-    /// <summary>
-    /// 文字反色：按 HSL 明度把整套界面令牌反色（深色主题 → 浅色底 + 深色字），
-    /// 适合白色/浅色背景图片，避免浅色背景上看不见浅色文字。
-    /// </summary>
-    public bool InvertText { get; set; }
-
     /// <summary>是否为自定义背景（非主题色模式）。</summary>
     public bool IsCustom => !string.Equals(Mode, ModeTheme, StringComparison.OrdinalIgnoreCase);
 

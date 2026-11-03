@@ -160,7 +160,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string? _backgroundGradientStart;
     private string? _backgroundGradientEnd;
     private double _backgroundSurfaceOpacity = 0.82;
-    private bool _backgroundInvertText;
     private string _selectedMotionMode = MotionModes.Expressive;
     private DispatcherTimer? _backgroundPreviewTimer;
 
@@ -243,6 +242,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         PickBackgroundImageCommand = new RelayCommand(PickBackgroundImage);
         ClearBackgroundImageCommand = new RelayCommand(ClearBackgroundImage);
         ResetBackgroundCommand = new RelayCommand(ResetBackground);
+        MatchThemeToBackgroundCommand = new RelayCommand(MatchThemeToBackground);
 
         InitializeFrom(_working);
         _controller.MicrophoneLevelChanged += OnMicrophoneLevelChanged;
@@ -1487,6 +1487,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand PickBackgroundImageCommand { get; }
     public RelayCommand ClearBackgroundImageCommand { get; }
     public RelayCommand ResetBackgroundCommand { get; }
+    public RelayCommand MatchThemeToBackgroundCommand { get; }
 
     /// <summary>背景模式：theme / image / solid / gradient。</summary>
     public string SelectedBackgroundMode
@@ -1610,18 +1611,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>文字反色：适合白色/浅色背景，避免浅色背景上看不清浅色文字。</summary>
-    public bool BackgroundInvertText
-    {
-        get => _backgroundInvertText;
-        set
-        {
-            if (SetProperty(ref _backgroundInvertText, value))
-            {
-                ApplyBackgroundPreviewDebounced();
-            }
-        }
-    }
+
 
     public string? BackgroundSolidColor
     {
@@ -1670,8 +1660,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SolidColor = _backgroundSolidColor,
         GradientStart = _backgroundGradientStart,
         GradientEnd = _backgroundGradientEnd,
-        SurfaceOpacity = _backgroundSurfaceOpacity,
-        InvertText = _backgroundInvertText
+        SurfaceOpacity = _backgroundSurfaceOpacity
     };
 
     private void PickBackgroundImage()
@@ -1734,17 +1723,41 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _backgroundGradientStart = null;
         _backgroundGradientEnd = null;
         _backgroundSurfaceOpacity = defaults.SurfaceOpacity;
-        _backgroundInvertText = false;
         OnPropertiesChanged(nameof(SelectedBackgroundMode), nameof(SelectedBackgroundFit),
             nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
             nameof(BackgroundImageOpacity), nameof(BackgroundBlurRadius), nameof(BackgroundDim),
-            nameof(BackgroundSurfaceOpacity), nameof(BackgroundInvertText), nameof(BackgroundSolidColor),
+            nameof(BackgroundSurfaceOpacity), nameof(BackgroundSolidColor),
             nameof(BackgroundGradientStart), nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode),
             nameof(IsBackgroundSolidMode), nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom),
             nameof(BackgroundStatusText));
         ApplyAppearancePreview();
     }
 
+    /// <summary>按背景亮度自动选择浅色/深色主题（文字颜色随主题自动适配，不再单独反色）。</summary>
+    private void MatchThemeToBackground()
+    {
+        try
+        {
+            var resolved = ThemeResolver.Resolve(_selectedThemeMode, _selectedColorSchemeId, ThemeManager.IsSystemLight);
+            var brightness = BackgroundTone.TryGetBrightness(BuildBackgroundDraft(), resolved);
+            if (brightness is null)
+            {
+                StatusText = "无法判断背景亮度：请先选择背景图片或填写有效的颜色。";
+                return;
+            }
+
+            var mode = brightness.Value >= 0.55 ? ThemeModes.Light : ThemeModes.Dark;
+            SelectThemeMode(mode);
+            StatusText = mode == ThemeModes.Light
+                ? "已按背景亮度切换到浅色主题（深色文字 / 浅色卡片）。"
+                : "已按背景亮度切换到深色主题（浅色文字 / 深色卡片）。";
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"按背景亮度匹配主题失败：{ex.Message}");
+            StatusText = "按背景亮度匹配主题失败：" + ex.Message;
+        }
+    }
     private void ApplyBackgroundPreviewDebounced()
     {
         if (_appearanceInitializing)
@@ -1957,12 +1970,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _backgroundGradientStart = background.GradientStart;
         _backgroundGradientEnd = background.GradientEnd;
         _backgroundSurfaceOpacity = background.SurfaceOpacity;
-        _backgroundInvertText = background.InvertText;
         _selectedMotionMode = MotionModes.Normalize(config.Ui.Motion);
         OnPropertiesChanged(nameof(SelectedBackgroundMode), nameof(SelectedBackgroundFit),
             nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
             nameof(BackgroundImageOpacity), nameof(BackgroundBlurRadius), nameof(BackgroundDim),
-            nameof(BackgroundSurfaceOpacity), nameof(BackgroundInvertText), nameof(BackgroundSolidColor),
+            nameof(BackgroundSurfaceOpacity), nameof(BackgroundSolidColor),
             nameof(BackgroundGradientStart), nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode),
             nameof(IsBackgroundSolidMode), nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom),
             nameof(BackgroundStatusText), nameof(SelectedMotionMode));

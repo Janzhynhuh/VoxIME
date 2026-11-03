@@ -129,15 +129,13 @@ public sealed class MotionAndBackgroundConfigTests
             Mode = "gradient",
             GradientStart = "#112233",
             GradientEnd = "#445566",
-            SurfaceOpacity = 0.7,
-            InvertText = true
+            SurfaceOpacity = 0.7
         };
 
         var json = JsonSerializer.Serialize(config, ConfigJson.Options);
         Assert.Contains("\"motion\": \"subtle\"", json);
         Assert.Contains("\"background\"", json);
         Assert.Contains("\"mode\": \"gradient\"", json);
-        Assert.Contains("\"invertText\": true", json);
 
         var loaded = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options)!;
         loaded.Normalize();
@@ -145,48 +143,17 @@ public sealed class MotionAndBackgroundConfigTests
         Assert.Equal("gradient", loaded.Ui.Background.Mode);
         Assert.Equal("#112233", loaded.Ui.Background.GradientStart);
         Assert.Equal(0.7, loaded.Ui.Background.SurfaceOpacity);
-        Assert.True(loaded.Ui.Background.InvertText);
     }
 
     [Fact]
-    public void BackgroundConfig_InvertText_DefaultsToFalse()
+    public void ColorMath_Luminance_ReflectsBrightness()
     {
-        Assert.False(new BackgroundConfig().InvertText);
-        Assert.False(AppConfig.CreateDefault().Ui.Background.InvertText);
+        Assert.Equal(0, ThemeColorMath.Luminance("#000000"), 3);
+        Assert.Equal(1, ThemeColorMath.Luminance("#FFFFFF"), 3);
+        Assert.True(ThemeColorMath.Luminance("#F6F5FB") > 0.9);
+        Assert.True(ThemeColorMath.Luminance("#12121A") < 0.15);
+        Assert.True(ThemeColorMath.Luminance("#FF6B6B") > ThemeColorMath.Luminance("#12121A"));
     }
-
-    [Fact]
-    public void ColorMath_InvertLightness_FlipsBlackAndWhiteAndKeepsAlpha()
-    {
-        Assert.Equal("#FFFFFF", ThemeColorMath.InvertLightness("#000000"));
-        Assert.Equal("#000000", ThemeColorMath.InvertLightness("#FFFFFF"));
-        Assert.Equal("#80FFFFFF", ThemeColorMath.InvertLightness("#80000000"));
-        Assert.True(ThemeColorMath.IsValid(ThemeColorMath.InvertLightness("#7C5CFF")));
-    }
-
-    [Fact]
-    public void ColorMath_InvertLightness_IsReversible()
-    {
-        foreach (var hex in new[] { "#12121A", "#E8E8F0", "#7C5CFF", "#FF6B6B", "#1C1C27" })
-        {
-            var once = ThemeColorMath.InvertLightness(hex);
-            var twice = ThemeColorMath.InvertLightness(once);
-            Assert.Equal(ThemeColorMath.Parse(hex), ThemeColorMath.Parse(twice));
-        }
-    }
-
-    [Fact]
-    public void ColorMath_InvertLightness_TurnsDarkThemeTokensLight()
-    {
-        var tokens = ThemeTokens.Build(ThemeCatalog.Default.Dark!, isLight: false);
-        var invertedBg = ThemeColorMath.Parse(ThemeColorMath.InvertLightness(tokens["BgColor"]));
-        var invertedText = ThemeColorMath.Parse(ThemeColorMath.InvertLightness(tokens["TextColor"]));
-
-        // 深色背景反色后应变亮，浅色文字反色后应变暗。
-        Assert.True(invertedBg.R + invertedBg.G + invertedBg.B > 600);
-        Assert.True(invertedText.R + invertedText.G + invertedText.B < 300);
-    }
-
     [Fact]
     public void BackgroundConfig_NormalizeColor_ReturnsNullForInvalid()
     {

@@ -1,28 +1,30 @@
-using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
+using System.Windows.Media.Effects;
 
 namespace VoxIME.App.Infrastructure;
 
 /// <summary>
-/// 滚动惯性：把鼠标滚轮滚动改成指数缓动的平滑滚动（带减速手感），用于长设置页与历史列表。
+/// 滚动惯性：把鼠标滚轮滚动改成与显示器刷新同步、按时间衰减的平滑滚动。
 /// 用法：XAML 给 ScrollViewer 挂 <c>inf:SmoothScroll.IsEnabled="True"</c>；
 /// 挂在 ListBox 等容器上时会自动找到内部 ScrollViewer。只处理纵向滚动，
-/// ScrollBar 拖拽仍保持系统原生行为。
+/// ScrollBar 拖拽与文本框滚动保持系统原生行为。
+/// 滚动期间会临时去掉窗口根容器的阴影特效（透明窗口是软件渲染，大范围模糊会显著拉低帧率），
+/// 停止后恢复。
 /// </summary>
 public static class SmoothScroll
 {
     /// <summary>一格滚轮（120 单位）对应的目标滚动距离（像素）。</summary>
-    private const double PixelsPerNotch = 96;
+    private const double PixelsPerNotch = 100;
 
-    /// <summary>每帧向目标逼近的比例：越大越跟手，越小惯性越长。</summary>
-    private const double EaseFactor = 0.26;
+    /// <summary>指数衰减的时间常数（秒）：越小越跟手，越大惯性越长。</summary>
+    private const double TimeConstantSeconds = 0.09;
 
-    private static readonly ConditionalWeakTable<ScrollViewer, ScrollState> States = new();
+    private static readonly Dictionary<ScrollViewer, ScrollState> States = new();
+    private static bool _renderingHooked;
 
     public static readonly DependencyProperty IsEnabledProperty = DependencyProperty.RegisterAttached(
         "IsEnabled", typeof(bool), typeof(SmoothScroll), new PropertyMetadata(false, OnIsEnabledChanged));
@@ -106,46 +108,137 @@ public static class SmoothScroll
         }
 
         e.Handled = true;
-        var state = States.GetValue(viewer, _ => new ScrollState());
-        state.Target = Math.Clamp(
-            (state.Target ?? viewer.VerticalOffset) - e.Delta / 120d * PixelsPerNotch,
-            0,
-            viewer.ScrollableHeight);
+        var state = GetState(viewer);
+        var from = state.Animating ? state.Target : viewer.VerticalOffset;
+        state.Target = Math.Clamp(from - e.Delta / 120d * PixelsPerNotch, 0, viewer.ScrollableHeight);
 
-        if (state.Timer is null)
+        if (!state.Animating)
         {
-            state.Timer = new DispatcherTimer(DispatcherPriority.Render)
-            {
-                Interval = TimeSpan.FromMilliseconds(16)
-            };
-            state.Timer.Tick += (_, _) => Tick(viewer, state);
+            state.Animating = true;
+            state.LastTimestamp = null;
+            SuppressWindowEffect(state, viewer);
+            HookRendering();
         }
-
-        state.Timer.Start();
     }
 
-    private static void Tick(ScrollViewer viewer, ScrollState state)
+    /// <summary>按显示器刷新节奏推进动画，使用时间增量做指数衰减（帧率无关，避免定时器抖动）。</summary>
+    private static void OnRendering(object? sender, EventArgs e)
     {
-        var current = viewer.VerticalOffset;
-        var target = state.Target ?? current;
-        var distance = target - current;
-        if (Math.Abs(distance) < 0.6)
+        var now = e is RenderingEventArgs args ? args.RenderingTime.TotalSeconds : 0;
+        var hasActive = false;
+
+        foreach (var (viewer, state) in States)
         {
-            viewer.ScrollToVerticalOffset(target);
-            state.Target = null;
-            state.Timer?.Stop();
-            return;
+            if (!state.Animating)
+            {
+                continue;
+            }
+
+            hasActive = true;
+            var dt = state.LastTimestamp is double last
+                ? Math.Clamp(now - last, 1d / 240d, 0.12d)
+                : 1d / 60d;
+            state.LastTimestamp = now;
+
+            var current = viewer.VerticalOffset;
+            var distance = state.Target - current;
+            if (Math.Abs(distance) < 0.5)
+            {
+                viewer.ScrollToVerticalOffset(state.Target);
+                Finish(state);
+                continue;
+            }
+
+            var alpha = 1d - Math.Exp(-dt / TimeConstantSeconds);
+            viewer.ScrollToVerticalOffset(current + distance * alpha);
         }
 
-        viewer.ScrollToVerticalOffset(current + distance * EaseFactor);
+        if (!hasActive)
+        {
+            UnhookRendering();
+        }
+    }
+
+    private static void Finish(ScrollState state)
+    {
+        state.Animating = false;
+        state.LastTimestamp = null;
+        if (state.Root is not null && state.SavedEffect is not null)
+        {
+            state.Root.Effect = state.SavedEffect;
+        }
+
+        state.Root = null;
+        state.SavedEffect = null;
     }
 
     private static void Stop(ScrollViewer viewer)
     {
         if (States.TryGetValue(viewer, out var state))
         {
-            state.Timer?.Stop();
-            state.Target = null;
+            state.Animating = false;
+            Finish(state);
+            States.Remove(viewer);
+        }
+
+        if (!States.Values.Any(s => s.Animating))
+        {
+            UnhookRendering();
+        }
+    }
+
+    private static ScrollState GetState(ScrollViewer viewer)
+    {
+        if (!States.TryGetValue(viewer, out var state))
+        {
+            state = new ScrollState();
+            States[viewer] = state;
+        }
+
+        return state;
+    }
+
+    private static void HookRendering()
+    {
+        if (_renderingHooked)
+        {
+            return;
+        }
+
+        _renderingHooked = true;
+        CompositionTarget.Rendering += OnRendering;
+    }
+
+    private static void UnhookRendering()
+    {
+        if (!_renderingHooked)
+        {
+            return;
+        }
+
+        _renderingHooked = false;
+        CompositionTarget.Rendering -= OnRendering;
+    }
+
+    /// <summary>
+    /// 透明（AllowsTransparency）窗口走软件渲染，根容器的大范围 DropShadowEffect 会让滚动明显掉帧，
+    /// 滚动期间临时移除、停下后恢复。
+    /// </summary>
+    private static void SuppressWindowEffect(ScrollState state, ScrollViewer viewer)
+    {
+        try
+        {
+            var window = Window.GetWindow(viewer);
+            if (window?.FindName("RootBorder") is FrameworkElement root && root.Effect is not null)
+            {
+                state.Root = root;
+                state.SavedEffect = root.Effect;
+                root.Effect = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SmoothScroll] 暂停窗口阴影失败：{ex.Message}");
         }
     }
 
@@ -187,8 +280,14 @@ public static class SmoothScroll
 
     private sealed class ScrollState
     {
-        public double? Target { get; set; }
+        public bool Animating { get; set; }
 
-        public DispatcherTimer? Timer { get; set; }
+        public double Target { get; set; }
+
+        public double? LastTimestamp { get; set; }
+
+        public FrameworkElement? Root { get; set; }
+
+        public Effect? SavedEffect { get; set; }
     }
 }

@@ -86,94 +86,12 @@ public static class ThemeColorMath
     }
 
     /// <summary>
-    /// 按 HSL 明度做反色（保留色相、饱和度与透明度）：黑↔白、浅色字↔深色字。
-    /// 用于「浅色背景 + 深色文字」的文字反色：深色主题的整套令牌反色后就是浅色界面。
+    /// 计算颜色亮度（0..1，sRGB 加权：0.2126R + 0.7152G + 0.0722B），
+    /// 用于「按背景亮度匹配明暗主题」。
     /// </summary>
-    public static string InvertLightness(string hex)
+    public static double Luminance(string hex)
     {
         var color = Parse(hex);
-        var r = color.R / 255d;
-        var g = color.G / 255d;
-        var b = color.B / 255d;
-
-        var max = Math.Max(r, Math.Max(g, b));
-        var min = Math.Min(r, Math.Min(g, b));
-        var lightness = (max + min) / 2d;
-        double hue = 0;
-        var saturation = 0d;
-
-        if (max > min)
-        {
-            var delta = max - min;
-            saturation = lightness > 0.5 ? delta / (2d - max - min) : delta / (max + min);
-            if (max == r)
-            {
-                hue = (g - b) / delta + (g < b ? 6 : 0);
-            }
-            else if (max == g)
-            {
-                hue = (b - r) / delta + 2;
-            }
-            else
-            {
-                hue = (r - g) / delta + 4;
-            }
-
-            hue /= 6d;
-        }
-
-        lightness = 1d - lightness;
-
-        double invertedR;
-        double invertedG;
-        double invertedB;
-        if (saturation <= double.Epsilon)
-        {
-            invertedR = invertedG = invertedB = lightness;
-        }
-        else
-        {
-            var q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
-            var p = 2 * lightness - q;
-            invertedR = HueToRgb(p, q, hue + 1d / 3d);
-            invertedG = HueToRgb(p, q, hue);
-            invertedB = HueToRgb(p, q, hue - 1d / 3d);
-        }
-
-        return ToHex((
-            color.A,
-            (byte)Math.Round(Math.Clamp(invertedR, 0, 1) * 255),
-            (byte)Math.Round(Math.Clamp(invertedG, 0, 1) * 255),
-            (byte)Math.Round(Math.Clamp(invertedB, 0, 1) * 255)));
-    }
-
-    private static double HueToRgb(double p, double q, double t)
-    {
-        if (t < 0)
-        {
-            t += 1;
-        }
-
-        if (t > 1)
-        {
-            t -= 1;
-        }
-
-        if (t < 1d / 6d)
-        {
-            return p + (q - p) * 6 * t;
-        }
-
-        if (t < 1d / 2d)
-        {
-            return q;
-        }
-
-        if (t < 2d / 3d)
-        {
-            return p + (q - p) * (2d / 3d - t) * 6;
-        }
-
-        return p;
+        return (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255d;
     }
 }

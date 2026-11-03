@@ -29,7 +29,7 @@ public static class BackgroundRenderer
     private static ImageBrush? _cachedBrush;
 
     /// <summary>把当前背景配置展开成两个画刷，写入调色板字典。</summary>
-    public static void Populate(ResourceDictionary dictionary, BackgroundConfig? background, ResolvedTheme theme, bool invertText = false)
+    public static void Populate(ResourceDictionary dictionary, BackgroundConfig? background, ResolvedTheme theme)
     {
         ArgumentNullException.ThrowIfNull(dictionary);
         ArgumentNullException.ThrowIfNull(theme);
@@ -37,7 +37,7 @@ public static class BackgroundRenderer
         var config = Clone(background);
         config.Normalize();
         dictionary[BackgroundBrushKey] = CreateBackgroundBrush(config, theme);
-        dictionary[DimBrushKey] = CreateDimBrush(config, theme, invertText);
+        dictionary[DimBrushKey] = CreateDimBrush(config, theme);
     }
 
     /// <summary>图片模式但文件缺失/损坏时返回 null（调用方回退主题背景）。</summary>
@@ -180,7 +180,7 @@ public static class BackgroundRenderer
         return bitmap;
     }
 
-    private static Brush CreateDimBrush(BackgroundConfig config, ResolvedTheme theme, bool invertText)
+    private static Brush CreateDimBrush(BackgroundConfig config, ResolvedTheme theme)
     {
         if (!config.IsCustom)
         {
@@ -189,10 +189,7 @@ public static class BackgroundRenderer
             return transparent;
         }
 
-        // 文字反色时用「亮色遮罩」压住浅色背景，让深色文字有足够对比度；否则用主题背景色压暗。
-        var baseColor = ParseColor(invertText
-            ? ThemeColorMath.InvertLightness(theme.Colors.Background)
-            : theme.Colors.Background) ?? Colors.Black;
+        var baseColor = ParseColor(theme.Colors.Background) ?? Colors.Black;
         var alpha = (byte)Math.Round(Math.Clamp(config.Dim, 0, 1) * 255);
         var brush = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
         brush.Freeze();
