@@ -247,13 +247,18 @@ public static class SmoothScroll
         try
         {
             viewer.ScrollToVerticalOffset(state.VisualOffset);
+
+            // ScrollToVerticalOffset 会立刻更新 VerticalOffset，但内容要等下一次布局才真正移动。
+            // 如果此时就把视觉补偿清零，会先闪一帧旧位置；这里强制完成布局，保证
+            // “逻辑位置、实际呈现、视觉补偿”三者在同一帧内一致，避免组件抽搐。
+            viewer.UpdateLayout();
         }
         finally
         {
             state.Syncing = false;
         }
 
-        // ScrollToVerticalOffset 后逻辑偏移变化，重算视觉补偿量，保证画面不跳。
+        // 布局完成后重算视觉补偿量，保证画面不跳。
         ApplyVisualDelta(viewer, state);
     }
 
