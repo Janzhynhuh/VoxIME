@@ -12,6 +12,7 @@ public partial class HistoryWindow : Window
 {
     private readonly HistoryViewModel _viewModel;
     private readonly IAppLogger _logger;
+    private bool _hiding;
 
     public HistoryWindow(HistoryViewModel viewModel, IAppLogger logger)
     {
@@ -20,6 +21,7 @@ public partial class HistoryWindow : Window
         _logger = logger;
         DataContext = viewModel;
         Closing += OnClosing;
+        IsVisibleChanged += OnIsVisibleChanged;
     }
 
     /// <summary>退出流程中允许真正关闭。</summary>
@@ -34,13 +36,37 @@ public partial class HistoryWindow : Window
         _viewModel.Load();
     }
 
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is true)
+        {
+            _hiding = false;
+            Motion.PlayEnter(RootBorder, offsetY: 16, fromScale: 0.97, duration: TimeSpan.FromMilliseconds(260));
+        }
+    }
+
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (!AllowClose)
         {
             e.Cancel = true;
-            Hide();
+            HideWithMotion();
         }
+    }
+
+    private void HideWithMotion()
+    {
+        if (_hiding || !IsVisible)
+        {
+            return;
+        }
+
+        _hiding = true;
+        Motion.PlayExit(RootBorder, offsetY: 10, toScale: 0.98, duration: TimeSpan.FromMilliseconds(160), completed: () =>
+        {
+            Hide();
+            _hiding = false;
+        });
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -51,7 +77,7 @@ public partial class HistoryWindow : Window
         }
     }
 
-    private void CloseButton_Click(object sender, RoutedEventArgs e) => Hide();
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => HideWithMotion();
 
     private void ClearButton_Click(object sender, RoutedEventArgs e)
     {

@@ -17,6 +17,8 @@ public partial class WelcomeWindow : Window
     private readonly IVoiceInputController _controller;
     private readonly IAsrProviderRegistry _registry;
     private readonly IAppLogger _logger;
+    private bool _closing;
+    private bool _allowClose;
 
     public WelcomeWindow(
         IConfigStore configStore,
@@ -30,6 +32,33 @@ public partial class WelcomeWindow : Window
         _registry = registry;
         _logger = logger;
         Loaded += OnLoaded;
+        Closing += OnClosing;
+    }
+
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_allowClose)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        CloseWithMotion();
+    }
+
+    private void CloseWithMotion()
+    {
+        if (_closing)
+        {
+            return;
+        }
+
+        _closing = true;
+        Motion.PlayExit(RootBorder, offsetY: 10, toScale: 0.98, duration: TimeSpan.FromMilliseconds(150), completed: () =>
+        {
+            _allowClose = true;
+            Close();
+        });
     }
 
     /// <summary>用户是否希望打开设置窗口。</summary>
@@ -40,6 +69,7 @@ public partial class WelcomeWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        Motion.PlayEnter(RootBorder, offsetY: 18, fromScale: 0.97, duration: TimeSpan.FromMilliseconds(280));
         try
         {
             var config = _configStore.Current;
@@ -72,7 +102,7 @@ public partial class WelcomeWindow : Window
     {
         RequestedSettings = true;
         MarkWelcomeSeen();
-        Close();
+        CloseWithMotion();
     }
 
     private void AddLocalButton_Click(object sender, RoutedEventArgs e)
@@ -110,7 +140,7 @@ public partial class WelcomeWindow : Window
             AddedProviderMessage =
                 $"已添加“{profile.Name}”并设为默认服务。\n请在设置的服务页中填写本地识别程序的命令行路径。";
             RequestedSettings = true;
-            Close();
+            CloseWithMotion();
         }
         catch (Exception ex)
         {
@@ -122,7 +152,7 @@ public partial class WelcomeWindow : Window
     private void LaterButton_Click(object sender, RoutedEventArgs e)
     {
         MarkWelcomeSeen();
-        Close();
+        CloseWithMotion();
     }
 
     private void MarkWelcomeSeen(bool save = true)

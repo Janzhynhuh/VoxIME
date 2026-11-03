@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using VoxIME.App.Infrastructure;
@@ -11,6 +12,8 @@ public partial class SettingsWindow : Window
 {
     private readonly SettingsViewModel _viewModel;
     private readonly IAppLogger _logger;
+    private bool _hiding;
+    private int _lastPageIndex;
 
     public SettingsWindow(SettingsViewModel viewModel, IAppLogger logger)
     {
@@ -20,6 +23,9 @@ public partial class SettingsWindow : Window
         DataContext = viewModel;
         WindowHelper.EnableDrag(this, TitleBar);
         Closing += OnClosing;
+        IsVisibleChanged += OnIsVisibleChanged;
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        _lastPageIndex = _viewModel.SelectedPageIndex;
     }
 
     /// <summary>退出流程中允许真正关闭。</summary>
@@ -39,16 +45,54 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is true)
+        {
+            _hiding = false;
+            Motion.PlayEnter(RootBorder, offsetY: 18, fromScale: 0.97, duration: TimeSpan.FromMilliseconds(280));
+        }
+    }
+
+    /// <summary>切换设置页时做一次「滑入 + 淡入」，方向跟随导航顺序。</summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(SettingsViewModel.CurrentPage))
+        {
+            return;
+        }
+
+        var direction = _viewModel.SelectedPageIndex >= _lastPageIndex ? 1 : -1;
+        _lastPageIndex = _viewModel.SelectedPageIndex;
+        Motion.PlaySlideIn(PageHost, fromX: 12 * direction, duration: TimeSpan.FromMilliseconds(200));
+    }
+
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (!AllowClose)
         {
             e.Cancel = true;
-            Hide();
+            HideWithMotion();
             return;
         }
 
+        _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         _viewModel.Dispose();
+    }
+
+    private void HideWithMotion()
+    {
+        if (_hiding || !IsVisible)
+        {
+            return;
+        }
+
+        _hiding = true;
+        Motion.PlayExit(RootBorder, offsetY: 10, toScale: 0.98, duration: TimeSpan.FromMilliseconds(160), completed: () =>
+        {
+            Hide();
+            _hiding = false;
+        });
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -63,14 +107,14 @@ public partial class SettingsWindow : Window
     {
         if (e.Key == Key.Escape)
         {
-            Hide();
+            HideWithMotion();
             e.Handled = true;
         }
     }
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
-    private void CloseButton_Click(object sender, RoutedEventArgs e) => Hide();
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => HideWithMotion();
 
     private void SaveButton_Click(object sender, RoutedEventArgs e) => _viewModel.SaveCommand.Execute(null);
 }

@@ -20,6 +20,7 @@ public partial class MessageDialog : Window
     private MessageDialog()
     {
         InitializeComponent();
+        Loaded += (_, _) => Motion.PlayDialogEnter(RootBorder, fromScale: 0.94);
     }
 
     public static void ShowMessage(string message, string title = "VoxIME", MessageKind kind = MessageKind.Info)

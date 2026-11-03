@@ -101,6 +101,186 @@
                 </StackPanel>
             </Border>
 
+            <!-- 背景（PCL2 风格自定义背景 + 玻璃质感） -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="背景" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10" TextWrapping="Wrap"
+                               Text="只作用于设置/历史/关于/欢迎等窗口；HUD 与 Live2D 桌宠保持透明。选择自定义背景后，卡片会变为半透明玻璃质感。" />
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="背景模式" Style="{StaticResource ValueText}" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding BackgroundModeOptions}"
+                                  DisplayMemberPath="Label" SelectedValuePath="Value"
+                                  SelectedValue="{Binding SelectedBackgroundMode, Mode=TwoWay}"
+                                  MaxWidth="280" HorizontalAlignment="Left" />
+                    </Grid>
+
+                    <!-- 图片参数 -->
+                    <StackPanel Visibility="{Binding IsBackgroundImageMode, Converter={StaticResource BoolToVis}}"
+                                Margin="0,12,0,0">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="图片" Style="{StaticResource ValueText}" />
+                            <TextBlock Grid.Column="1" Text="{Binding BackgroundImageName}"
+                                       Style="{StaticResource MonoText}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="2" Style="{StaticResource SmallButton}" Content="选择图片…"
+                                    Command="{Binding PickBackgroundImageCommand}" Margin="8,0,0,0" />
+                            <Button Grid.Column="3" Style="{StaticResource GhostButton}" Content="移除"
+                                    Command="{Binding ClearBackgroundImageCommand}" Margin="6,0,0,0" Padding="10,4" />
+                        </Grid>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="60" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="图片透明度" Style="{StaticResource ValueText}" />
+                            <Slider Grid.Column="1" Minimum="0.2" Maximum="1" TickFrequency="0.05"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding BackgroundImageOpacity, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Text="{Binding BackgroundImageOpacity, StringFormat={}{0:P0}}"
+                                       Style="{StaticResource MutedText}" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="60" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="模糊" Style="{StaticResource ValueText}" />
+                            <Slider Grid.Column="1" Minimum="0" Maximum="60" TickFrequency="1"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding BackgroundBlurRadius, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Text="{Binding BackgroundBlurRadius, StringFormat={}{0:0}px}"
+                                       Style="{StaticResource MutedText}" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="60" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="暗化遮罩" Style="{StaticResource ValueText}" />
+                            <Slider Grid.Column="1" Minimum="0" Maximum="0.95" TickFrequency="0.05"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding BackgroundDim, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="2" Text="{Binding BackgroundDim, StringFormat={}{0:P0}}"
+                                       Style="{StaticResource MutedText}" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="填充方式" Style="{StaticResource ValueText}" />
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding BackgroundFitOptions}"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedBackgroundFit, Mode=TwoWay}"
+                                      MaxWidth="280" HorizontalAlignment="Left" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- 纯色 -->
+                    <Grid Visibility="{Binding IsBackgroundSolidMode, Converter={StaticResource BoolToVis}}"
+                          Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="背景颜色" Style="{StaticResource ValueText}" />
+                        <TextBox Grid.Column="1" Style="{StaticResource InputTextBoxBase}" MaxWidth="280"
+                                 HorizontalAlignment="Left" Text="{Binding BackgroundSolidColor, Mode=TwoWay}"
+                                 ToolTip="留空则跟随主题卡片色；支持 #RRGGBB 或 #AARRGGBB" />
+                    </Grid>
+
+                    <!-- 渐变 -->
+                    <StackPanel Visibility="{Binding IsBackgroundGradientMode, Converter={StaticResource BoolToVis}}"
+                                Margin="0,12,0,0">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="起始色" Style="{StaticResource ValueText}" />
+                            <TextBox Grid.Column="1" Style="{StaticResource InputTextBoxBase}" MaxWidth="280"
+                                     HorizontalAlignment="Left" Text="{Binding BackgroundGradientStart, Mode=TwoWay}"
+                                     ToolTip="留空则跟随主题强调色；支持 #RRGGBB" />
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="结束色" Style="{StaticResource ValueText}" />
+                            <TextBox Grid.Column="1" Style="{StaticResource InputTextBoxBase}" MaxWidth="280"
+                                     HorizontalAlignment="Left" Text="{Binding BackgroundGradientEnd, Mode=TwoWay}"
+                                     ToolTip="留空则跟随主题背景色；支持 #RRGGBB" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- 玻璃强度 -->
+                    <Grid Visibility="{Binding IsBackgroundCustom, Converter={StaticResource BoolToVis}}"
+                          Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="60" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="玻璃强度" Style="{StaticResource ValueText}" />
+                        <Slider Grid.Column="1" Minimum="0.35" Maximum="1" TickFrequency="0.05"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding BackgroundSurfaceOpacity, Mode=TwoWay}" />
+                        <TextBlock Grid.Column="2" Text="{Binding BackgroundSurfaceOpacity, StringFormat={}{0:P0}}"
+                                   Style="{StaticResource MutedText}" HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,10,0,0" TextWrapping="Wrap"
+                               Text="{Binding BackgroundStatusText}" />
+                    <Button Style="{StaticResource GhostButton}" Content="恢复默认背景"
+                            Command="{Binding ResetBackgroundCommand}" HorizontalAlignment="Left"
+                            Padding="12,6" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- 界面动效 -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="界面动效" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10" TextWrapping="Wrap"
+                               Text="窗口/设置页/提示框的动画强度。只动画透明度与位移，不影响布局；HUD 与录音流程保持轻量。" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="动效档位" Style="{StaticResource ValueText}" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding MotionOptions}"
+                                  DisplayMemberPath="Label" SelectedValuePath="Value"
+                                  SelectedValue="{Binding SelectedMotionMode, Mode=TwoWay}"
+                                  MaxWidth="280" HorizontalAlignment="Left" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <!-- 预览 -->
             <Border Style="{StaticResource Card}">
                 <StackPanel>

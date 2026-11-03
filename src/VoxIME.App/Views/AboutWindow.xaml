@@ -11,10 +11,14 @@
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False">
 
-    <Border Margin="18" Background="{DynamicResource BgBrush}"
+    <Border x:Name="RootBorder" Margin="18" Background="{DynamicResource WindowBackgroundBrush}"
             BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
             CornerRadius="16" Effect="{StaticResource WindowShadow}">
-        <StackPanel>
+        <Grid>
+            <!-- 自定义背景暗化遮罩：保证文字对比度（主题色模式下为全透明） -->
+            <Border Background="{DynamicResource WindowDimBrush}" IsHitTestVisible="False" />
+
+            <StackPanel>
             <!-- 标题栏 -->
             <Border x:Name="TitleBar" Padding="20,14,12,0" Background="Transparent"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
@@ -93,5 +97,6 @@
                         MinWidth="96" Click="CloseButton_Click" />
             </Grid>
         </StackPanel>
+        </Grid>
     </Border>
 </Window>

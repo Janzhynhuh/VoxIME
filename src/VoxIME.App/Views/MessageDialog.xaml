@@ -13,7 +13,7 @@
         WindowStartupLocation="CenterScreen"
         FocusManager.FocusedElement="{Binding ElementName=OkButton}">
 
-    <Border Background="{DynamicResource CardBrush}"
+    <Border x:Name="RootBorder" Background="{DynamicResource DialogCardBrush}"
             BorderBrush="{DynamicResource BorderStrongBrush}"
             BorderThickness="1"
             CornerRadius="14"

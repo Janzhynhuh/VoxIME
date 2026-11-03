@@ -8,35 +8,43 @@ using VoxIME.Core.Configuration;
 namespace VoxIME.App.Infrastructure;
 
 /// <summary>
-/// 运行期主题管理：把「主题模式（跟随系统/浅色/深色）」+「配色方案」解析成完整调色板资源字典，
+/// 运行期外观管理：把「主题模式 + 配色方案 + 自定义背景」解析成完整调色板资源字典，
 /// 替换 <see cref="Application"/> 资源里的调色板；所有 XAML 颜色引用都用 DynamicResource，
-/// 因此换主题时已打开的窗口会立即重绘。
+/// 因此换主题/换背景时已打开的窗口会立即重绘。
 ///
-/// 调色板数据全部来自 <see cref="ThemeCatalog"/> / <see cref="ThemeTokens"/>（VoxIME.Core.Appearance），
-/// 新增配色或派生色不需要改任何 XAML。
+/// 调色板数据来自 <see cref="ThemeCatalog"/> / <see cref="ThemeTokens"/>（VoxIME.Core.Appearance），
+/// 自定义背景来自 <see cref="BackgroundRenderer"/>；新增配色或背景参数不需要改 XAML。
 /// </summary>
 public static class ThemeManager
 {
+    /// <summary>挂到自定义背景上时，需要半透明的颜色键（玻璃卡片/输入框/导航选中）。</summary>
+    private static readonly HashSet<string> TranslucentColorKeys = new(StringComparer.Ordinal)
+    {
+        "BgColor", "CardColor", "CardHoverColor", "InputColor", "PopupColor",
+        "NavHoverColor", "NavSelectedColor", "AccentSoftColor"
+    };
+
     private static ResourceDictionary? _palette;
     private static bool _systemEventsHooked;
     private static string _lastThemeMode = ThemeModes.Dark;
     private static string _lastColorSchemeId = ThemeCatalog.DefaultColorSchemeId;
+    private static BackgroundConfig _lastBackground = new();
 
     /// <summary>当前生效外观（主题模式 / 实际明暗 / 配色方案）。</summary>
     public static ResolvedTheme Current { get; private set; } =
         ThemeResolver.Resolve(ThemeModes.Dark, ThemeCatalog.DefaultColorSchemeId, systemIsLight: false);
 
-    /// <summary>调色板已替换（自绘颜色/托盘等非资源绑定元素可据此刷新）。在 UI 线程触发。</summary>
+    /// <summary>调色板或背景已替换（自绘颜色/托盘等非资源绑定元素可据此刷新）。在 UI 线程触发。</summary>
     public static event EventHandler<ResolvedTheme>? ThemeChanged;
 
-    /// <summary>启动时调用：先套用配置里的外观，再订阅系统应用模式变化。</summary>
+    /// <summary>启动时调用：先套用配置里的外观与动效档位，再订阅系统应用模式变化。</summary>
     public static void Initialize(AppConfig config)
     {
         HookSystemPreferences();
         ApplyConfig(config);
     }
 
-    /// <summary>按配置应用外观（保存设置 / 导入配置 / 恢复默认后调用）。</summary>
+    /// <summary>按配置应用外观（启动 / 保存设置 / 导入配置 / 恢复默认后调用）。</summary>
     public static void ApplyConfig(AppConfig? config)
     {
         if (config?.Ui is null)
@@ -44,21 +52,28 @@ public static class ThemeManager
             return;
         }
 
-        Apply(config.Ui.Theme, config.Ui.ColorScheme);
+        Motion.ApplyConfig(config);
+        ApplyAppearance(config.Ui.Theme, config.Ui.ColorScheme, config.Ui.Background);
     }
 
-    /// <summary>应用指定主题模式与配色方案（设置页实时预览）；任意线程可调用。</summary>
+    /// <summary>只换主题/配色（沿用当前背景；设置页实时预览与跟随系统切换用）。</summary>
     public static void Apply(string? themeMode, string? colorSchemeId) =>
-        WindowHelper.RunOnUi(() => ApplyCore(themeMode, colorSchemeId));
+        ApplyAppearance(themeMode, colorSchemeId, _lastBackground);
+
+    /// <summary>同时应用主题/配色与自定义背景（设置页实时预览）。任意线程可调用。</summary>
+    public static void ApplyAppearance(string? themeMode, string? colorSchemeId, BackgroundConfig? background) =>
+        WindowHelper.RunOnUi(() => ApplyCore(themeMode, colorSchemeId, background));
 
     /// <summary>系统当前是否为浅色应用模式。</summary>
     public static bool IsSystemLight => SystemTheme.IsLight();
 
-    private static void ApplyCore(string? themeMode, string? colorSchemeId)
+    private static void ApplyCore(string? themeMode, string? colorSchemeId, BackgroundConfig? background)
     {
         var resolved = ThemeResolver.Resolve(themeMode, colorSchemeId, SystemTheme.IsLight());
         _lastThemeMode = resolved.ThemeMode;
         _lastColorSchemeId = resolved.ColorSchemeId;
+        _lastBackground = background is null ? new BackgroundConfig() : ConfigJson.Clone(background);
+        _lastBackground.Normalize();
 
         var app = Application.Current;
         if (app is null)
@@ -68,7 +83,10 @@ public static class ThemeManager
             return;
         }
 
-        var nextPalette = BuildPaletteDictionary(resolved);
+        var surfaceOpacity = _lastBackground.IsCustom ? _lastBackground.SurfaceOpacity : 1.0;
+        var nextPalette = BuildPaletteDictionary(resolved, surfaceOpacity);
+        BackgroundRenderer.Populate(nextPalette, _lastBackground, resolved);
+
         var merged = app.Resources.MergedDictionaries;
         if (_palette is not null)
         {
@@ -126,10 +144,11 @@ public static class ThemeManager
         }
     }
 
-    private static ResourceDictionary BuildPaletteDictionary(ResolvedTheme theme)
+    private static ResourceDictionary BuildPaletteDictionary(ResolvedTheme theme, double surfaceOpacity)
     {
         var tokens = ThemeTokens.Build(theme.Colors, theme.IsLight);
         var dictionary = new ResourceDictionary();
+        var opacity = Math.Clamp(surfaceOpacity, 0, 1);
 
         foreach (var pair in tokens)
         {
@@ -139,6 +158,12 @@ public static class ThemeManager
             }
 
             var color = (Color)ColorConverter.ConvertFromString(pair.Value);
+            if (opacity < 0.999 && TranslucentColorKeys.Contains(pair.Key))
+            {
+                var alpha = (byte)Math.Round(color.A * opacity);
+                color = Color.FromArgb(alpha, color.R, color.G, color.B);
+            }
+
             dictionary[pair.Key] = color;
 
             var brush = new SolidColorBrush(color);
@@ -166,6 +191,11 @@ public static class ThemeManager
         };
         glow.Freeze();
         dictionary["AccentGlow"] = glow;
+
+        // 消息框等小型对话框保持不透明卡片（没有背景图衬底，半透明会透出桌面影响可读性）。
+        var dialogCard = new SolidColorBrush(GetColor(tokens, "CardColor"));
+        dialogCard.Freeze();
+        dictionary["DialogCardBrush"] = dialogCard;
 
         return dictionary;
     }

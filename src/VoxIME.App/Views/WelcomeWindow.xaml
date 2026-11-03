@@ -11,7 +11,7 @@
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="True">
 
-    <Border Margin="18" Background="{DynamicResource BgBrush}"
+    <Border x:Name="RootBorder" Margin="18" Background="{DynamicResource WindowBackgroundBrush}"
             BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
             CornerRadius="16" Effect="{StaticResource WindowShadow}">
         <Grid>
@@ -19,6 +19,9 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+
+            <!-- 自定义背景暗化遮罩：保证文字对比度（主题色模式下为全透明） -->
+            <Border Grid.RowSpan="2" Background="{DynamicResource WindowDimBrush}" IsHitTestVisible="False" />
 
             <!-- 顶部渐变横幅（渐变端点由当前配色决定） -->
             <Border Grid.Row="0" CornerRadius="15,15,0,0" MouseLeftButtonDown="Header_MouseLeftButtonDown"

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using VoxIME.App.Infrastructure;
 using VoxIME.Core;
@@ -148,6 +149,20 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private bool _appearanceInitializing;
     private bool _appearanceApplying;
 
+    // ---- 背景（自定义图片/纯色/渐变）与动效档位 ----
+    private string _backgroundMode = BackgroundConfig.ModeTheme;
+    private string? _backgroundImagePath;
+    private double _backgroundImageOpacity = 0.92;
+    private double _backgroundBlurRadius = 22;
+    private double _backgroundDim = 0.42;
+    private string _backgroundFit = "cover";
+    private string? _backgroundSolidColor;
+    private string? _backgroundGradientStart;
+    private string? _backgroundGradientEnd;
+    private double _backgroundSurfaceOpacity = 0.82;
+    private string _selectedMotionMode = MotionModes.Expressive;
+    private DispatcherTimer? _backgroundPreviewTimer;
+
     public SettingsViewModel(
         IConfigStore configStore,
         IVoiceInputController controller,
@@ -224,6 +239,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             StatusText = "已重置悬浮窗位置，将在下次显示时回到屏幕底部居中";
         });
         SelectColorSchemeCommand = new RelayCommand(param => SelectColorScheme(param as ColorSchemeOption));
+        PickBackgroundImageCommand = new RelayCommand(PickBackgroundImage);
+        ClearBackgroundImageCommand = new RelayCommand(ClearBackgroundImage);
+        ResetBackgroundCommand = new RelayCommand(ResetBackground);
 
         InitializeFrom(_working);
         _controller.MicrophoneLevelChanged += OnMicrophoneLevelChanged;
@@ -1411,7 +1429,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _appearanceApplying = true;
         try
         {
-            ThemeManager.Apply(_selectedThemeMode, _selectedColorSchemeId);
+            Motion.Apply(_selectedMotionMode);
+            ThemeManager.ApplyAppearance(_selectedThemeMode, _selectedColorSchemeId, BuildBackgroundDraft());
         }
         finally
         {
@@ -1435,6 +1454,301 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
 
         RefreshColorSchemeOptions(applyTheme: false);
+    }
+
+    // ==================== 背景与动效 ====================
+
+    /// <summary>背景模式下拉选项。</summary>
+    public IReadOnlyList<Choice> BackgroundModeOptions { get; } = new[]
+    {
+        new Choice("跟随主题", BackgroundConfig.ModeTheme),
+        new Choice("本地图片", BackgroundConfig.ModeImage),
+        new Choice("纯色", BackgroundConfig.ModeSolid),
+        new Choice("渐变", BackgroundConfig.ModeGradient)
+    };
+
+    /// <summary>图片填充方式选项。</summary>
+    public IReadOnlyList<Choice> BackgroundFitOptions { get; } = new[]
+    {
+        new Choice("等比铺满（裁剪）", "cover"),
+        new Choice("完整显示", "contain"),
+        new Choice("拉伸铺满", "fill")
+    };
+
+    /// <summary>动效档位选项。</summary>
+    public IReadOnlyList<Choice> MotionOptions { get; } = new[]
+    {
+        new Choice("明显（默认）", MotionModes.Expressive),
+        new Choice("克制", MotionModes.Subtle),
+        new Choice("关闭", MotionModes.Off)
+    };
+
+    public RelayCommand PickBackgroundImageCommand { get; }
+    public RelayCommand ClearBackgroundImageCommand { get; }
+    public RelayCommand ResetBackgroundCommand { get; }
+
+    /// <summary>背景模式：theme / image / solid / gradient。</summary>
+    public string SelectedBackgroundMode
+    {
+        get => _backgroundMode;
+        set
+        {
+            var normalized = BackgroundConfig.NormalizeMode(value);
+            if (SetProperty(ref _backgroundMode, normalized))
+            {
+                OnPropertiesChanged(nameof(IsBackgroundImageMode), nameof(IsBackgroundSolidMode),
+                    nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom), nameof(BackgroundStatusText));
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    /// <summary>动效档位：expressive / subtle / off。</summary>
+    public string SelectedMotionMode
+    {
+        get => _selectedMotionMode;
+        set
+        {
+            var normalized = MotionModes.Normalize(value);
+            if (SetProperty(ref _selectedMotionMode, normalized))
+            {
+                Motion.Apply(normalized);
+            }
+        }
+    }
+
+    public bool IsBackgroundImageMode => _backgroundMode == BackgroundConfig.ModeImage;
+    public bool IsBackgroundSolidMode => _backgroundMode == BackgroundConfig.ModeSolid;
+    public bool IsBackgroundGradientMode => _backgroundMode == BackgroundConfig.ModeGradient;
+    public bool IsBackgroundCustom => _backgroundMode != BackgroundConfig.ModeTheme;
+    public bool HasBackgroundImage => !string.IsNullOrWhiteSpace(_backgroundImagePath);
+
+    /// <summary>背景区状态提示。</summary>
+    public string BackgroundStatusText
+    {
+        get
+        {
+            if (!IsBackgroundCustom)
+            {
+                return "当前使用主题背景色。";
+            }
+
+            if (IsBackgroundImageMode && !HasBackgroundImage)
+            {
+                return "尚未选择背景图片，暂用主题背景。";
+            }
+
+            return IsBackgroundImageMode
+                ? "背景图片仅保存在本机（%APPDATA%\\VoxIME\\backgrounds），可随时更换。"
+                : "自定义背景会同时让卡片呈现玻璃质感。";
+        }
+    }
+
+    public string BackgroundImagePath => _backgroundImagePath ?? "";
+    public string BackgroundImageName => string.IsNullOrWhiteSpace(_backgroundImagePath)
+        ? "未选择图片"
+        : Path.GetFileName(_backgroundImagePath);
+
+    public double BackgroundImageOpacity
+    {
+        get => _backgroundImageOpacity;
+        set
+        {
+            if (SetProperty(ref _backgroundImageOpacity, Math.Clamp(value, 0.2, 1.0)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public double BackgroundBlurRadius
+    {
+        get => _backgroundBlurRadius;
+        set
+        {
+            if (SetProperty(ref _backgroundBlurRadius, Math.Clamp(value, 0, 60)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public double BackgroundDim
+    {
+        get => _backgroundDim;
+        set
+        {
+            if (SetProperty(ref _backgroundDim, Math.Clamp(value, 0, 0.95)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public double BackgroundSurfaceOpacity
+    {
+        get => _backgroundSurfaceOpacity;
+        set
+        {
+            if (SetProperty(ref _backgroundSurfaceOpacity, Math.Clamp(value, 0.35, 1.0)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string SelectedBackgroundFit
+    {
+        get => _backgroundFit;
+        set
+        {
+            if (SetProperty(ref _backgroundFit, BackgroundConfig.NormalizeFit(value)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string? BackgroundSolidColor
+    {
+        get => _backgroundSolidColor;
+        set
+        {
+            if (SetProperty(ref _backgroundSolidColor, value))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string? BackgroundGradientStart
+    {
+        get => _backgroundGradientStart;
+        set
+        {
+            if (SetProperty(ref _backgroundGradientStart, value))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string? BackgroundGradientEnd
+    {
+        get => _backgroundGradientEnd;
+        set
+        {
+            if (SetProperty(ref _backgroundGradientEnd, value))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    private BackgroundConfig BuildBackgroundDraft() => new()
+    {
+        Mode = _backgroundMode,
+        ImagePath = _backgroundImagePath,
+        ImageOpacity = _backgroundImageOpacity,
+        BlurRadius = _backgroundBlurRadius,
+        Dim = _backgroundDim,
+        Fit = _backgroundFit,
+        SolidColor = _backgroundSolidColor,
+        GradientStart = _backgroundGradientStart,
+        GradientEnd = _backgroundGradientEnd,
+        SurfaceOpacity = _backgroundSurfaceOpacity
+    };
+
+    private void PickBackgroundImage()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择背景图片",
+            Filter = "图片文件 (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件 (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = BackgroundImageStore.Import(dialog.FileName);
+            if (stored is null)
+            {
+                return;
+            }
+
+            _backgroundImagePath = stored;
+            _backgroundMode = BackgroundConfig.ModeImage;
+            OnPropertiesChanged(nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
+                nameof(SelectedBackgroundMode), nameof(IsBackgroundImageMode), nameof(IsBackgroundSolidMode),
+                nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom), nameof(BackgroundStatusText));
+            ApplyAppearancePreview();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"导入背景图片失败：{ex.Message}");
+            Ui.Warn("无法使用这张图片：" + ex.Message);
+        }
+    }
+
+    private void ClearBackgroundImage()
+    {
+        BackgroundImageStore.Delete(_backgroundImagePath);
+        _backgroundImagePath = null;
+        _backgroundMode = BackgroundConfig.ModeTheme;
+        OnPropertiesChanged(nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
+            nameof(SelectedBackgroundMode), nameof(IsBackgroundImageMode), nameof(IsBackgroundSolidMode),
+            nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom), nameof(BackgroundStatusText));
+        ApplyAppearancePreview();
+    }
+
+    private void ResetBackground()
+    {
+        var defaults = new BackgroundConfig();
+        _backgroundMode = defaults.Mode;
+        _backgroundImagePath = null;
+        _backgroundImageOpacity = defaults.ImageOpacity;
+        _backgroundBlurRadius = defaults.BlurRadius;
+        _backgroundDim = defaults.Dim;
+        _backgroundFit = defaults.Fit;
+        _backgroundSolidColor = null;
+        _backgroundGradientStart = null;
+        _backgroundGradientEnd = null;
+        _backgroundSurfaceOpacity = defaults.SurfaceOpacity;
+        OnPropertiesChanged(nameof(SelectedBackgroundMode), nameof(SelectedBackgroundFit),
+            nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
+            nameof(BackgroundImageOpacity), nameof(BackgroundBlurRadius), nameof(BackgroundDim),
+            nameof(BackgroundSurfaceOpacity), nameof(BackgroundSolidColor), nameof(BackgroundGradientStart),
+            nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode), nameof(IsBackgroundSolidMode),
+            nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom), nameof(BackgroundStatusText));
+        ApplyAppearancePreview();
+    }
+
+    private void ApplyBackgroundPreviewDebounced()
+    {
+        if (_appearanceInitializing)
+        {
+            return;
+        }
+
+        _backgroundPreviewTimer ??= CreateBackgroundPreviewTimer();
+        _backgroundPreviewTimer.Stop();
+        _backgroundPreviewTimer.Start();
+    }
+
+    private DispatcherTimer CreateBackgroundPreviewTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            ApplyAppearancePreview();
+        };
+        return timer;
     }
 
     // ==================== 初始化 ====================
@@ -1612,6 +1926,28 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         OnPropertiesChanged(nameof(SelectedThemeMode), nameof(SelectedColorSchemeId),
             nameof(IsThemeSystem), nameof(IsThemeLight), nameof(IsThemeDark),
             nameof(AppearanceStatusText), nameof(ColorSchemeHint));
+
+        // 背景与动效
+        var background = config.Ui.Background ?? new BackgroundConfig();
+        background.Normalize();
+        _backgroundMode = background.Mode;
+        _backgroundImagePath = background.ImagePath;
+        _backgroundImageOpacity = background.ImageOpacity;
+        _backgroundBlurRadius = background.BlurRadius;
+        _backgroundDim = background.Dim;
+        _backgroundFit = background.Fit;
+        _backgroundSolidColor = background.SolidColor;
+        _backgroundGradientStart = background.GradientStart;
+        _backgroundGradientEnd = background.GradientEnd;
+        _backgroundSurfaceOpacity = background.SurfaceOpacity;
+        _selectedMotionMode = MotionModes.Normalize(config.Ui.Motion);
+        OnPropertiesChanged(nameof(SelectedBackgroundMode), nameof(SelectedBackgroundFit),
+            nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
+            nameof(BackgroundImageOpacity), nameof(BackgroundBlurRadius), nameof(BackgroundDim),
+            nameof(BackgroundSurfaceOpacity), nameof(BackgroundSolidColor), nameof(BackgroundGradientStart),
+            nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode), nameof(IsBackgroundSolidMode),
+            nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom), nameof(BackgroundStatusText),
+            nameof(SelectedMotionMode));
 
         ValidateHotkeys();
         _expressionMapModelDirectory = NormalizeModelDirectory(ModelDirectory);
@@ -2852,6 +3188,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             HistoryLimit = HistoryLimit,
             Theme = _selectedThemeMode,
             ColorScheme = _selectedColorSchemeId,
+            Motion = _selectedMotionMode,
+            Background = BuildBackgroundDraft(),
             ShowWelcomeOnStartup = ShowWelcomeOnStartup
         };
 
@@ -3018,5 +3356,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _disposed = true;
         _controller.MicrophoneLevelChanged -= OnMicrophoneLevelChanged;
         ThemeManager.ThemeChanged -= OnThemeManagerChanged;
+        _backgroundPreviewTimer?.Stop();
+        _backgroundPreviewTimer = null;
     }
 }

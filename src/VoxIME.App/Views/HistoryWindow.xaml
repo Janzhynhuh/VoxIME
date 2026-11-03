@@ -11,7 +11,7 @@
         WindowStartupLocation="CenterScreen"
         Icon="{x:Null}">
 
-    <Border Margin="18" Background="{DynamicResource BgBrush}"
+    <Border x:Name="RootBorder" Margin="18" Background="{DynamicResource WindowBackgroundBrush}"
             BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
             CornerRadius="16" Effect="{StaticResource WindowShadow}">
         <Grid>
@@ -22,6 +22,9 @@
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+
+            <!-- 自定义背景暗化遮罩：保证文字对比度（主题色模式下为全透明） -->
+            <Border Grid.RowSpan="5" Background="{DynamicResource WindowDimBrush}" IsHitTestVisible="False" />
 
             <!-- 标题栏 -->
             <Border x:Name="TitleBar" Grid.Row="0" Background="Transparent" Padding="18,0"

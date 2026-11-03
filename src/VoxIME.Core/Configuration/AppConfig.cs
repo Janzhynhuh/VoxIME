@@ -260,6 +260,9 @@ public sealed class AppConfig
         Ui.HistoryLimit = Math.Clamp(Ui.HistoryLimit, 10, 2000);
         Ui.Theme = ThemeModes.Normalize(Ui.Theme);
         Ui.ColorScheme = ThemeCatalog.NormalizeId(Ui.ColorScheme);
+        Ui.Motion = MotionModes.Normalize(Ui.Motion);
+        Ui.Background ??= new BackgroundConfig();
+        Ui.Background.Normalize();
 
         Overlay ??= new OverlayConfig();
         Overlay.AutoHideMs = Math.Clamp(Overlay.AutoHideMs, 500, 30000);
@@ -553,6 +556,12 @@ public sealed class UiConfig
 
     /// <summary>配色方案 ID（见 <see cref="ThemeCatalog"/>，如 voxime / catppuccin-mocha）。</summary>
     public string ColorScheme { get; set; } = ThemeCatalog.DefaultColorSchemeId;
+
+    /// <summary>界面动效档位：expressive（明显，默认）/ subtle（克制）/ off（关闭）。</summary>
+    public string Motion { get; set; } = MotionModes.Expressive;
+
+    /// <summary>设置中心/欢迎/历史等窗口的自定义背景（主题色/纯色/渐变/图片）。</summary>
+    public BackgroundConfig Background { get; set; } = new();
 
     public bool ShowWelcomeOnStartup { get; set; } = true;
 }

@@ -189,3 +189,25 @@ App（`VoxIME.App.Infrastructure`）：
 - XAML 硬性规则：颜色只能写 `{DynamicResource ...}`；**禁止**硬编码十六进制颜色，禁止把颜色资源用 `StaticResource` 烘焙进样式（否则实时换肤失效、浅色主题错色）。新增颜色先加 `ThemeTokens` 派生键，再在 `ThemeCatalog` 各配色里给语义值。
 - 主题无关资源（字体、圆角、黑色阴影、`WhiteBrush`）放 `Themes/Base.xaml`；调色板不落 XAML，由 `ThemeManager` 生成。
 
+### 10.1 背景与动效契约（2026-11-03 第二批）
+
+配置文件（`UiConfig`）：
+
+- `motion`：`expressive`（明显，默认）/ `subtle`（克制）/ `off`（关闭）；`Normalize` 非法值回退 `expressive`。
+- `background`：只作用于设置/历史/关于/欢迎等低频窗口，**HUD 与 Live2D 桌宠不使用**。字段：
+  - `mode`：`theme`（默认）/ `solid` / `gradient` / `image`；
+  - `imagePath`：选择图片时复制到 `%APPDATA%\VoxIME\backgrounds`（源文件移动/删除不影响）；
+  - `imageOpacity` 0.2–1.0、`blurRadius` 0–60、`dim` 0–0.95、`fit`（`cover`/`contain`/`fill`）、`surfaceOpacity` 0.35–1.0（玻璃强度）；
+  - `solidColor` / `gradientStart` / `gradientEnd`：`#RRGGBB`，空=跟随主题。
+
+Core：
+
+- `VoxIME.Core.Appearance.MotionModes`：动效档位规范化/解析。
+- `VoxIME.Core.Configuration.BackgroundConfig`：背景字段、`IsCustom`、`Normalize()`；颜色非法时置空（跟随主题）。
+
+App：
+
+- `Infrastructure.Motion`：动效 token（明显档时长/位移，克制档按时长 ×0.62、幅度 ×0.5），提供 `PlayEnter/PlayExit/PlaySlideIn/PlayDialogEnter/PlayLift/PlayPress`；只动画 `Opacity` 与 `RenderTransform`，XAML 不写 Storyboard 时长。
+- `Infrastructure.BackgroundRenderer`：把背景配置展开为 `WindowBackgroundBrush` / `WindowDimBrush` 两个 DynamicResource；图片先按 980 宽解码 + `RenderTargetBitmap` 预烘焙模糊并缓存，不挂实时 `BlurEffect`；图片模式会让 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷按 `surfaceOpacity` 变半透明（玻璃质感）。消息框使用不受玻璃影响的 `DialogCardBrush`。
+- `Infrastructure.BackgroundImageStore`：背景图片本机存储（复制/清理旧图，只保留最近 8 张）。
+- 窗口 XAML 约定：低频窗口根 `Border.Background` 用 `{DynamicResource WindowBackgroundBrush}`，内部第一层加 `{DynamicResource WindowDimBrush}` 遮罩（主题色模式下为透明）；HUD/桌宠保持原样。
