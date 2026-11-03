@@ -52,6 +52,7 @@ public static class SmoothScroll
 
         state.Target = Math.Clamp(state.Target + deltaPixels, 0, viewer.ScrollableHeight);
         state.LastTimestamp = now;
+        state.HasFrameClock = false;
         state.Animating = true;
         HookRendering();
     }
@@ -141,7 +142,8 @@ public static class SmoothScroll
     private static void OnRendering(object? sender, EventArgs e)
     {
         var hasActive = false;
-        var now = Stopwatch.GetTimestamp();
+        var frames = e as RenderingEventArgs;
+        var compositionSeconds = frames?.RenderingTime.TotalSeconds;
 
         foreach (var (viewer, state) in States)
         {
@@ -151,8 +153,27 @@ public static class SmoothScroll
             }
 
             hasActive = true;
-            var elapsed = (now - state.LastTimestamp) * TimestampToSeconds;
-            state.LastTimestamp = now;
+            double elapsed;
+
+            if (state.HasFrameClock && compositionSeconds is double frameSeconds)
+            {
+                // 优先用合成器自己的帧时间戳，和显示器 vsync 完全对齐。
+                elapsed = Math.Clamp(frameSeconds - state.LastFrameSeconds, 0, 0.05);
+                state.LastFrameSeconds = frameSeconds;
+            }
+            else
+            {
+                // 刚由滚轮启动时还没有上一合成帧时间，用 Stopwatch 从滚轮事件时刻算起。
+                var stopwatchNow = Stopwatch.GetTimestamp();
+                elapsed = Math.Clamp((stopwatchNow - state.LastTimestamp) * TimestampToSeconds, 0, 0.05);
+                state.LastTimestamp = stopwatchNow;
+                if (compositionSeconds is double firstFrameSeconds)
+                {
+                    state.HasFrameClock = true;
+                    state.LastFrameSeconds = firstFrameSeconds;
+                }
+            }
+
             var step = ScrollMotion.Next(state.Offset, state.Target, elapsed);
             state.Offset = step.Offset;
             viewer.ScrollToVerticalOffset(state.Offset);
@@ -160,6 +181,7 @@ public static class SmoothScroll
             if (step.Completed)
             {
                 state.Animating = false;
+                state.HasFrameClock = false;
             }
         }
 
@@ -275,5 +297,11 @@ public static class SmoothScroll
         public double Target { get; set; }
 
         public long LastTimestamp { get; set; }
+
+        /// <summary>是否已经拿到过合成器帧时间戳（用于和 vsync 对齐）。</summary>
+        public bool HasFrameClock { get; set; }
+
+        /// <summary>上一合成帧的时间（RenderingTime 秒）。</summary>
+        public double LastFrameSeconds { get; set; }
     }
 }
