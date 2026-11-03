@@ -25,6 +25,13 @@ public static class SmoothScroll
     private static readonly Dictionary<ScrollViewer, ScrollState> States = new();
     private static bool _renderingHooked;
 
+    /// <summary>滚动动画的实时帧率（约每 250ms 触发一次，供设置窗口显示/诊断）。</summary>
+    public static event EventHandler<double>? FrameRateChanged;
+
+    private static long _fpsWindowStart;
+    private static int _fpsFrames;
+    private static bool _fpsWindowActive;
+
     public static readonly DependencyProperty IsEnabledProperty = DependencyProperty.RegisterAttached(
         "IsEnabled", typeof(bool), typeof(SmoothScroll), new PropertyMetadata(false, OnIsEnabledChanged));
 
@@ -177,11 +184,43 @@ public static class SmoothScroll
             }
         }
 
+        if (hasActive)
+        {
+            if (!_fpsWindowActive)
+            {
+                _fpsWindowActive = true;
+                _fpsWindowStart = now;
+                _fpsFrames = 0;
+            }
+
+            _fpsFrames++;
+            var elapsedMs = now - _fpsWindowStart;
+            if (elapsedMs >= 250)
+            {
+                EmitFrameRate(_fpsFrames * 1000d / elapsedMs);
+                _fpsWindowStart = now;
+                _fpsFrames = 0;
+            }
+        }
+        else if (_fpsWindowActive)
+        {
+            var elapsedMs = now - _fpsWindowStart;
+            if (elapsedMs > 0)
+            {
+                EmitFrameRate(_fpsFrames * 1000d / elapsedMs);
+            }
+
+            _fpsWindowActive = false;
+            _fpsFrames = 0;
+        }
+
         if (!hasActive)
         {
             UnhookRendering();
         }
     }
+
+    private static void EmitFrameRate(double fps) => FrameRateChanged?.Invoke(null, Math.Round(fps));
 
     /// <summary>
     /// 外部滚动（拖动滚动条、键盘、代码调用 ScrollToVerticalOffset 等）：

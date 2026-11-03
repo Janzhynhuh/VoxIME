@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using VoxIME.App.Infrastructure;
 using VoxIME.App.ViewModels;
 using VoxIME.Core.Logging;
@@ -14,6 +15,7 @@ public partial class SettingsWindow : Window
     private readonly IAppLogger _logger;
     private bool _hiding;
     private int _lastPageIndex;
+    private readonly DispatcherTimer _fpsHideTimer;
 
     public SettingsWindow(SettingsViewModel viewModel, IAppLogger logger)
     {
@@ -22,6 +24,13 @@ public partial class SettingsWindow : Window
         _logger = logger;
         DataContext = viewModel;
         WindowHelper.EnableDrag(this, TitleBar);
+        _fpsHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.2) };
+        _fpsHideTimer.Tick += (_, _) =>
+        {
+            _fpsHideTimer.Stop();
+            FpsText.Visibility = Visibility.Collapsed;
+        };
+        SmoothScroll.FrameRateChanged += OnFrameRateChanged;
         Closing += OnClosing;
         IsVisibleChanged += OnIsVisibleChanged;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -67,6 +76,14 @@ public partial class SettingsWindow : Window
         Motion.PlaySlideIn(PageHost, fromX: 12 * direction, duration: TimeSpan.FromMilliseconds(200));
     }
 
+    private void OnFrameRateChanged(object? sender, double fps)
+    {
+        FpsText.Text = $"{fps:0} FPS";
+        FpsText.Visibility = Visibility.Visible;
+        _fpsHideTimer.Stop();
+        _fpsHideTimer.Start();
+    }
+
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (!AllowClose)
@@ -76,6 +93,7 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        SmoothScroll.FrameRateChanged -= OnFrameRateChanged;
         _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         _viewModel.Dispose();
     }
