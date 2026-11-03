@@ -57,6 +57,9 @@ internal sealed class PetWindow : Window
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
 
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+
     private readonly Grid _contentHost;
     private readonly FallbackAvatar _avatar;
     private readonly Border _dragLayer;
@@ -299,6 +302,33 @@ internal sealed class PetWindow : Window
         }
     }
 
+    private double GetGeometryScale(double width)
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero && width > 1
+                && GetWindowRect(hwnd, out var rect))
+            {
+                var physicalWidth = rect.Right - rect.Left;
+                if (physicalWidth > 0)
+                {
+                    var scale = physicalWidth / width;
+                    if (scale is > 0.5 and < 4.0)
+                    {
+                        return scale;
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // 回退到 DPI API。
+        }
+
+        return GetWindowScale();
+    }
+
     /// <summary>取指定窗口矩形中心所在的显示器工作区/完整区域（WPF DIP）。</summary>
     private bool TryGetMonitorRects(double left, double top, double width, double height, out Rect workArea, out Rect monitorBounds)
     {
@@ -306,22 +336,29 @@ internal sealed class PetWindow : Window
         monitorBounds = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
         try
         {
-            var scale = GetWindowScale();
+            // 远程桌面切换后 GetDpiForWindow 可能短暂仍是旧 DPI。
+            // 用“物理窗口宽 / WPF 实际宽”反推当前实际缩放，比只信 DPI API 更稳。
+            var logicalWidth = ActualWidth > 1 ? ActualWidth : width;
+            var scale = GetGeometryScale(logicalWidth);
             if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale))
             {
                 scale = 1.0;
             }
 
-            var point = new POINT
-            {
-                X = (int)Math.Round((left + width / 2) * scale),
-                Y = (int)Math.Round((top + height / 2) * scale)
-            };
-            var monitor = MonitorFromPoint(point, MonitorDefaultToNearest);
+            // 优先用窗口句柄定位显示器。远程桌面/混合 DPI 下，用 WPF 坐标反推物理坐标
+            // 再 MonitorFromPoint 可能落到错误屏幕，导致下边吸附取错任务栏工作区。
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var monitor = hwnd != IntPtr.Zero
+                ? MonitorFromWindow(hwnd, MonitorDefaultToNearest)
+                : IntPtr.Zero;
             if (monitor == IntPtr.Zero)
             {
-                var hwnd = new WindowInteropHelper(this).Handle;
-                monitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+                var point = new POINT
+                {
+                    X = (int)Math.Round((left + width / 2) * scale),
+                    Y = (int)Math.Round((top + height / 2) * scale)
+                };
+                monitor = MonitorFromPoint(point, MonitorDefaultToNearest);
             }
 
             if (monitor == IntPtr.Zero)

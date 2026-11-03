@@ -86,7 +86,9 @@ public sealed class Live2DController : ILive2DController
     private string? _lastError;
     private double? _userLeft;
     private double? _userTop;
+    private bool _windowSnapped;
     private bool _systemParametersSubscribed;
+    private bool _systemEventsSubscribed;
 
     public Live2DController(IAppLogger logger)
     {
@@ -211,41 +213,83 @@ public sealed class Live2DController : ILive2DController
 
     private void SubscribeDisplaySettings()
     {
-        if (_systemParametersSubscribed)
+        if (_systemParametersSubscribed && _systemEventsSubscribed)
         {
             return;
         }
 
-        try
+        if (!_systemParametersSubscribed)
         {
-            SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
-            _systemParametersSubscribed = true;
+            try
+            {
+                SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
+                _systemParametersSubscribed = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug($"[Live2D] 订阅显示器配置变化失败：{ex.Message}");
+            }
         }
-        catch (Exception ex)
+
+        if (!_systemEventsSubscribed)
         {
-            _logger.Debug($"[Live2D] 订阅显示器配置变化失败：{ex.Message}");
+            try
+            {
+                // 远程桌面/显示器切换不一定触发 WPF 的 SystemParameters 事件；
+                // SystemEvents.DisplaySettingsChanged 是 WM_DISPLAYCHANGE 的兜底。
+                Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnSystemDisplaySettingsChanged;
+                _systemEventsSubscribed = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug($"[Live2D] 订阅显示设置变化失败：{ex.Message}");
+            }
         }
     }
 
     private void UnsubscribeDisplaySettings()
     {
-        if (!_systemParametersSubscribed)
+        if (_systemParametersSubscribed)
+        {
+            try
+            {
+                SystemParameters.StaticPropertyChanged -= OnSystemParametersChanged;
+            }
+            catch (Exception)
+            {
+                // 进程退出阶段忽略。
+            }
+            finally
+            {
+                _systemParametersSubscribed = false;
+            }
+        }
+
+        if (_systemEventsSubscribed)
+        {
+            try
+            {
+                Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnSystemDisplaySettingsChanged;
+            }
+            catch (Exception)
+            {
+                // 进程退出阶段忽略。
+            }
+            finally
+            {
+                _systemEventsSubscribed = false;
+            }
+        }
+    }
+
+    private void OnSystemDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        if (_disposed)
         {
             return;
         }
 
-        try
-        {
-            SystemParameters.StaticPropertyChanged -= OnSystemParametersChanged;
-        }
-        catch (Exception)
-        {
-            // 进程退出阶段忽略。
-        }
-        finally
-        {
-            _systemParametersSubscribed = false;
-        }
+        RunOnUiThread(EnsureWindowVisibleOnDisplayChange, "DisplaySettingsChanged(SystemEvents)");
     }
 
     private void OnSystemParametersChanged(object? sender, PropertyChangedEventArgs e)
@@ -271,14 +315,30 @@ public sealed class Live2DController : ILive2DController
 
     private void EnsureWindowVisibleOnDisplayChange()
     {
-        if (_disposed || _window is null || _window.IsVisibleOnCurrentDesktop())
+        if (_disposed || _window is null)
         {
             return;
         }
 
         var config = GetConfig();
-        _logger.Info("[Live2D] 显示器布局变化，桌宠窗口已不在可见区域，自动回位。");
-        ResetWindowToVisiblePosition(config);
+        if (!_window.IsVisibleOnCurrentDesktop())
+        {
+            _logger.Info("[Live2D] 显示器布局变化，桌宠窗口已不在可见区域，自动回位。");
+            ResetWindowToVisiblePosition(config);
+            return;
+        }
+
+        // 远程桌面切换后，窗口可能仍在可见区域，但已不在新任务栏底部。
+        // 只在切换前确实处于吸附状态时才强制重新贴底，避免覆盖用户主动拖到的位置。
+        if (config.SnapToEdge && _windowSnapped
+            && _window.TrySnapToBottomEdge(config.KeepAboveTaskbar, threshold: double.PositiveInfinity))
+        {
+            _userLeft = _window.Left;
+            _userTop = _window.Top;
+            _logger.Info(
+                $"[Live2D] 显示器布局变化，桌宠重新吸附到底部：({_window.Left:0},{_window.Top:0})");
+            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
+        }
     }
 
     /// <summary>把窗口移到当前屏的可见位置，并通知上层持久化新坐标。</summary>
@@ -303,6 +363,7 @@ public sealed class Live2DController : ILive2DController
             config.AlwaysOnTop,
             config.ClickThrough);
 
+        _windowSnapped = config.SnapToEdge;
         PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
     }
 
@@ -567,6 +628,10 @@ public sealed class Live2DController : ILive2DController
             config.Opacity,
             config.AlwaysOnTop,
             config.ClickThrough);
+
+        // 记录当前是否真的在底部；显示器切换后只有吸附状态才重新贴底。
+        _windowSnapped = config.SnapToEdge
+            && _window.TrySnapToBottomEdge(config.KeepAboveTaskbar, threshold: 2);
 
         // 分辨率/多屏布局变化后，旧坐标可能完全落到当前桌面外（表现为“看不到桌宠”）。
         if (!_window.IsVisibleOnCurrentDesktop())
@@ -1532,8 +1597,10 @@ public sealed class Live2DController : ILive2DController
             var config = GetConfig();
             // 只做下边吸附；向上拖动时不再把窗口往下拽，用户可以自由移到上半屏。
             var movingUp = previousTop.HasValue && e.Top < previousTop.Value - 0.5;
-            if (config.SnapToEdge && !movingUp && _window is not null
-                && _window.TrySnapToBottomEdge(config.KeepAboveTaskbar))
+            var snapped = config.SnapToEdge && !movingUp && _window is not null
+                && _window.TrySnapToBottomEdge(config.KeepAboveTaskbar);
+            _windowSnapped = config.SnapToEdge && !movingUp && snapped;
+            if (snapped && _window is not null)
             {
                 _userLeft = _window.Left;
                 _userTop = _window.Top;
