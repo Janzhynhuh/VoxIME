@@ -208,7 +208,7 @@ sequenceDiagram
 - **玻璃质感**：自定义背景时，`ThemeManager` 按 `surfaceOpacity` 把 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷改为半透明，让背景透出来；消息框使用不透明的 `DialogCardBrush`，不参与玻璃化。
 - **动效**：`UiConfig.Motion` 三档（明显 / 克制 / 关闭）。`Infrastructure.Motion` 统一时长/位移/缓动（明显档 160–280ms、上浮 16–18px、缩放 0.92–0.97；克制档时长 ×0.62、幅度 ×0.5；关闭档瞬时完成），提供窗口入场/退场、设置页滑入、对话框回弹、卡片抬起、按钮按压等 helper。窗口在 `IsVisibleChanged` 播放入场、关闭/隐藏时先播退场再真正关闭（退出流程 `AllowClose=true` 直接关闭，不延迟退出）；设置页切换由 `SettingsWindow` 监听 `CurrentPage` 播放滑入。
 - **明暗匹配**：文字颜色完全由主题的浅色/深色决定（浅色主题=深色字 + 浅色玻璃卡片，深色主题反之）。外观页提供「按背景亮度匹配主题」：`BackgroundTone` 估算纯色/渐变/图片背景的平均亮度（图片按 32px 采样），自动切换到匹配的明暗主题。
-- **滚动惯性**：`Infrastructure.SmoothScroll` 挂到页面根 `ScrollViewer`，与 `CompositionTarget.Rendering` 同步、按时间增量指数衰减（约 100px/格、时间常数 90ms，帧率无关）；滚动期间临时移除窗口根容器的 `DropShadowEffect`（透明窗口是软件渲染，整窗模糊会明显拉低帧率），停止后恢复；文本框与拖动滚动条保持原生行为。
+- **滚动惯性**：`Infrastructure.SmoothScroll` 挂到页面根 `ScrollViewer`，与 `CompositionTarget.Rendering` 同步、按时间增量指数衰减（约 100px/格、时间常数 90ms，帧率无关）；滚动期间临时移除窗口根容器的 `DropShadowEffect`（透明窗口是软件渲染，整窗模糊会明显拉低帧率），停止滚动 420ms 后才恢复（避免连续滚轮时阴影反复闪烁）；文本框与拖动滚动条保持原生行为。
 - **性能取舍**：按项目当前定位不做 GPU/远程桌面自动降级；只动画 `Opacity` 与 `RenderTransform`（不触发布局重算），图片模糊只做一次缓存，避免实时特效与逐帧重算。
 ## 6. 配置与持久化
 

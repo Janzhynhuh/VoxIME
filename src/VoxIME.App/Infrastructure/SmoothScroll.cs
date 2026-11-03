@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Threading;
 
 namespace VoxIME.App.Infrastructure;
 
@@ -109,6 +110,8 @@ public static class SmoothScroll
 
         e.Handled = true;
         var state = GetState(viewer);
+        // 新一轮滚轮到来时，保持阴影暂时关闭（不要每格滚轮都切一次效果，否则窗口阴影会闪）。
+        state.RestoreTimer?.Stop();
         var from = state.Animating ? state.Target : viewer.VerticalOffset;
         state.Target = Math.Clamp(from - e.Delta / 120d * PixelsPerNotch, 0, viewer.ScrollableHeight);
 
@@ -163,6 +166,41 @@ public static class SmoothScroll
     {
         state.Animating = false;
         state.LastTimestamp = null;
+        // 不立刻恢复阴影：等这一轮滚动彻底停下来再恢复，避免连续滚轮时阴影反复闪烁。
+        ScheduleRestore(state);
+    }
+
+    private static void ScheduleRestore(ScrollState state)
+    {
+        if (state.Root is null || state.SavedEffect is null)
+        {
+            return;
+        }
+
+        state.RestoreTimer ??= CreateRestoreTimer(state);
+        state.RestoreTimer.Stop();
+        state.RestoreTimer.Start();
+    }
+
+    private static DispatcherTimer CreateRestoreTimer(ScrollState state)
+    {
+        var timer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(420)
+        };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (!state.Animating)
+            {
+                RestoreEffect(state);
+            }
+        };
+        return timer;
+    }
+
+    private static void RestoreEffect(ScrollState state)
+    {
         if (state.Root is not null && state.SavedEffect is not null)
         {
             state.Root.Effect = state.SavedEffect;
@@ -177,7 +215,8 @@ public static class SmoothScroll
         if (States.TryGetValue(viewer, out var state))
         {
             state.Animating = false;
-            Finish(state);
+            state.RestoreTimer?.Stop();
+            RestoreEffect(state);
             States.Remove(viewer);
         }
 
@@ -289,5 +328,7 @@ public static class SmoothScroll
         public FrameworkElement? Root { get; set; }
 
         public Effect? SavedEffect { get; set; }
+
+        public DispatcherTimer? RestoreTimer { get; set; }
     }
 }
