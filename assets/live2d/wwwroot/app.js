@@ -524,8 +524,6 @@
       try {
         diag.readback = {
           mouth: core.getParameterValueById(getCubismId(mouthParamIds[0])),
-          eyeLOpen: core.getParameterValueById(getCubismId('ParamEyeLOpen')),
-          eyeROpen: core.getParameterValueById(getCubismId('ParamEyeROpen')),
           angleX: core.getParameterValueById(getCubismId('ParamAngleX')),
           angleY: core.getParameterValueById(getCubismId('ParamAngleY')),
           eyeBallX: core.getParameterValueById(getCubismId('ParamEyeBallX')),
@@ -1764,12 +1762,6 @@
         targetGazeY: live.targetGazeY,
         groups: modelGroups,
         idleGroup: idleGroup,
-        config: {
-          idleMotion: config.idleMotion,
-          idleMotionGroup: config.idleMotionGroup,
-          eyeFollow: config.eyeFollow,
-          mouthSync: config.mouthSync
-        },
         demoActive: demoActive,
         fps: fpsCounter.value,
         mouthSync: config.mouthSync,
@@ -1779,7 +1771,7 @@
       try {
         if (model) {
           result.params = {};
-          var ids = ['ParamMouthOpenY', 'ParamEyeLOpen', 'ParamEyeROpen', 'ParamAngleX', 'ParamAngleY', 'ParamEyeBallX', 'ParamEyeBallY'];
+          var ids = ['ParamMouthOpenY', 'ParamAngleX', 'ParamAngleY', 'ParamEyeBallX', 'ParamEyeBallY'];
           for (var i = 0; i < ids.length; i++) {
             try { result.params[ids[i]] = model.internalModel.coreModel.getParameterValueById(getCubismId(ids[i])); } catch (e) { /* ignore */ }
           }
@@ -1787,8 +1779,6 @@
             var mm = model.internalModel.motionManager;
             result.motion = {
               playing: !!mm.playing,
-              finished: typeof mm.isFinished === 'function' ? mm.isFinished() : null,
-              idleGroup: mm.groups ? mm.groups.idle : null,
               group: mm.state ? mm.state.currentGroup : null,
               index: mm.state ? mm.state.currentIndex : null
             };
