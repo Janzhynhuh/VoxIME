@@ -43,7 +43,7 @@
 
 ### 方式一：安装包（推荐）
 
-1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-Setup-v0.3.3.exe`，双击运行。
+1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-Setup-v0.3.4.exe`，双击运行。
    - 默认安装到当前用户目录 `%LOCALAPPDATA%\Programs\VoxIME`，**不需要管理员权限**
    - 安装器会创建开始菜单快捷方式，可选桌面快捷方式
    - 卸载默认**保留** `%APPDATA%\VoxIME` 里的配置、历史和模型；只有安装时勾选“删除用户数据”才会清理
@@ -55,7 +55,7 @@
 
 ### 方式二：免安装版（Portable ZIP）
 
-1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.3.3.zip`，解压到任意普通目录（不要放在 C:\Program Files 下，避免写入权限问题）。
+1. 从 [GitHub Releases](https://github.com/Janzhynhuh/VoxIME/releases/latest) 下载 `VoxIME-win-x64-v0.3.4.zip`，解压到任意普通目录（不要放在 C:\Program Files 下，避免写入权限问题）。
 2. 双击 `VoxIME.exe` 启动，后续设置步骤同上。
 
 ### 方式三：源码构建
@@ -68,11 +68,11 @@ dotnet run --project src/VoxIME.App
 
 # 发布自包含 x64 包（含 .NET 运行时，目标机器无需安装 SDK）
 .\scripts\publish-x64.ps1
-# 产物：deploy\VoxIME-win-x64\ 与 deploy\VoxIME-win-x64-v0.3.3.zip
+# 产物：deploy\VoxIME-win-x64\ 与 deploy\VoxIME-win-x64-v0.3.4.zip
 
 # 构建 Windows 安装包（需要 Inno Setup 6；CI 会自动执行）
 .\scripts\build-installer.ps1 -SkipPublish
-# 产物：deploy\VoxIME-Setup-v0.3.3.exe
+# 产物：deploy\VoxIME-Setup-v0.3.4.exe
 ```
 
 ## 🎙️ 支持的语音识别服务
