@@ -447,49 +447,6 @@ internal sealed class PetWindow : Window
         Top = workArea.Top + (workArea.Height - Height) / 2;
     }
 
-    /// <summary>
-    /// 临时诊断信息：显示切换时把窗口/显示器/DPI/工作区一次性写入日志。
-    /// 定位远程桌面吸附问题后删除，不作为长期 API。
-    /// </summary>
-    public string GetDisplayDiagnostics()
-    {
-        try
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            var scale = GetWindowScale();
-            var physical = default(RECT);
-            var hasPhysical = hwnd != IntPtr.Zero && GetWindowRect(hwnd, out physical);
-            var monitor = hwnd != IntPtr.Zero
-                ? MonitorFromWindow(hwnd, MonitorDefaultToNearest)
-                : IntPtr.Zero;
-            var work = "n/a";
-            var bounds = "n/a";
-            if (monitor != IntPtr.Zero)
-            {
-                var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
-                if (GetMonitorInfo(monitor, ref info))
-                {
-                    work = $"{info.rcWork.Left},{info.rcWork.Top},{info.rcWork.Right},{info.rcWork.Bottom}";
-                    bounds = $"{info.rcMonitor.Left},{info.rcMonitor.Top},{info.rcMonitor.Right},{info.rcMonitor.Bottom}";
-                }
-            }
-
-            var physicalText = hasPhysical
-                ? $"{physical.Left},{physical.Top},{physical.Right},{physical.Bottom}"
-                : "n/a";
-            return $"win=({Left:0.#},{Top:0.#},{Width:0.#}x{Height:0.#}) actual={ActualWidth:0.#}x{ActualHeight:0.#} " +
-                   $"scale={scale:0.###} physical={physicalText} monitorBounds={bounds} monitorWork={work} " +
-                   $"virtual=({SystemParameters.VirtualScreenLeft:0.#},{SystemParameters.VirtualScreenTop:0.#}," +
-                   $"{SystemParameters.VirtualScreenWidth:0.#}x{SystemParameters.VirtualScreenHeight:0.#}) " +
-                   $"primaryWork=({SystemParameters.WorkArea.Left:0.#},{SystemParameters.WorkArea.Top:0.#}," +
-                   $"{SystemParameters.WorkArea.Width:0.#}x{SystemParameters.WorkArea.Height:0.#})";
-        }
-        catch (Exception ex)
-        {
-            return "diagnostics-failed: " + ex.Message;
-        }
-    }
-
     private double GetPhysicalDisplayScale()
     {
         try

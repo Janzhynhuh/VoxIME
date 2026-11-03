@@ -87,7 +87,7 @@ public sealed class Live2DController : ILive2DController
     private double? _userLeft;
     private double? _userTop;
     private bool _systemParametersSubscribed;
-    private bool _diagnosticSystemEventsSubscribed;
+    private bool _systemEventsSubscribed;
     private bool _physicalSnapRetryPending;
 
     public Live2DController(IAppLogger logger)
@@ -213,30 +213,36 @@ public sealed class Live2DController : ILive2DController
 
     private void SubscribeDisplaySettings()
     {
-        if (_systemParametersSubscribed)
+        if (_systemParametersSubscribed && _systemEventsSubscribed)
         {
             return;
         }
 
-        try
+        if (!_systemParametersSubscribed)
         {
-            SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
-            _systemParametersSubscribed = true;
-        }
-        catch (Exception ex)
-        {
-            _logger.Debug($"[Live2D] 订阅显示器配置变化失败：{ex.Message}");
+            try
+            {
+                SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
+                _systemParametersSubscribed = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug($"[Live2D] 订阅显示器配置变化失败：{ex.Message}");
+            }
         }
 
-        try
+        if (!_systemEventsSubscribed)
         {
-            // 临时诊断：确认 RDP/远控切换是否触发 WM_DISPLAYCHANGE。
-            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDiagnosticDisplaySettingsChanged;
-            _diagnosticSystemEventsSubscribed = true;
-        }
-        catch (Exception ex)
-        {
-            _logger.Debug($"[Live2D][诊断] 订阅 SystemEvents 失败：{ex.Message}");
+            try
+            {
+                // 远程桌面/虚拟显示器切换不一定触发 WPF SystemParameters 事件。
+                Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnSystemEventsDisplaySettingsChanged;
+                _systemEventsSubscribed = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug($"[Live2D] 订阅显示设置变化失败：{ex.Message}");
+            }
         }
     }
 
@@ -258,11 +264,11 @@ public sealed class Live2DController : ILive2DController
             }
         }
 
-        if (_diagnosticSystemEventsSubscribed)
+        if (_systemEventsSubscribed)
         {
             try
             {
-                Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDiagnosticDisplaySettingsChanged;
+                Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnSystemEventsDisplaySettingsChanged;
             }
             catch (Exception)
             {
@@ -270,25 +276,21 @@ public sealed class Live2DController : ILive2DController
             }
             finally
             {
-                _diagnosticSystemEventsSubscribed = false;
+                _systemEventsSubscribed = false;
             }
         }
     }
 
-    private void OnDiagnosticDisplaySettingsChanged(object? sender, EventArgs e)
+    private void OnSystemEventsDisplaySettingsChanged(object? sender, EventArgs e)
     {
         if (_disposed)
         {
             return;
         }
 
-        RunOnUiThread(() =>
-        {
-            if (_window is not null)
-            {
-                _logger.Info($"[Live2D][诊断] SystemEvents.DisplaySettingsChanged：{_window.GetDisplayDiagnostics()}");
-            }
-        }, "DiagnosticDisplaySettingsChanged");
+        RunOnUiThread(
+            () => EnsureWindowVisibleOnDisplayChange("SystemEvents.DisplaySettingsChanged"),
+            "DisplaySettingsChanged(SystemEvents)");
     }
 
     private void OnSystemParametersChanged(object? sender, PropertyChangedEventArgs e)
@@ -323,9 +325,8 @@ public sealed class Live2DController : ILive2DController
 
         var visible = _window.IsVisibleOnCurrentDesktop();
         var needsRepair = _window.NeedsDisplayGeometryRepair();
-        _logger.Info(
-            $"[Live2D][诊断] 显示变化({source}) visibleOnVirtualDesktop={visible} " +
-            $"needsGeometryRepair={needsRepair} " + _window.GetDisplayDiagnostics());
+        _logger.Debug(
+            $"[Live2D] 显示变化({source}) visible={visible} needsGeometryRepair={needsRepair}");
 
         var config = GetConfig();
         if (config.SnapToEdge && (needsRepair || !visible)
