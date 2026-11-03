@@ -7,7 +7,7 @@ public static class AppInfo
 {
     public const string ProductName = "VoxIME 声语";
     public const string EnglishName = "VoxIME";
-    public const string Version = "0.3.2";
+    public const string Version = "0.3.3";
     public const string ConfigFileName = "config.json";
     public const string DefaultHotkeyPushToTalk = "Ctrl+Alt";
     public const string DefaultHotkeyToggle = "Ctrl+Alt+M";
