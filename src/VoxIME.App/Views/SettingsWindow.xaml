@@ -54,12 +54,8 @@
                         <TextBlock Text="设置" Style="{StaticResource MutedText}" Margin="8,0,0,0"
                                    VerticalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right"
-                                VerticalAlignment="Center" Margin="0,0,10,0">
-                        <TextBlock x:Name="FpsText" Text="-- FPS" Style="{StaticResource MutedText}"
-                                   Visibility="Collapsed" Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding VersionText}" Style="{StaticResource MutedText}" />
-                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding VersionText}" Style="{StaticResource MutedText}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0" />
                     <Button Grid.Column="3" Style="{StaticResource IconButton}" Content="&#xE921;"
                             Click="MinimizeButton_Click" ToolTip="最小化" />
                     <Button Grid.Column="4" Style="{StaticResource IconButton}" Content="&#xE711;"

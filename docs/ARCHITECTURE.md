@@ -209,7 +209,7 @@ sequenceDiagram
 - **动效**：`UiConfig.Motion` 三档（明显 / 克制 / 关闭）。`Infrastructure.Motion` 统一时长/位移/缓动（明显档 160–280ms、上浮 16–18px、缩放 0.92–0.97；克制档时长 ×0.62、幅度 ×0.5；关闭档瞬时完成），提供窗口入场/退场、设置页滑入、对话框回弹、卡片抬起、按钮按压等 helper。窗口在 `IsVisibleChanged` 播放入场、关闭/隐藏时先播退场再真正关闭（退出流程 `AllowClose=true` 直接关闭，不延迟退出）；设置页切换由 `SettingsWindow` 监听 `CurrentPage` 播放滑入。
 - **明暗匹配**：文字颜色完全由主题的浅色/深色决定（浅色主题=深色字 + 浅色玻璃卡片，深色主题反之）。外观页提供「按背景亮度匹配主题」：`BackgroundTone` 估算纯色/渐变/图片背景的平均亮度（图片按 32px 采样），自动切换到匹配的明暗主题。
 - **静态窗口阴影**：4 个设置类窗口不再在根容器挂 `DropShadowEffect`，改用 `Infrastructure.WindowShadowLayer`：首次显示时按窗口尺寸把圆角矩形阴影渲染成位图并缓存（实测 980×700 首次约几十毫秒、之后走缓存），把源形状像素挖掉只留外圈阴影；之后滚动/动画/内容变化都不会重新计算阴影，绘制时还只画四周 8 个区域、跳过中间的透明区域，进一步降低透明窗口的软件渲染开销。消息框体量小，仍保留小范围 `WindowShadow` Effect。
-- **滚动惯性**：`Infrastructure.SmoothScroll` 挂到页面根 `ScrollViewer`，滚轮每格约 100px；**视觉层 / 逻辑层分离**（参考 FluentWpfCore v3 方案）：每帧只更新 `ScrollViewer.Content` 的 `TranslateTransform`（不触发布局、跟随刷新率；视口裁剪由 `ScrollContentPresenter` 负责，位移不会把内容带出滚动区域），**滚动过程中完全不触发布局**，动画结束后才 `ScrollToVerticalOffset` + `UpdateLayout` 同步真实偏移（滚动条在停止后跟上，命中测试/虚拟化仍正确）。运动模型在 `VoxIME.Core.Services.ScrollMotion`：**指数跟随目标**——滚轮事件累加目标偏移，视觉偏移每帧按 `1-e^(-dt/τ)` 连续逼近目标（τ≈100ms），连续滚轮时目标持续领先，不会每格重新起步再停下；纯函数单测覆盖单调收敛、不越界、帧率无关与吸附。滚动不再触碰任何窗口特效；文本框与拖动滚动条保持原生行为。设置窗口标题栏在滚动时显示实时 FPS（静止 1.2s 后隐藏），用于诊断实际帧率。
+- **滚动惯性**：`Infrastructure.SmoothScroll` 挂到页面根 `ScrollViewer`，滚轮每格约 100px；与拖动滚动条走同一条路径：每帧调用 `ScrollViewer.ScrollToVerticalOffset` 把真实偏移推向目标，滚动条/内容/命中测试天然每帧同步，不会出现"滚动条停住、最后跳一下"。运动模型在 `VoxIME.Core.Services.ScrollMotion`：**指数跟随目标**——滚轮事件累加目标偏移，偏移每帧按 `1-e^(-dt/τ)` 连续逼近（τ≈75ms，帧率无关），连续滚轮时目标持续领先，不会每格重新起步再停下；纯函数单测覆盖单调收敛、不越界、帧率无关与吸附。滚动不再触碰任何窗口特效；文本框与拖动滚动条保持原生行为。
 - **性能取舍**：按项目当前定位不做 GPU/远程桌面自动降级；只动画 `Opacity` 与 `RenderTransform`（不触发布局重算），图片模糊只做一次缓存，避免实时特效与逐帧重算。
 ## 6. 配置与持久化
 
