@@ -84,8 +84,9 @@ public static class ThemeManager
         }
 
         var surfaceOpacity = _lastBackground.IsCustom ? _lastBackground.SurfaceOpacity : 1.0;
-        var nextPalette = BuildPaletteDictionary(resolved, surfaceOpacity);
-        BackgroundRenderer.Populate(nextPalette, _lastBackground, resolved);
+        var invertText = _lastBackground.InvertText;
+        var nextPalette = BuildPaletteDictionary(resolved, surfaceOpacity, invertText);
+        BackgroundRenderer.Populate(nextPalette, _lastBackground, resolved, invertText);
 
         var merged = app.Resources.MergedDictionaries;
         if (_palette is not null)
@@ -144,9 +145,15 @@ public static class ThemeManager
         }
     }
 
-    private static ResourceDictionary BuildPaletteDictionary(ResolvedTheme theme, double surfaceOpacity)
+    private static ResourceDictionary BuildPaletteDictionary(ResolvedTheme theme, double surfaceOpacity, bool invertText)
     {
-        var tokens = ThemeTokens.Build(theme.Colors, theme.IsLight);
+        IReadOnlyDictionary<string, string> tokens = ThemeTokens.Build(theme.Colors, theme.IsLight);
+        if (invertText)
+        {
+            // 文字反色：整套令牌按 HSL 明度反转（深色主题 → 浅色底 + 深色字），适合白色/浅色背景。
+            tokens = tokens.ToDictionary(pair => pair.Key, pair => ThemeColorMath.InvertLightness(pair.Value), StringComparer.Ordinal);
+        }
+
         var dictionary = new ResourceDictionary();
         var opacity = Math.Clamp(surfaceOpacity, 0, 1);
 

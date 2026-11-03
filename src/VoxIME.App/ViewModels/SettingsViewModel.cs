@@ -160,6 +160,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string? _backgroundGradientStart;
     private string? _backgroundGradientEnd;
     private double _backgroundSurfaceOpacity = 0.82;
+    private bool _backgroundInvertText;
     private string _selectedMotionMode = MotionModes.Expressive;
     private DispatcherTimer? _backgroundPreviewTimer;
 
@@ -1609,6 +1610,19 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>文字反色：适合白色/浅色背景，避免浅色背景上看不清浅色文字。</summary>
+    public bool BackgroundInvertText
+    {
+        get => _backgroundInvertText;
+        set
+        {
+            if (SetProperty(ref _backgroundInvertText, value))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
     public string? BackgroundSolidColor
     {
         get => _backgroundSolidColor;
@@ -1656,7 +1670,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SolidColor = _backgroundSolidColor,
         GradientStart = _backgroundGradientStart,
         GradientEnd = _backgroundGradientEnd,
-        SurfaceOpacity = _backgroundSurfaceOpacity
+        SurfaceOpacity = _backgroundSurfaceOpacity,
+        InvertText = _backgroundInvertText
     };
 
     private void PickBackgroundImage()
@@ -1719,12 +1734,14 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _backgroundGradientStart = null;
         _backgroundGradientEnd = null;
         _backgroundSurfaceOpacity = defaults.SurfaceOpacity;
+        _backgroundInvertText = false;
         OnPropertiesChanged(nameof(SelectedBackgroundMode), nameof(SelectedBackgroundFit),
             nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
             nameof(BackgroundImageOpacity), nameof(BackgroundBlurRadius), nameof(BackgroundDim),
-            nameof(BackgroundSurfaceOpacity), nameof(BackgroundSolidColor), nameof(BackgroundGradientStart),
-            nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode), nameof(IsBackgroundSolidMode),
-            nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom), nameof(BackgroundStatusText));
+            nameof(BackgroundSurfaceOpacity), nameof(BackgroundInvertText), nameof(BackgroundSolidColor),
+            nameof(BackgroundGradientStart), nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode),
+            nameof(IsBackgroundSolidMode), nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom),
+            nameof(BackgroundStatusText));
         ApplyAppearancePreview();
     }
 
@@ -1940,14 +1957,15 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _backgroundGradientStart = background.GradientStart;
         _backgroundGradientEnd = background.GradientEnd;
         _backgroundSurfaceOpacity = background.SurfaceOpacity;
+        _backgroundInvertText = background.InvertText;
         _selectedMotionMode = MotionModes.Normalize(config.Ui.Motion);
         OnPropertiesChanged(nameof(SelectedBackgroundMode), nameof(SelectedBackgroundFit),
             nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
             nameof(BackgroundImageOpacity), nameof(BackgroundBlurRadius), nameof(BackgroundDim),
-            nameof(BackgroundSurfaceOpacity), nameof(BackgroundSolidColor), nameof(BackgroundGradientStart),
-            nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode), nameof(IsBackgroundSolidMode),
-            nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom), nameof(BackgroundStatusText),
-            nameof(SelectedMotionMode));
+            nameof(BackgroundSurfaceOpacity), nameof(BackgroundInvertText), nameof(BackgroundSolidColor),
+            nameof(BackgroundGradientStart), nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode),
+            nameof(IsBackgroundSolidMode), nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom),
+            nameof(BackgroundStatusText), nameof(SelectedMotionMode));
 
         ValidateHotkeys();
         _expressionMapModelDirectory = NormalizeModelDirectory(ModelDirectory);

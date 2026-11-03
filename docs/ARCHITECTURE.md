@@ -207,6 +207,8 @@ sequenceDiagram
 - **背景**：`UiConfig.Background` 支持主题色 / 纯色 / 渐变 / 本地图片；图片由 `BackgroundImageStore` 复制到 `%APPDATA%\VoxIME\backgrounds`（只保留最近 8 张）；`BackgroundRenderer` 按 980 宽解码、用 `RenderTargetBitmap` 把 `BlurEffect` 预烘焙进图片并缓存，输出 `WindowBackgroundBrush`；`WindowDimBrush` 用主题背景色加 alpha 做对比度遮罩。主题色模式下遮罩全透明，窗口表现与旧版一致。
 - **玻璃质感**：自定义背景时，`ThemeManager` 按 `surfaceOpacity` 把 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷改为半透明，让背景透出来；消息框使用不透明的 `DialogCardBrush`，不参与玻璃化。
 - **动效**：`UiConfig.Motion` 三档（明显 / 克制 / 关闭）。`Infrastructure.Motion` 统一时长/位移/缓动（明显档 160–280ms、上浮 16–18px、缩放 0.92–0.97；克制档时长 ×0.62、幅度 ×0.5；关闭档瞬时完成），提供窗口入场/退场、设置页滑入、对话框回弹、卡片抬起、按钮按压等 helper。窗口在 `IsVisibleChanged` 播放入场、关闭/隐藏时先播退场再真正关闭（退出流程 `AllowClose=true` 直接关闭，不延迟退出）；设置页切换由 `SettingsWindow` 监听 `CurrentPage` 播放滑入。
+- **文字反色**：`BackgroundConfig.InvertText` 打开后，`ThemeManager` 用 `ThemeColorMath.InvertLightness` 按 HSL 明度反转整套令牌（深色主题 → 浅色底 + 深色字），暗化遮罩同时改用亮色，解决白色/浅色背景上看不见浅色文字的问题。
+- **滚动惯性**：`Infrastructure.SmoothScroll` 挂到页面根 `ScrollViewer`，把滚轮事件转换成指数缓动的纵向滚动（每格约 96px、每帧逼近 26%），文本输入框与拖动滚动条仍走原生行为。
 - **性能取舍**：按项目当前定位不做 GPU/远程桌面自动降级；只动画 `Opacity` 与 `RenderTransform`（不触发布局重算），图片模糊只做一次缓存，避免实时特效与逐帧重算。
 ## 6. 配置与持久化
 
@@ -265,7 +267,7 @@ sequenceDiagram
 
 | 层级 | 方式 | 命令/产物 |
 |---|---|---|
-| 单元测试 | 393 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程/主题解析与配色/动效与背景配置） | `dotnet test` |
+| 单元测试 | 397 个离线 xUnit 测试（音频/VAD/热键（含鼠标侧键）/剪贴板/TTS/ASR 协议/配置/历史/主控制器流程/主题解析与配色/动效与背景配置） | `dotnet test` |
 | 窗口级自检 | 构造并显示欢迎/设置/历史/关于/HUD 五个窗口后退出 | `VoxIME.exe --tray --selftest`（日志 `SELFTEST` 行，退出码 0/2） |
 | 端到端 | 真实启动应用 → 录音 3 秒 → 识别 → 上屏到一个真实前台 WinForms 文本框；结果写 JSON；支持 `-ForceAudioWav` 用指定 WAV 走真实厂商接口 | `scripts/e2e-smoke.ps1` → `%TEMP%\voxime-e2e-result.json` |
 | 真实厂商联调 | Windows SAPI 合成中文语音 → 应用完整链路（强制 WAV）→ 小米 MiMo ASR → 上屏；HTTP 200，识别结果与原文逐字一致，上屏内容与识别结果一致 | `docs/verification/e2e-mimo-real-asr.json` |

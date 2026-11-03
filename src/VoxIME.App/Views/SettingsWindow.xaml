@@ -26,7 +26,7 @@
             </Grid.RowDefinitions>
 
             <!-- 自定义背景暗化遮罩：保证文字对比度（主题色模式下为全透明） -->
-            <Border Grid.RowSpan="3" Background="{DynamicResource WindowDimBrush}" IsHitTestVisible="False" />
+            <Border Grid.RowSpan="3" CornerRadius="16" Background="{DynamicResource WindowDimBrush}" IsHitTestVisible="False" />
 
             <!-- ===== 标题栏 ===== -->
             <Border x:Name="TitleBar" Grid.Row="0" Background="Transparent" Padding="18,0,10,0"

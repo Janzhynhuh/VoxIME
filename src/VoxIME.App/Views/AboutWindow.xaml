@@ -16,7 +16,7 @@
             CornerRadius="16" Effect="{StaticResource WindowShadow}">
         <Grid>
             <!-- 自定义背景暗化遮罩：保证文字对比度（主题色模式下为全透明） -->
-            <Border Background="{DynamicResource WindowDimBrush}" IsHitTestVisible="False" />
+            <Border CornerRadius="16" Background="{DynamicResource WindowDimBrush}" IsHitTestVisible="False" />
 
             <StackPanel>
             <!-- 标题栏 -->

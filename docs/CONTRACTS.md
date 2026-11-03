@@ -198,7 +198,7 @@ App（`VoxIME.App.Infrastructure`）：
   - `mode`：`theme`（默认）/ `solid` / `gradient` / `image`；
   - `imagePath`：选择图片时复制到 `%APPDATA%\VoxIME\backgrounds`（源文件移动/删除不影响）；
   - `imageOpacity` 0.2–1.0、`blurRadius` 0–60、`dim` 0–0.95、`fit`（`cover`/`contain`/`fill`）、`surfaceOpacity` 0.35–1.0（玻璃强度）；
-  - `solidColor` / `gradientStart` / `gradientEnd`：`#RRGGBB`，空=跟随主题。
+  - `solidColor` / `gradientStart` / `gradientEnd`：`#RRGGBB`，空=跟随主题；`invertText`（bool）：按 HSL 明度反色整套界面令牌，适合白色/浅色背景（暗化遮罩同时改用亮色）。
 
 Core：
 
@@ -210,4 +210,4 @@ App：
 - `Infrastructure.Motion`：动效 token（明显档时长/位移，克制档按时长 ×0.62、幅度 ×0.5），提供 `PlayEnter/PlayExit/PlaySlideIn/PlayDialogEnter/PlayLift/PlayPress`；只动画 `Opacity` 与 `RenderTransform`，XAML 不写 Storyboard 时长。
 - `Infrastructure.BackgroundRenderer`：把背景配置展开为 `WindowBackgroundBrush` / `WindowDimBrush` 两个 DynamicResource；图片先按 980 宽解码 + `RenderTargetBitmap` 预烘焙模糊并缓存，不挂实时 `BlurEffect`；图片模式会让 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷按 `surfaceOpacity` 变半透明（玻璃质感）。消息框使用不受玻璃影响的 `DialogCardBrush`。
 - `Infrastructure.BackgroundImageStore`：背景图片本机存储（复制/清理旧图，只保留最近 8 张）。
-- 窗口 XAML 约定：低频窗口根 `Border.Background` 用 `{DynamicResource WindowBackgroundBrush}`，内部第一层加 `{DynamicResource WindowDimBrush}` 遮罩（主题色模式下为透明）；HUD/桌宠保持原样。
+- 窗口 XAML 约定：低频窗口根 `Border.Background` 用 `{DynamicResource WindowBackgroundBrush}`，内部第一层加 `{DynamicResource WindowDimBrush}` 遮罩（`CornerRadius` 必须与窗口一致，主题色模式下为透明）；HUD/桌宠保持原样。`ScrollViewer` 用 `inf:SmoothScroll.IsEnabled="True"` 启用滚轮平滑惯性（只处理纵向滚轮，文本输入框与拖拽滚动条保持原生）。
