@@ -217,7 +217,7 @@ public sealed class ThemeAppearanceTests
     }
 
     [Fact]
-    public void Tokens_AccentForeground_FollowsThemeMode()
+    public void Tokens_AccentForeground_MeetsContrast()
     {
         foreach (var scheme in ThemeCatalog.Schemes)
         {
@@ -230,11 +230,30 @@ public sealed class ThemeAppearanceTests
                 }
 
                 var tokens = ThemeTokens.Build(colors, isLight);
-                Assert.Equal(isLight ? "#12121A" : "#FFFFFF", tokens["AccentForegroundColor"]);
+                var contrast = ContrastRatio(tokens["AccentColor"], tokens["AccentForegroundColor"]);
+                Assert.True(contrast >= 4.5, $"{scheme.Id}/{(isLight ? "light" : "dark")} 强调色前景对比度只有 {contrast:0.00}");
             }
         }
     }
 
+    private static double ContrastRatio(string first, string second)
+    {
+        var a = RelativeLuminance(first);
+        var b = RelativeLuminance(second);
+        return (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
+    }
+
+    private static double RelativeLuminance(string hex)
+    {
+        var (_, red, green, blue) = ThemeColorMath.Parse(hex);
+        return (0.2126 * Linearize(red)) + (0.7152 * Linearize(green)) + (0.0722 * Linearize(blue));
+
+        static double Linearize(byte channel)
+        {
+            var value = channel / 255d;
+            return value <= 0.03928 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+    }
     [Fact]
     public void AppConfig_Normalize_RepairsThemeAndColorScheme()
     {

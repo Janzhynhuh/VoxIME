@@ -30,7 +30,7 @@ public static class ThemeTokens
             ["AccentHoverColor"] = isLight ? ThemeColorMath.Darken(accent, 0.16) : ThemeColorMath.Lighten(accent, 0.10),
             ["AccentSoftColor"] = ThemeColorMath.Blend(background, accent, isLight ? 0.12 : 0.22),
             ["AccentSecondaryColor"] = colors.AccentSecondary,
-            ["AccentForegroundColor"] = isLight ? "#12121A" : "#FFFFFF",
+            ["AccentForegroundColor"] = PickAccentForeground(accent),
 
             // ---- 文字 ----
             ["TextColor"] = colors.Text,
@@ -80,5 +80,31 @@ public static class ThemeTokens
             ["HeroGradientMid"] = ThemeColorMath.Blend(background, colors.Surface, 0.7),
             ["HeroGradientEnd"] = background
         };
+    }
+
+    /// <summary>
+    /// 强调色上的文字颜色：在白色和深色之间按 WCAG 相对亮度选对比度更高的一个。
+    /// 浅色强调色（Nord Frost、Rosé Pine Rose 等）上用白字会看不清，必须随强调色明暗切换。
+    /// </summary>
+    private static string PickAccentForeground(string accent)
+    {
+        const string dark = "#000000";
+        var accentLuminance = RelativeLuminance(accent);
+        var whiteContrast = 1.05 / (accentLuminance + 0.05);
+        var darkContrast = (accentLuminance + 0.05) / (RelativeLuminance(dark) + 0.05);
+        return whiteContrast >= darkContrast ? "#FFFFFF" : dark;
+    }
+
+    /// <summary>WCAG 2.x 相对亮度（sRGB gamma 解码后加权），用于计算文字对比度。</summary>
+    private static double RelativeLuminance(string hex)
+    {
+        var (_, red, green, blue) = ThemeColorMath.Parse(hex);
+        return (0.2126 * Linearize(red)) + (0.7152 * Linearize(green)) + (0.0722 * Linearize(blue));
+
+        static double Linearize(byte channel)
+        {
+            var value = channel / 255d;
+            return value <= 0.03928 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
     }
 }
