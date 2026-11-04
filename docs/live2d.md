@@ -139,7 +139,7 @@ Hiyori/
 - **打开模型库目录**：直接查看/手动放入模型（手动放入后点「刷新列表」）。
 - **删除选中模型**：只删除模型库里的副本（有二次确认），不会影响你原来的文件夹。
 - **状态表情映射**：设置页四个状态改为可编辑下拉框，自动扫描 `model3.json` 的 `Expressions` 以及模型目录下的 `Exp3/*.exp3.json`；`Animation/*.motion3.json` 会注册为 `Animation/<文件名>` 动作组，避免和 model3 原生 Idle 组冲突。当前模型没有登记表情时也能识别 VTube Studio 的文件夹资源；映射按模型目录记忆。
-- **状态动作映射/预览**：四个状态可分别选择「自动（同名动作组）」「不播放」或具体动作组，待机动作组也可从下拉框选；切换待机组、状态动作、预览动作前后都会先停止当前动作，并把模型参数/部件透明度恢复到加载时的基线，避免「脱捕」这类动作修改的自定义参数残留（不依赖具体模型或参数名）；每项旁「预览」按钮会立即在桌宠上试播当前选择，只播一遍，结束后停 3 秒再恢复默认动作（避免 VTube Studio 动作的 Loop 标记导致无限重复）。待机动作本身是循环的，冷却结束后会继续待机循环，所以视觉上会比状态动作更连贯。动作映射同样按模型目录记忆。状态表情旁也有「预览」，可立即应用所选表情，3 秒后恢复默认表情。
+- **状态动作映射/预览**：四个状态可分别选择「自动（同名动作组）」「不播放」或具体动作组，待机动作组也可从下拉框选；待机动作在主动作层循环，状态动作/预览动作分别由并行动作层叠加（见 6.5），切换时只停止对应层并把模型参数/部件透明度恢复到加载时的基线，避免「脱捕」这类动作修改的自定义参数残留（不依赖具体模型或参数名）；每项旁「预览」按钮会立即在桌宠上试播当前选择，只播一遍，结束后停 3 秒再恢复待机/状态层（避免 VTube Studio 动作的 Loop 标记导致无限重复）。动作映射同样按模型目录记忆。状态表情旁也有「预览」，可立即应用所选表情，3 秒后恢复默认表情。
 - **重置位置**：桌宠状态栏旁的「重置位置」会清除保存的 `Left/Top`，把窗口移回默认位置（开启贴边时回当前屏幕右下角，关闭贴边时当前屏幕居中），下次启动也不会再使用旧位置。
 - **自动找回**：启动时以及检测到显示器工作区/虚拟屏尺寸变化时，如果保存的窗口位置已经不在当前桌面可见区域，会自动把它移回当前屏右下角（关闭贴边时居中），避免远程桌面/切换分辨率后“看不到桌宠”。
 - 模型名优先取 `*.model3.json` 的文件名（如 `Hiyori.model3.json` → Hiyori），重名自动追加 `(2)`、`(3)`。
@@ -174,7 +174,7 @@ Hiyori/
 | `MouthSync` | true | 口型同步开关（关闭后嘴巴闭合） |
 | `MouthSensitivity` | 1.0 | 口型灵敏度（0.1..5.0，与输入音量相乘后 clamp 到 0..1） |
 | `ShowBubble` | true | 是否显示气泡（false 时忽略 `SetBubbleText`） |
-| `IdleMotionGroup` | "Idle" | 待机动作组名（大小写不敏感，精确匹配；找不到时不播放待机动作，不会自动拿第一个动作组） |
+| `IdleMotionGroup` | "Idle" | 待机动作组名（大小写不敏感，精确匹配；找不到时若存在名字包含 `idle` 的动作组（如 `Animation/IDLE`）会自动使用，否则不播放待机动作，不会拿第一个动作组） |
 | `ListeningExpression` / `ThinkingExpression` / `SpeakingExpression` / `ErrorExpression` | null | 状态对应的表情名；模型没有该表情时忽略 |
 | `ListeningMotionGroup` / `ThinkingMotionGroup` / `SpeakingMotionGroup` / `ErrorMotionGroup` | null | 状态对应的动作组名；null/空=自动同名匹配，`__none__`=不播放，其它=指定组 |
 | `FallbackAvatarTheme` | "violet" | 兜底形象主题（当前仅 violet，保留扩展） |
@@ -188,14 +188,14 @@ Hiyori/
 
 | 状态 | 动作组查找顺序 | 表情 |
 |---|---|---|
-| `Idle` | 待机动作组（`IdleMotionGroup`，默认 `Idle`；仅精确匹配 model3 声明的组） | 重置为默认表情 |
+| `Idle` | 待机动作组（`IdleMotionGroup`，默认 `Idle`；精确匹配，找不到时自动匹配名字含 `idle` 的组，如 `Animation/IDLE`） | 重置为默认表情 |
 | `Listening` | 优先 `ListeningMotionGroup`；未配置时找同名组（`Listening`/`Listen`），否则继续待机 | `ListeningExpression`（若模型有） |
 | `Thinking` | 优先 `ThinkingMotionGroup`；未配置时同名组（`Thinking`/`Think`），否则待机 | `ThinkingExpression` |
 | `Speaking` | 优先 `SpeakingMotionGroup`；未配置时同名组（`Speaking`/`Speak`），否则待机；口型由 `SetMouthOpen` 驱动 | `SpeakingExpression` |
 | `Error` | 优先 `ErrorMotionGroup`；未配置时同名组（`Error`），否则待机 | `ErrorExpression` |
 
 约定：模型没有对应动作组/表情时**静默保持待机**，不报错、不崩溃（Hiyori 只有 `Idle`/`TapBody`，
-因此所有非 Idle 状态都表现为继续待机动作 + 口型/眼动变化）。
+因此所有非 Idle 状态都表现为继续待机动作 + 口型/眼动变化）。状态动作不再停止待机动作，而是叠加在待机层上，见 6.5。
 
 ### 6.2 口型（SetMouthOpen 0..1）
 
@@ -220,7 +220,8 @@ Hiyori/
   「眼动上下反转」（`EyeFollowInvertY`），会按模型目录记忆（`EyeFollowInvertYByModel`）。
   该反转只作用于 WebView2 模型，WPF 兜底形象始终保持正确方向。
 - 眨眼：`model3.json` 声明了 `Groups.EyeBlink.Ids` 时由 Cubism 自动眨眼（Hiyori 为
-  `ParamEyeLOpen`/`ParamEyeROpen`）；模型未声明 EyeBlink 组时不会眨眼。
+  `ParamEyeLOpen`/`ParamEyeROpen`）；模型未声明 EyeBlink 组时不会眨眼。待机动作循环期间 Cubism 会跳过自动眨眼，
+  网页由 `applyBlinkLayer` 按同一组参数手动补眨眼（见 6.5）；模型没有眼睛参数时跳过。
 - 呼吸：CubismWebFramework 的 `updateNaturalMovements` 自动驱动（`ParamBreath` 等）。
 
 ### 6.4 气泡
@@ -231,6 +232,20 @@ Hiyori/
 - 10 秒未更新自动隐藏；`ShowBubble=false` 时忽略。
 - 空字符串/null 立即隐藏。
 
+
+### 6.5 动作分层与程序层
+
+- 主动作层：`IdleMotionGroup` 由主 `MotionManager` 循环播放，保留 Cubism 的呼吸/物理。
+- 并行动作层：
+  - `state`：分发给 `listening` / `thinking` / `speaking` / `error` 的动作，叠加在待机层上；
+  - `preview`：设置页「预览」的动作，最高层，只播一遍，结束并冷却 3 秒后停止。
+- 更新顺序：主动作 → state 层 → preview 层 → 表情 → 焦点/呼吸/物理 → `beforeModelUpdate`
+  程序层 → `coreModel.update()`。后更新的层覆盖先更新的同名参数，因此可以同时看到待机、
+  状态和预览动作。
+- 程序层 `applyBlinkLayer`：待机动作循环期间 Cubism 的 `updateMotions()` 返回 true，会跳过自动
+  EyeBlink；网页按 `model3.json` 的 `Groups.EyeBlink.Ids`（没有时回退
+  `ParamEyeLOpen`/`ParamEyeROpen`）在程序层手动眨眼。模型没有可用眼睛参数时整层跳过。
+- 模型缺少某个动作组/表情时对应层静默不启动，不影响其它层。
 ## 7. C# ↔ JS 消息协议
 
 ### 7.1 C# → JS（`CoreWebView2.PostWebMessageAsJson`）
