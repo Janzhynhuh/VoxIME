@@ -137,14 +137,6 @@ public static class SmoothScroll
             return;
         }
 
-        // 文本输入控件自己的滚轮行为优先（例如多行提示词输入框）。
-        if (IsInsideTextInput(e.OriginalSource as DependencyObject))
-        {
-            return;
-        }
-
-        e.Handled = true;
-        var deltaPixels = -e.Delta / 120d * PixelsPerNotch;
         var state = GetState(viewer);
 
         // 在整窗范围内找打开的下拉框：可能是页面其它列（例如服务页左栏）的下拉框，
@@ -152,32 +144,43 @@ public static class SmoothScroll
         DependencyObject searchRoot = (DependencyObject?)Window.GetWindow(viewer) ?? viewer;
         var openComboBox = FindOpenComboBox(searchRoot);
 
-        if (openComboBox is not null)
+        if (openComboBox is null)
         {
-            var now = Environment.TickCount64;
-            if (now - state.LastWheelTick > WheelIntentTimeoutMs)
-            {
-                state.PendingWheelPixels = 0;
-            }
-
-            state.PendingWheelPixels += deltaPixels;
-            state.LastWheelTick = now;
-
-            // 误触阈值：没到阈值什么都不做，页面不滚、下拉框不关。
-            if (Math.Abs(state.PendingWheelPixels) < DropDownCloseThresholdPixels)
+            // 没有打开的下拉框时，文本输入控件自己的滚轮行为优先（例如多行提示词输入框）。
+            if (IsInsideTextInput(e.OriginalSource as DependencyObject))
             {
                 return;
             }
 
-            // 确实要滚页面：先关下拉框，再把累计的滚动意图一次性给页面。
-            openComboBox.IsDropDownOpen = false;
-            deltaPixels = state.PendingWheelPixels;
             state.PendingWheelPixels = 0;
+            e.Handled = true;
+            ScrollBy(viewer, -e.Delta / 120d * PixelsPerNotch);
+            return;
         }
-        else
+
+        // 有下拉框打开时优先处理关闭：即使指针停在右侧表单的 TextBox 上，
+        // 也按低敏阈值累计，不能被文本输入框的滚轮判断提前 return。
+        e.Handled = true;
+        var deltaPixels = -e.Delta / 120d * PixelsPerNotch;
+        var now = Environment.TickCount64;
+        if (now - state.LastWheelTick > WheelIntentTimeoutMs)
         {
             state.PendingWheelPixels = 0;
         }
+
+        state.PendingWheelPixels += deltaPixels;
+        state.LastWheelTick = now;
+
+        // 误触阈值：没到阈值什么都不做，页面不滚、下拉框不关。
+        if (Math.Abs(state.PendingWheelPixels) < DropDownCloseThresholdPixels)
+        {
+            return;
+        }
+
+        // 确实要滚页面：先关下拉框，再把累计的滚动意图一次性给页面。
+        openComboBox.IsDropDownOpen = false;
+        deltaPixels = state.PendingWheelPixels;
+        state.PendingWheelPixels = 0;
 
         ScrollBy(viewer, deltaPixels);
     }
