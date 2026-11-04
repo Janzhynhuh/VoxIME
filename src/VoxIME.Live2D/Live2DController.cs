@@ -237,6 +237,7 @@ public sealed class Live2DController : ILive2DController
             {
                 // 远程桌面/虚拟显示器切换不一定触发 WPF SystemParameters 事件。
                 Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnSystemEventsDisplaySettingsChanged;
+                Microsoft.Win32.SystemEvents.SessionSwitch += OnSystemEventsSessionSwitch;
                 _systemEventsSubscribed = true;
             }
             catch (Exception ex)
@@ -269,6 +270,7 @@ public sealed class Live2DController : ILive2DController
             try
             {
                 Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnSystemEventsDisplaySettingsChanged;
+                Microsoft.Win32.SystemEvents.SessionSwitch -= OnSystemEventsSessionSwitch;
             }
             catch (Exception)
             {
@@ -291,6 +293,23 @@ public sealed class Live2DController : ILive2DController
         RunOnUiThread(
             () => EnsureWindowVisibleOnDisplayChange("SystemEvents.DisplaySettingsChanged"),
             "DisplaySettingsChanged(SystemEvents)");
+    }
+
+    private void OnSystemEventsSessionSwitch(object? sender, Microsoft.Win32.SessionSwitchEventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        // 远控断开/切回本地控制台时，分辨率与 DPI 可能已经变化，但 DisplaySettingsChanged
+        // 未必触发；这里统一做一次几何校验 + 延迟物理吸附。
+        RunOnUiThread(() =>
+        {
+            _logger.Debug($"[Live2D] 会话切换：{e.Reason}");
+            EnsureWindowVisibleOnDisplayChange("SessionSwitch:" + e.Reason);
+            SchedulePhysicalSnapRetry();
+        }, "SessionSwitch");
     }
 
     private void OnSystemParametersChanged(object? sender, PropertyChangedEventArgs e)
@@ -358,6 +377,35 @@ public sealed class Live2DController : ILive2DController
     /// DPI 刚切换时 GetDpiForWindow 可能还是旧值；第一次物理吸附会按旧缩放算。
     /// 延迟到 WPF 完成 DPI 更新后，再按最终缩放补一次。
     /// </summary>
+    private void OnWindowDisplayGeometryNeedsRepair(object? sender, EventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        RunOnUiThread(() =>
+        {
+            if (_disposed || _window is null)
+            {
+                return;
+            }
+
+            if (_window.IsDragging)
+            {
+                // 拖动跨屏时的 DPI 变化不要抢 DragMove，等拖动结束/延迟后再修。
+                SchedulePhysicalSnapRetry();
+                return;
+            }
+
+            EnsureWindowVisibleOnDisplayChange("Window.DpiChanged");
+            SchedulePhysicalSnapRetry();
+        }, "DpiChanged");
+    }
+
+    /// <summary>
+    /// 远控切回/DPI 变化后，WPF 的物理尺寸可能延后稳定；分两次延迟再修一次几何。
+    /// </summary>
     private void SchedulePhysicalSnapRetry()
     {
         if (_physicalSnapRetryPending)
@@ -370,38 +418,51 @@ public sealed class Live2DController : ILive2DController
         {
             try
             {
-                await Task.Delay(350).ConfigureAwait(false);
-                RunOnUiThread(() =>
+                foreach (var delayMs in new[] { 350, 1200 })
                 {
-                    _physicalSnapRetryPending = false;
-                    if (_disposed || _window is null)
+                    await Task.Delay(delayMs).ConfigureAwait(false);
+                    RunOnUiThread(() =>
                     {
-                        return;
-                    }
+                        if (_disposed || _window is null || _window.IsDragging)
+                        {
+                            return;
+                        }
 
-                    var config = GetConfig();
-                    if (!config.SnapToEdge
-                        || !_window.SnapToBottomEdgePhysical(
-                            config.Width,
-                            config.Height,
-                            config.KeepAboveTaskbar))
-                    {
-                        return;
-                    }
+                        var config = GetConfig();
+                        if (config.SnapToEdge
+                            && _window.SnapToBottomEdgePhysical(
+                                config.Width,
+                                config.Height,
+                                config.KeepAboveTaskbar))
+                        {
+                            _userLeft = _window.Left;
+                            _userTop = _window.Top;
+                            _logger.Info(
+                                $"[Live2D] DPI 稳定后再次吸附到底部：" +
+                                $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
+                            PositionChanged?.Invoke(
+                                this,
+                                new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
+                            return;
+                        }
 
-                    _userLeft = _window.Left;
-                    _userTop = _window.Top;
-                    _logger.Info(
-                        $"[Live2D] DPI 稳定后再次吸附到底部：" +
-                        $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
-                    PositionChanged?.Invoke(
-                        this,
-                        new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
-                }, "RetryPhysicalSnap");
+                        if (_window.NeedsDisplayGeometryRepair())
+                        {
+                            if (!_window.ResizePhysicalKeepingPosition(config.Width, config.Height))
+                            {
+                                ApplyWindowConfiguration();
+                            }
+                        }
+                    }, "RetryPhysicalSnap");
+                }
             }
             catch (Exception ex)
             {
                 _logger.Debug($"[Live2D] 延迟物理吸附失败：{ex.Message}");
+            }
+            finally
+            {
+                RunOnUiThread(() => _physicalSnapRetryPending = false, "RetryPhysicalSnapDone");
             }
         });
     }
@@ -657,6 +718,7 @@ public sealed class Live2DController : ILive2DController
 
         _window = new PetWindow();
         _window.PositionChanged += OnWindowPositionChanged;
+        _window.DisplayGeometryNeedsRepair += OnWindowDisplayGeometryNeedsRepair;
         _window.Closed += (_, _) => _logger.Debug("[Live2D] 桌宠窗口已关闭。");
         _logger.Info("[Live2D] 桌宠窗口已创建。");
     }
@@ -1671,6 +1733,26 @@ public sealed class Live2DController : ILive2DController
             }
 
             PositionChanged?.Invoke(this, e);
+
+            // 跨 DPI 显示器拖动后，拖动结束再按物理像素修一次尺寸（不改变刚拖到的位置）。
+            if (_window is not null && _window.NeedsDisplayGeometryRepair())
+            {
+                var repairConfig = GetConfig();
+                if (!_window.ResizePhysicalKeepingPosition(repairConfig.Width, repairConfig.Height))
+                {
+                    _window.ApplyGeometry(
+                        repairConfig.Width,
+                        repairConfig.Height,
+                        _window.Left,
+                        _window.Top,
+                        false,
+                        repairConfig.KeepAboveTaskbar,
+                        hasSavedPosition: true,
+                        repairConfig.Opacity,
+                        repairConfig.AlwaysOnTop,
+                        repairConfig.ClickThrough);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -1740,6 +1822,7 @@ public sealed class Live2DController : ILive2DController
         if (_window is not null)
         {
             _window.PositionChanged -= OnWindowPositionChanged;
+            _window.DisplayGeometryNeedsRepair -= OnWindowDisplayGeometryNeedsRepair;
             _window.CloseSafely();
             _window = null;
         }

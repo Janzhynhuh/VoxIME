@@ -136,12 +136,22 @@ internal sealed class PetWindow : Window
             ApplyAvatarTransform();
         };
         SourceInitialized += OnSourceInitialized;
+        DpiChanged += OnDpiChanged;
 
         _topmostTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(3)
         };
-        _topmostTimer.Tick += (_, _) => ReassertTopmost();
+        _topmostTimer.Tick += (_, _) =>
+        {
+            ReassertTopmost();
+
+            // 远控切回/显示器热插拔不一定有事件通知；兜底每 3 秒自查一次几何。
+            if (NeedsDisplayGeometryRepair())
+            {
+                DisplayGeometryNeedsRepair?.Invoke(this, EventArgs.Empty);
+            }
+        };
         Loaded += (_, _) =>
         {
             if (Topmost)
@@ -156,6 +166,12 @@ internal sealed class PetWindow : Window
 
     /// <summary>用户拖动窗口结束后触发，供宿主持久化位置。</summary>
     public event EventHandler<Live2DPositionChangedEventArgs>? PositionChanged;
+
+    /// <summary>DPI 变化（例如从不同缩放的显示器拖入、远控切回）后触发，宿主应重新校验几何。</summary>
+    public event EventHandler? DisplayGeometryNeedsRepair;
+
+    /// <summary>是否正在拖动窗口（拖动期间不应做几何修复/吸附，避免和 DragMove 打架）。</summary>
+    public bool IsDragging { get; private set; }
 
     public FallbackAvatar Avatar => _avatar;
 
@@ -481,9 +497,44 @@ internal sealed class PetWindow : Window
     {
         try
         {
-            return ActualWidth > 1 && ActualHeight > 1
-                   && (Math.Abs(ActualWidth - Width) > 0.75
-                       || Math.Abs(ActualHeight - Height) > 0.75);
+            if (ActualWidth > 1 && ActualHeight > 1
+                && (Math.Abs(ActualWidth - Width) > 0.75
+                    || Math.Abs(ActualHeight - Height) > 0.75))
+            {
+                return true;
+            }
+
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            // 远控切回时 WPF 可能保留旧 DIP/物理尺寸：把窗口 DPI 与 WPF 认为的 DPI 对比。
+            var windowDpi = GetDpiForWindow(hwnd) / 96.0;
+            var wpfDpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            if (windowDpi > 0 && wpfDpi > 0 && Math.Abs(windowDpi - wpfDpi) > 0.05)
+            {
+                return true;
+            }
+
+            if (GetWindowRect(hwnd, out var rect))
+            {
+                var scale = windowDpi > 0 ? windowDpi : wpfDpi;
+                if (scale > 0)
+                {
+                    var expectedWidth = Width * scale;
+                    var expectedHeight = Height * scale;
+                    var actualWidth = rect.Right - rect.Left;
+                    var actualHeight = rect.Bottom - rect.Top;
+                    if (Math.Abs(actualWidth - expectedWidth) > 2 || Math.Abs(actualHeight - expectedHeight) > 2)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
         catch (Exception)
         {
@@ -543,13 +594,18 @@ internal sealed class PetWindow : Window
             targetWidth = Math.Min(targetWidth, Math.Max(1, info.rcWork.Right - info.rcWork.Left));
             targetHeight = Math.Min(targetHeight, Math.Max(1, info.rcWork.Bottom - info.rcWork.Top));
 
+            // 关键：窗口可见时只吸附 Y，绝不横向钳制 X。
+            // 否则拖到屏幕右下方时会被 Right - width 拉回左边，表现为"往右下拉吸附回弹"。
             var targetX = visible
                 ? current.Left
                 : info.rcWork.Right - targetWidth - (int)Math.Round(AutoPositionMarginRight * scale);
-            targetX = Math.Clamp(
-                targetX,
-                info.rcWork.Left,
-                Math.Max(info.rcWork.Left, info.rcWork.Right - targetWidth));
+            if (!visible)
+            {
+                targetX = Math.Clamp(
+                    targetX,
+                    info.rcWork.Left,
+                    Math.Max(info.rcWork.Left, info.rcWork.Right - targetWidth));
+            }
 
             var bottom = keepAboveTaskbar ? info.rcWork.Bottom : info.rcMonitor.Bottom;
             var targetY = bottom - targetHeight;
@@ -587,6 +643,51 @@ internal sealed class PetWindow : Window
         }
     }
 
+    /// <summary>
+    /// 只按物理像素修正窗口尺寸、保持当前左下位置不变（用于跨 DPI 拖动/远控切回后的尺寸修复，
+    /// 避免为了修正尺寸把用户刚拖到的位置吸附走）。
+    /// </summary>
+    public bool ResizePhysicalKeepingPosition(double widthDip, double heightDip)
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var current))
+            {
+                return false;
+            }
+
+            var scale = GetPhysicalDisplayScale();
+            if (scale <= 0 || double.IsNaN(scale) || double.IsInfinity(scale))
+            {
+                return false;
+            }
+
+            var targetWidth = Math.Max(1, (int)Math.Round(widthDip * scale));
+            var targetHeight = Math.Max(1, (int)Math.Round(heightDip * scale));
+            if (!SetWindowPos(
+                    hwnd,
+                    IntPtr.Zero,
+                    current.Left,
+                    current.Top,
+                    targetWidth,
+                    targetHeight,
+                    SwpNoZOrder | SwpNoActivate))
+            {
+                return false;
+            }
+
+            Left = current.Left / scale;
+            Top = current.Top / scale;
+            Width = widthDip;
+            Height = heightDip;
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
     /// <summary>
     /// 拖拽时的物理像素吸附：只有窗口物理底边已经靠近当前显示器任务栏上沿
     /// （阈值按当前 DPI 换算）才触发，避免每次拖拽都强制拉到底部。
@@ -731,6 +832,12 @@ internal sealed class PetWindow : Window
         }
     }
 
+    private void OnDpiChanged(object? sender, DpiChangedEventArgs e)
+    {
+        // DPI 切换后 WPF 可能还没完成窗口重排，宿主会延迟再校验一次。
+        DisplayGeometryNeedsRepair?.Invoke(this, EventArgs.Empty);
+    }
+
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         _hwnd = new WindowInteropHelper(this).Handle;
@@ -780,6 +887,7 @@ internal sealed class PetWindow : Window
             return;
         }
 
+        IsDragging = true;
         try
         {
             DragMove();
@@ -790,6 +898,7 @@ internal sealed class PetWindow : Window
         }
         finally
         {
+            IsDragging = false;
             PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(Left, Top));
         }
 

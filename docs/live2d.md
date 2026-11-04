@@ -507,8 +507,10 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 
 1. **拖动交互**未做自动化输入注入验证（需要真实鼠标）；已通过 `WS_EX_TRANSPARENT`/
    `WM_NCHITTEST` 与拖动层代码审查间接覆盖。请 Lead 在真机手工验证「关闭点击穿透后拖动窗口」。
-2. **多屏幕/混合 DPI**：窗口位置/尺寸使用 WPF DIP（主屏工作区自动定位），多屏负坐标与
-   逐屏 DPI 切换未做自动化验证；已限制窗口不被拖出虚拟桌面。
+2. **多屏幕/混合 DPI / 远控切回**：窗口位置/尺寸使用 WPF DIP（主屏工作区自动定位）。
+   已处理 `DpiChanged`、`DisplaySettingsChanged`、`SessionSwitch`：按物理像素重新校正窗口尺寸/贴底，
+   并有 3 秒一次的几何自检兜底；下边吸附只改 Y/高度、不再横向钳制 X（不会右下拖拽回弹）。
+   多屏负坐标与逐屏 DPI 切换仍建议真机手工验证；已限制窗口不被拖出虚拟桌面。
 3. **Cubism 2（.model.json）** 不支持（只引入 Modern bundle，覆盖 Cubism 3/4/5；旧模型需转换）。
 4. 状态→动作组默认使用**命名约定**（`Idle`/`Listening`/`Thinking`/`Speaking`/`Error`），
    若模型动作组命名不同，可在设置页「状态动作映射」中手动指定（也支持「不播放」）；表情通过配置的
