@@ -348,20 +348,6 @@ public sealed class Live2DController : ILive2DController
             $"[Live2D] 显示变化({source}) visible={visible} needsGeometryRepair={needsRepair}");
 
         var config = GetConfig();
-
-        // 远控/主屏各自记忆位置：切到某块屏时先恢复该屏上次的位置，再做物理尺寸修复。
-        var currentDisplayKey = _window.GetDisplayKeyForWindow();
-        if (!string.IsNullOrWhiteSpace(currentDisplayKey)
-            && config.PositionsByDisplay.TryGetValue(currentDisplayKey, out var remembered)
-            && double.IsFinite(remembered.Left)
-            && double.IsFinite(remembered.Top))
-        {
-            _window.MoveTo(remembered.Left, remembered.Top);
-            _userLeft = _window.Left;
-            _userTop = _window.Top;
-            _logger.Debug($"[Live2D] 显示变化，恢复显示器记忆位置 {currentDisplayKey}: ({_userLeft:0},{_userTop:0})");
-        }
-
         if (config.SnapToEdge && (needsRepair || !visible)
             && _window.SnapToBottomEdgePhysical(
                 config.Width,
@@ -373,7 +359,7 @@ public sealed class Live2DController : ILive2DController
             _logger.Info(
                 $"[Live2D] 显示器/DPI 变化，按物理像素重新吸附到底部：" +
                 $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
-            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top, _window.GetDisplayKeyForWindow()));
+            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
             SchedulePhysicalSnapRetry();
             return;
         }
@@ -456,7 +442,7 @@ public sealed class Live2DController : ILive2DController
                                 $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
                             PositionChanged?.Invoke(
                                 this,
-                                new Live2DPositionChangedEventArgs(_window.Left, _window.Top, _window.GetDisplayKeyForWindow()));
+                                new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
                             return;
                         }
 
@@ -503,7 +489,7 @@ public sealed class Live2DController : ILive2DController
             config.AlwaysOnTop,
             config.ClickThrough);
 
-        PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top, _window.GetDisplayKeyForWindow()));
+        PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
     }
 
     /// <inheritdoc />
@@ -755,20 +741,6 @@ public sealed class Live2DController : ILive2DController
             left = _userLeft.Value;
             top = _userTop.Value;
             hasSavedPosition = true;
-        }
-
-        // 优先使用当前显示器记忆的位置（远控屏/主屏各自独立）。
-        var displayKey = _window.GetDisplayKeyForSavedPosition(left, top);
-        if (!string.IsNullOrWhiteSpace(displayKey)
-            && config.PositionsByDisplay.TryGetValue(displayKey, out var remembered)
-            && double.IsFinite(remembered.Left)
-            && double.IsFinite(remembered.Top)
-            && !(Math.Abs(remembered.Left + 1) < 0.01 && Math.Abs(remembered.Top + 1) < 0.01))
-        {
-            left = remembered.Left;
-            top = remembered.Top;
-            hasSavedPosition = true;
-            _logger.Debug($"[Live2D] 使用显示器记忆位置 {displayKey}: ({left:0},{top:0})");
         }
 
         _window.ApplyGeometry(
@@ -1757,7 +1729,7 @@ public sealed class Live2DController : ILive2DController
             {
                 _userLeft = _window.Left;
                 _userTop = _window.Top;
-                e = new Live2DPositionChangedEventArgs(_window.Left, _window.Top, _window.GetDisplayKeyForWindow());
+                e = new Live2DPositionChangedEventArgs(_window.Left, _window.Top);
             }
 
             PositionChanged?.Invoke(this, e);

@@ -3195,8 +3195,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             MotionByModel = ConfigJson.Clone(_working.Live2D.MotionByModel),
             FallbackAvatarTheme = string.IsNullOrWhiteSpace(FallbackAvatarTheme) ? "violet" : FallbackAvatarTheme.Trim(),
             Left = _configStore.Current.Live2D.Left,
-            Top = _configStore.Current.Live2D.Top,
-            PositionsByDisplay = ConfigJson.Clone(_configStore.Current.Live2D.PositionsByDisplay)
+            Top = _configStore.Current.Live2D.Top
         };
 
         config.Tts = new TtsConfig

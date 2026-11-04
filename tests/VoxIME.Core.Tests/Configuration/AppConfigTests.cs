@@ -55,23 +55,6 @@ public sealed class AppConfigTests
     }
 
     [Fact]
-    public void Serialization_RoundTripsLive2DPositionsByDisplay()
-    {
-        var config = AppConfig.CreateDefault();
-        const string key = @"RDP:\\\\.\\DISPLAY1:1920x1080";
-        config.Live2D.PositionsByDisplay[key] = new Live2DPosition { Left = 120.5, Top = 340.25 };
-
-        var json = JsonSerializer.Serialize(config, ConfigJson.Options);
-        Assert.Contains("\"positionsByDisplay\"", json);
-
-        var loaded = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options)!;
-        loaded.Normalize();
-
-        Assert.True(loaded.Live2D.PositionsByDisplay.TryGetValue(key, out var position));
-        Assert.Equal(120.5, position!.Left, 3);
-        Assert.Equal(340.25, position.Top, 3);
-    }
-    [Fact]
     public void ExpressionMap_ResolvesPerModelWithGlobalFallback()
     {
         var config = AppConfig.CreateDefault();

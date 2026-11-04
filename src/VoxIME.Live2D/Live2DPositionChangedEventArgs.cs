@@ -6,11 +6,10 @@ namespace VoxIME.Live2D;
 /// </summary>
 public sealed class Live2DPositionChangedEventArgs : EventArgs
 {
-    public Live2DPositionChangedEventArgs(double left, double top, string? displayKey = null)
+    public Live2DPositionChangedEventArgs(double left, double top)
     {
         Left = left;
         Top = top;
-        DisplayKey = displayKey ?? string.Empty;
     }
 
     /// <summary>窗口左上角 X（WPF 设备无关像素）。</summary>
@@ -18,7 +17,4 @@ public sealed class Live2DPositionChangedEventArgs : EventArgs
 
     /// <summary>窗口左上角 Y（WPF 设备无关像素）。</summary>
     public double Top { get; }
-
-    /// <summary>显示器记忆键（会话类型+设备名+物理分辨率）；为空表示无法识别。</summary>
-    public string DisplayKey { get; }
 }
