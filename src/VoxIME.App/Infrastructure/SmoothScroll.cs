@@ -146,7 +146,11 @@ public static class SmoothScroll
         e.Handled = true;
         var deltaPixels = -e.Delta / 120d * PixelsPerNotch;
         var state = GetState(viewer);
-        var openComboBox = FindOpenComboBox(viewer);
+
+        // 在整窗范围内找打开的下拉框：可能是页面其它列（例如服务页左栏）的下拉框，
+        // 这样在右侧表滚动时也能先按低敏阈值把它关掉。
+        DependencyObject searchRoot = (DependencyObject?)Window.GetWindow(viewer) ?? viewer;
+        var openComboBox = FindOpenComboBox(searchRoot);
 
         if (openComboBox is not null)
         {
