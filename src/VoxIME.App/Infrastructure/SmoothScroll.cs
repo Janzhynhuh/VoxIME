@@ -30,6 +30,7 @@ public static class SmoothScroll
 
     private static readonly Dictionary<ScrollViewer, ScrollState> States = new();
     private static bool _renderingHooked;
+    private static bool _windowWheelFallbackInitialized;
 
     /// <summary>Stopwatch 时间戳换算成秒的系数（高精度计时，避免 Environment.TickCount64 的 15.6ms 粒度）。</summary>
     private static readonly double TimestampToSeconds = 1d / Stopwatch.Frequency;
@@ -132,7 +133,58 @@ public static class SmoothScroll
 
     private static void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (e.Handled || sender is not ScrollViewer viewer || viewer.ScrollableHeight <= 0.5)
+        if (e.Handled || sender is not ScrollViewer viewer)
+        {
+            return;
+        }
+
+        HandleWheel(viewer, e);
+    }
+
+    /// <summary>
+    /// 整窗滚轮兜底：ComboBox 下拉框打开时会捕获鼠标，滚轮事件会直接路由到下拉框所在控件，
+    /// 不经过右侧表单的 ScrollViewer。这里在 Window 层用鼠标位置反查可滚动区域，
+    /// 把"右侧表单滚轮关闭整窗下拉框"的行为补上。
+    /// </summary>
+    public static void InitializeWindowWheelFallback()
+    {
+        if (_windowWheelFallbackInitialized)
+        {
+            return;
+        }
+
+        _windowWheelFallbackInitialized = true;
+        EventManager.RegisterClassHandler(
+            typeof(Window),
+            UIElement.PreviewMouseWheelEvent,
+            new MouseWheelEventHandler(OnWindowPreviewMouseWheel));
+    }
+
+    private static void OnWindowPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Handled || sender is not Window window)
+        {
+            return;
+        }
+
+        // 没有打开的下拉框时完全交给原有路径（页面 ScrollViewer / 原生控件）。
+        if (FindOpenComboBox(window) is null)
+        {
+            return;
+        }
+
+        var viewer = FindSmoothScrollViewerUnderMouse(window);
+        if (viewer is null)
+        {
+            return;
+        }
+
+        HandleWheel(viewer, e);
+    }
+
+    private static void HandleWheel(ScrollViewer viewer, MouseWheelEventArgs e)
+    {
+        if (e.Handled || viewer.ScrollableHeight <= 0.5)
         {
             return;
         }
@@ -183,6 +235,29 @@ public static class SmoothScroll
         state.PendingWheelPixels = 0;
 
         ScrollBy(viewer, deltaPixels);
+    }
+
+    /// <summary>按鼠标屏幕位置命中测试，向上找最近的、启用了 SmoothScroll 的 ScrollViewer。</summary>
+    private static ScrollViewer? FindSmoothScrollViewerUnderMouse(Window window)
+    {
+        if (!window.IsMouseOver)
+        {
+            return null;
+        }
+
+        var hit = VisualTreeHelper.HitTest(window, Mouse.GetPosition(window));
+        var node = hit?.VisualHit;
+        while (node is not null)
+        {
+            if (node is ScrollViewer viewer && GetIsEnabled(viewer))
+            {
+                return viewer;
+            }
+
+            node = VisualTreeHelper.GetParent(node);
+        }
+
+        return null;
     }
 
     /// <summary>逐帧把真实偏移推向目标——与拖动滚动条走同一路径，滚动条实时跟随。</summary>

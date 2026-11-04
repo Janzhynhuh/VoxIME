@@ -26,6 +26,9 @@ public partial class App : System.Windows.Application
         // 不能等到配置加载完成才注入（AppHost.Create 里会再套用用户配置）。
         ThemeManager.ApplyConfig(AppConfig.CreateDefault());
 
+        // 下拉框打开时会捕获鼠标滚轮，Window 层补一条兜底路径（见 SmoothScroll）。
+        SmoothScroll.InitializeWindowWheelFallback();
+
         var arguments = e.Args ?? Array.Empty<string>();
         var settingsMode = HasArgument(arguments, "--settings");
         var trayMode = HasArgument(arguments, "--tray");
