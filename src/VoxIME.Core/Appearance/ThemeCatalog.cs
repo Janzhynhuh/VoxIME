@@ -73,7 +73,8 @@ public static class ThemeCatalog
             BorderStrong = "#BCC0CC",
             Success = "#40A02B",
             Danger = "#D20F39",
-            Warning = "#DF8E1D"
+            Warning = "#DF8E1D",
+            AccentForeground = "#12121A"
         },
         dark: null);
 
@@ -98,7 +99,8 @@ public static class ThemeCatalog
             BorderStrong = "#51576D",
             Success = "#A6D189",
             Danger = "#E78284",
-            Warning = "#E5C890"
+            Warning = "#E5C890",
+            AccentForeground = "#FFFFFF"
         });
 
     private static readonly ColorScheme CatppuccinMacchiato = new(
@@ -122,7 +124,8 @@ public static class ThemeCatalog
             BorderStrong = "#494D64",
             Success = "#A6DA95",
             Danger = "#ED8796",
-            Warning = "#EED49F"
+            Warning = "#EED49F",
+            AccentForeground = "#FFFFFF"
         });
 
     private static readonly ColorScheme CatppuccinMocha = new(
@@ -146,7 +149,8 @@ public static class ThemeCatalog
             BorderStrong = "#45475A",
             Success = "#A6E3A1",
             Danger = "#F38BA8",
-            Warning = "#F9E2AF"
+            Warning = "#F9E2AF",
+            AccentForeground = "#FFFFFF"
         });
 
     private static readonly ColorScheme Nord = new(

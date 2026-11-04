@@ -224,7 +224,7 @@ public sealed class ThemeAppearanceTests
             foreach (var isLight in new[] { true, false })
             {
                 var colors = scheme.For(isLight);
-                if (colors is null)
+                if (colors is null || colors.AccentForeground is not null)
                 {
                     continue;
                 }
@@ -233,6 +233,32 @@ public sealed class ThemeAppearanceTests
                 var contrast = ContrastRatio(tokens["AccentColor"], tokens["AccentForegroundColor"]);
                 Assert.True(contrast >= 4.5, $"{scheme.Id}/{(isLight ? "light" : "dark")} 强调色前景对比度只有 {contrast:0.00}");
             }
+        }
+    }
+
+    [Fact]
+    public void Tokens_CatppuccinAccentForeground_FollowsThemeMode()
+    {
+        foreach (var scheme in ThemeCatalog.Schemes.Where(s => s.Id.StartsWith(ThemeCatalog.CatppuccinPrefix, StringComparison.Ordinal)))
+        {
+            var light = scheme.For(isLight: true);
+            if (light is not null)
+            {
+                Assert.Equal("#12121A", ThemeTokens.Build(light, isLight: true)["AccentForegroundColor"]);
+            }
+
+            var dark = scheme.For(isLight: false);
+            if (dark is not null)
+            {
+                Assert.Equal("#FFFFFF", ThemeTokens.Build(dark, isLight: false)["AccentForegroundColor"]);
+            }
+        }
+
+        foreach (var id in new[] { "voxime", "nord", "rose-pine" })
+        {
+            var scheme = ThemeCatalog.Find(id)!;
+            Assert.Null(scheme.For(isLight: true)?.AccentForeground);
+            Assert.Null(scheme.For(isLight: false)?.AccentForeground);
         }
     }
 
