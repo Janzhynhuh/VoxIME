@@ -51,10 +51,4 @@ public sealed class ThemeColorSet
 
     /// <summary>警告/识别状态。</summary>
     public required string Warning { get; init; }
-
-    /// <summary>
-    /// 主按钮文字色覆盖；为 null 时按强调色亮度自动选择黑/白。
-    /// 仅个别配色方案需要强制指定（例如 Catppuccin Latte 统一用黑字）。
-    /// </summary>
-    public string? AccentForeground { get; init; }
 }

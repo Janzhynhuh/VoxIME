@@ -224,7 +224,7 @@ public sealed class ThemeAppearanceTests
             foreach (var isLight in new[] { true, false })
             {
                 var colors = scheme.For(isLight);
-                if (colors is null || colors.AccentForeground is not null)
+                if (colors is null)
                 {
                     continue;
                 }
@@ -234,14 +234,6 @@ public sealed class ThemeAppearanceTests
                 Assert.True(contrast >= 4.5, $"{scheme.Id}/{(isLight ? "light" : "dark")} 强调色前景对比度只有 {contrast:0.00}");
             }
         }
-    }
-
-    [Fact]
-    public void Tokens_CatppuccinLatteAccentForeground_IsBlack()
-    {
-        var latte = ThemeCatalog.Find("catppuccin-latte")!;
-        var tokens = ThemeTokens.Build(latte.For(isLight: true)!, isLight: true);
-        Assert.Equal("#000000", tokens["AccentForegroundColor"]);
     }
 
     private static double ContrastRatio(string first, string second)

@@ -179,7 +179,7 @@ dotnet build VoxIME.sln
 Core（`VoxIME.Core.Appearance`，无 UI 依赖，可离线单测）：
 
 - `ThemeModes`：规范化主题模式、按「模式 + 系统明暗」判断实际明暗。
-- `ThemeCatalog`：配色方案目录。`voxime`、`rose-pine` 同时提供浅/深两套色；`nord` 与 Catppuccin Frappé / Macchiato / Mocha 仅深色，Catppuccin Latte 仅浅色。`ThemeColorSet.AccentForeground` 可覆盖主按钮文字色：Catppuccin Latte 固定 `#000000`，其余方案按强调色亮度自动选黑/白。
+- `ThemeCatalog`：配色方案目录。`voxime`、`rose-pine` 同时提供浅/深两套色；`nord` 与 Catppuccin Frappé / Macchiato / Mocha 仅深色，Catppuccin Latte 仅浅色。
 - `ThemeResolver.Resolve(theme, colorScheme, systemIsLight)` → `ResolvedTheme`；模式失配时同族回退（Catppuccin → Latte/Mocha，其它 → `voxime`）。
 - `ThemeTokens.Build(ThemeColorSet, isLight)` → 完整颜色资源键：普通颜色键以 `Color` 结尾（UI 层自动生成同名 `*Brush`），渐变端点用 `AccentGradient*` / `HeroGradient*`。
 
