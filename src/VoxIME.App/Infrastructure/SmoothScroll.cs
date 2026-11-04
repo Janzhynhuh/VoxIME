@@ -19,6 +19,15 @@ public static class SmoothScroll
     /// <summary>一格滚轮（120 单位）对应的目标滚动距离（像素）。</summary>
     private const double PixelsPerNotch = 100;
 
+    /// <summary>
+    /// 下拉框打开时，滚轮累计到该距离才认定为"确实要滚动页面"，先关闭下拉框再滚；
+    /// 小于该值视为误触，不滚动也不关闭。
+    /// </summary>
+    private const double DropDownCloseThresholdPixels = 150;
+
+    /// <summary>滚轮累计意图的过期时间（毫秒）：两次滚轮间隔超过该值则重新累计，避免误触叠加。</summary>
+    private const long WheelIntentTimeoutMs = 600;
+
     private static readonly Dictionary<ScrollViewer, ScrollState> States = new();
     private static bool _renderingHooked;
 
@@ -135,7 +144,38 @@ public static class SmoothScroll
         }
 
         e.Handled = true;
-        ScrollBy(viewer, -e.Delta / 120d * PixelsPerNotch);
+        var deltaPixels = -e.Delta / 120d * PixelsPerNotch;
+        var state = GetState(viewer);
+        var openComboBox = FindOpenComboBox(viewer);
+
+        if (openComboBox is not null)
+        {
+            var now = Environment.TickCount64;
+            if (now - state.LastWheelTick > WheelIntentTimeoutMs)
+            {
+                state.PendingWheelPixels = 0;
+            }
+
+            state.PendingWheelPixels += deltaPixels;
+            state.LastWheelTick = now;
+
+            // 误触阈值：没到阈值什么都不做，页面不滚、下拉框不关。
+            if (Math.Abs(state.PendingWheelPixels) < DropDownCloseThresholdPixels)
+            {
+                return;
+            }
+
+            // 确实要滚页面：先关下拉框，再把累计的滚动意图一次性给页面。
+            openComboBox.IsDropDownOpen = false;
+            deltaPixels = state.PendingWheelPixels;
+            state.PendingWheelPixels = 0;
+        }
+        else
+        {
+            state.PendingWheelPixels = 0;
+        }
+
+        ScrollBy(viewer, deltaPixels);
     }
 
     /// <summary>逐帧把真实偏移推向目标——与拖动滚动条走同一路径，滚动条实时跟随。</summary>
@@ -286,6 +326,26 @@ public static class SmoothScroll
         return null;
     }
 
+    /// <summary>在页面可视树里找当前打开着下拉列表的 ComboBox（通常只会有一个）。</summary>
+    private static ComboBox? FindOpenComboBox(DependencyObject root)
+    {
+        if (root is ComboBox comboBox && comboBox.IsDropDownOpen)
+        {
+            return comboBox;
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            if (FindOpenComboBox(VisualTreeHelper.GetChild(root, i)) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     private sealed class ScrollState
     {
         public bool Animating { get; set; }
@@ -303,5 +363,11 @@ public static class SmoothScroll
 
         /// <summary>上一合成帧的时间（RenderingTime 秒）。</summary>
         public double LastFrameSeconds { get; set; }
+
+        /// <summary>下拉框打开期间累计的滚轮距离（像素，带方向）；超过阈值才滚动页面。</summary>
+        public double PendingWheelPixels { get; set; }
+
+        /// <summary>上一次滚轮事件时间（Environment.TickCount64），用于过期重置。</summary>
+        public long LastWheelTick { get; set; }
     }
 }
