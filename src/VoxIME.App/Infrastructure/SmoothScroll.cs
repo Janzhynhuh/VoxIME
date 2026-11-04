@@ -376,11 +376,19 @@ public static class SmoothScroll
     {
         while (source is not null)
         {
-            // 只有用户点击/聚焦到输入框后，滚轮才交给输入框自己处理；
-            // 未聚焦时即使指针在单行输入框上，也继续平滑滚动页面，避免滚动突然中断。
-            if (source is TextBoxBase textInput)
+            // 多行/可滚动输入框：用户点击/聚焦后才把滚轮交给输入框自己处理；
+            // 未聚焦、或单行输入框没有可滚内容时，滚轮继续平滑滚动页面。
+            if (source is RichTextBox richTextBox)
             {
-                return textInput.IsKeyboardFocusWithin;
+                return richTextBox.IsKeyboardFocusWithin;
+            }
+
+            if (source is TextBox textBox)
+            {
+                return textBox.IsKeyboardFocusWithin
+                    && (textBox.AcceptsReturn
+                        || textBox.TextWrapping != TextWrapping.NoWrap
+                        || textBox.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled);
             }
 
             source = source is Visual or System.Windows.Media.Media3D.Visual3D
