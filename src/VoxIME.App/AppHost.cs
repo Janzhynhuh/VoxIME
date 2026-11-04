@@ -81,6 +81,9 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
         _logger.Info($"配置：{ConfigStore.ConfigFilePath}");
         _logger.Info($"日志：{_logger.LogFilePath}");
 
+        // 背景图片已被手动删除但配置还指向旧路径时，清掉失效背景，避免设置页一直显示旧文件名。
+        RepairMissingBackgroundImage();
+
         // 先套用用户主题/配色，再创建 HUD / 托盘等界面，避免窗口先以默认色出现再跳变。
         ThemeManager.Initialize(Config);
 
@@ -94,6 +97,31 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
         CreateTray();
 
         _logger.Info("应用初始化完成（托盘已就绪）");
+    }
+
+    private void RepairMissingBackgroundImage()
+    {
+        try
+        {
+            var background = Config.Ui.Background;
+            if (background is null
+                || !string.Equals(background.Mode, BackgroundConfig.ModeImage, StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(background.ImagePath)
+                || File.Exists(background.ImagePath))
+            {
+                return;
+            }
+
+            _logger.Warn($"背景图片不存在，已回退主题背景：{background.ImagePath}");
+            background.Mode = BackgroundConfig.ModeTheme;
+            background.ImagePath = null;
+            background.Normalize();
+            ConfigStore.Save(Config);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"清理失效背景图片失败：{ex.Message}");
+        }
     }
 
     /// <summary>首次启动是否显示欢迎引导（尚未配置真实服务时）。</summary>

@@ -1701,13 +1701,43 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private void ClearBackgroundImage()
     {
-        BackgroundImageStore.Delete(_backgroundImagePath);
+        var oldPath = _backgroundImagePath;
         _backgroundImagePath = null;
         _backgroundMode = BackgroundConfig.ModeTheme;
         OnPropertiesChanged(nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
             nameof(SelectedBackgroundMode), nameof(IsBackgroundImageMode), nameof(IsBackgroundSolidMode),
             nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom), nameof(BackgroundStatusText));
         ApplyAppearancePreview();
+
+        // 移除是破坏性操作：立即写入配置，避免"文件已删、配置还留着旧路径"，
+        // 下次启动设置页又显示旧图片名。
+        if (TryPersistBackgroundDraft())
+        {
+            BackgroundImageStore.Delete(oldPath);
+            StatusText = "背景图片已移除并保存。";
+        }
+        else
+        {
+            StatusText = "背景图片已移除，但写入配置失败。";
+        }
+    }
+
+    /// <summary>只把当前背景草稿写回配置，不影响其它未保存的设置。</summary>
+    private bool TryPersistBackgroundDraft()
+    {
+        try
+        {
+            var config = ConfigJson.CloneAppConfig(_configStore.Current);
+            config.Ui.Background = BuildBackgroundDraft();
+            config.Ui.Background.Normalize();
+            _configStore.Save(config);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"保存背景设置失败：{ex.Message}");
+            return false;
+        }
     }
 
     private void ResetBackground()
