@@ -376,19 +376,11 @@ public static class SmoothScroll
     {
         while (source is not null)
         {
-            // 只有真正会纵向滚动的文本输入（多行/可滚动输入、富文本）才让原生滚轮优先；
-            // 单行 TextBox/PasswordBox 上继续让页面平滑滚动，避免指针扫过输入框时突然没有惯性。
-            if (source is TextBox textBox
-                && (textBox.AcceptsReturn
-                    || textBox.TextWrapping != TextWrapping.NoWrap
-                    || textBox.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled))
+            // 只有用户点击/聚焦到输入框后，滚轮才交给输入框自己处理；
+            // 未聚焦时即使指针在单行输入框上，也继续平滑滚动页面，避免滚动突然中断。
+            if (source is TextBoxBase textInput)
             {
-                return true;
-            }
-
-            if (source is RichTextBox)
-            {
-                return true;
+                return textInput.IsKeyboardFocusWithin;
             }
 
             source = source is Visual or System.Windows.Media.Media3D.Visual3D
