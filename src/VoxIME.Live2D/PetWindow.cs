@@ -65,6 +65,26 @@ internal sealed class PetWindow : Window
         public string szDevice;
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct DISPLAY_DEVICE
+    {
+        public int cb;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string DeviceName;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceString;
+
+        public int StateFlags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceID;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string DeviceKey;
+    }
+
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
 
@@ -91,6 +111,9 @@ internal sealed class PetWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT pt);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool EnumDisplayDevices(string? lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
 
     private readonly Grid _contentHost;
     private readonly FallbackAvatar _avatar;
@@ -562,8 +585,39 @@ internal sealed class PetWindow : Window
         var width = info.rcMonitor.Right - info.rcMonitor.Left;
         var height = info.rcMonitor.Bottom - info.rcMonitor.Top;
         var session = GetSystemMetrics(SmRemoteSession) != 0 ? "RDP" : "LOCAL";
-        var device = string.IsNullOrWhiteSpace(info.szDevice) ? "UNKNOWN" : info.szDevice.Trim();
-        return $"{session}:{device}:{width}x{height}";
+        var displayName = info.szDevice?.Trim() ?? string.Empty;
+
+        // 适配器名（例如 GameViewer Virtual Display Adapter / NVIDIA ...）是识别
+        // UU 远程虚拟屏等第三方远控屏最可靠的标记；显示器硬件 ID 再区分同型号多屏。
+        var adapter = string.Empty;
+        var display = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
+        for (uint i = 0; EnumDisplayDevices(null, i, ref display, 0); i++)
+        {
+            if (string.Equals(display.DeviceName?.Trim(), displayName, StringComparison.OrdinalIgnoreCase))
+            {
+                adapter = display.DeviceString?.Trim() ?? string.Empty;
+                break;
+            }
+
+            display.cb = Marshal.SizeOf<DISPLAY_DEVICE>();
+        }
+
+        var monitorName = string.Empty;
+        var monitorId = string.Empty;
+        var detail = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
+        if (displayName.Length > 0 && EnumDisplayDevices(displayName, 0, ref detail, 0))
+        {
+            monitorName = detail.DeviceString?.Trim() ?? string.Empty;
+            monitorId = detail.DeviceID?.Trim() ?? string.Empty;
+        }
+
+        var monitorTag = monitorId.Length > 0 ? monitorId : monitorName;
+        if (monitorTag.Length > 160)
+        {
+            monitorTag = monitorTag[..160];
+        }
+
+        return $"{session}|{adapter}|{monitorTag}|{width}x{height}";
     }
     /// <summary>
     /// 远控/DPI 切换后，WPF 可能保留旧物理尺寸（ActualWidth 与 Width 不一致）。
