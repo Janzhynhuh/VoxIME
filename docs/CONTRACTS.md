@@ -207,7 +207,7 @@ Core：
 
 App：
 
-- `Infrastructure.Motion`：动效 token（明显档时长/位移，克制档按时长 ×0.62、幅度 ×0.5），提供 `PlayEnter/PlayExit/PlaySlideIn/PlayDialogEnter/PlayLift/PlayPress`；按钮 hover/press 缩放由 `ButtonMotion` 统一处理（`PlayButtonHover/Press/Release`，跟随动效档位）；只动画 `Opacity` 与 `RenderTransform`，XAML 不写 Storyboard 时长。
+- `Infrastructure.Motion`：动效 token（明显档时长/位移，克制档按时长 ×0.62、幅度 ×0.5），提供 `PlayEnter/PlayExit/PlaySlideIn/PlayDialogEnter/PlayLift/PlayPress`；只动画 `Opacity` 与 `RenderTransform`，XAML 不写 Storyboard 时长。
 - `Infrastructure.BackgroundRenderer`：把背景配置展开为 `WindowBackgroundBrush` / `WindowDimBrush` 两个 DynamicResource；图片先按 980 宽解码 + `RenderTargetBitmap` 预烘焙模糊并缓存，不挂实时 `BlurEffect`；图片模式会让 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷按 `surfaceOpacity` 变半透明（玻璃质感）。消息框使用不受玻璃影响的 `DialogCardBrush`。
 - `Infrastructure.BackgroundImageStore`：背景图片本机存储（复制/清理旧图，只保留最近 8 张）。
 - 窗口 XAML 约定：低频窗口根 `Border.Background` 用 `{DynamicResource WindowBackgroundBrush}`，内部第一层加 `{DynamicResource WindowDimBrush}` 遮罩（`CornerRadius` 必须与窗口一致，主题色模式下为透明）；HUD/桌宠保持原样。`ScrollViewer` 用 `inf:SmoothScroll.IsEnabled="True"` 启用滚轮平滑惯性：平滑滚动与拖动滚动条同路径：每帧调用 ScrollToVerticalOffset 把真实偏移推向目标，滚动条/内容天然同步。运动模型为指数跟随目标（`VoxIME.Core.Services.ScrollMotion`，τ≈50ms（优先用合成器 RenderingTime，回退 Stopwatch 高精度帧间隔））：滚轮累加目标、偏移连续逼近，无逐格脉冲；程序化滚动入口为 `SmoothScroll.ScrollBy`。滚动不再触碰任何窗口特效；只处理纵向滚轮，文本输入框与拖拽滚动条保持原生。整窗有打开的下拉框时，右侧表单滚轮先按 150px 阈值/600ms 过期做防误触，达到阈值先关闭下拉框再滚动；左栏等无滚动目标区域的滚轮不转发、不关闭下拉框。下拉框打开会捕获滚轮、事件不经过右侧 ScrollViewer，`SmoothScroll.InitializeWindowWheelFallback()` 在 Window 层按鼠标位置反查启用了 SmoothScroll 的 ScrollViewer 补上这条路径。
