@@ -218,9 +218,18 @@
         <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
 
+    <!-- 主按钮内容模板：显式把文字颜色绑定到 Button.Foreground，
+         否则全局 TextBlock 样式的 Foreground 会覆盖按钮自己的 AccentForegroundBrush。 -->
+    <DataTemplate x:Key="PrimaryButtonTextTemplate">
+        <TextBlock Text="{Binding}"
+                   Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                   TextOptions.TextFormattingMode="Display" />
+    </DataTemplate>
+
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+        <Setter Property="ContentTemplate" Value="{StaticResource PrimaryButtonTextTemplate}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Padding" Value="20,9" />
     </Style>
