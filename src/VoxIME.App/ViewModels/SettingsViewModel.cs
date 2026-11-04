@@ -1355,7 +1355,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             var isLight = ThemeModes.IsLight(_selectedThemeMode, ThemeManager.IsSystemLight);
             return isLight
-                ? "当前是浅色主题，只列出支持浅色的配色；Catppuccin 的 Frappé / Macchiato / Mocha 是深色专用，切到深色后出现。"
+                ? "当前是浅色主题，只列出支持浅色的配色；Nord、Catppuccin Frappé / Macchiato / Mocha 是深色专用，切到深色后出现。"
                 : "当前是深色主题，只列出支持深色的配色；Catppuccin Latte 是浅色专用，切到浅色后出现。";
         }
     }

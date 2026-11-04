@@ -32,6 +32,16 @@ VoxIME 代码以 MIT 许可发布（见根目录 `LICENSE`）。以下是运行�
 | 应用图标 `assets/app.ico` | 本项目原创 | 可随项目分发 |
 | 字体 | 系统字体（Microsoft YaHei UI） | 不随包分发 |
 
+## 配色方案
+
+| 方案 | 许可 | 说明 |
+|---|---|---|
+| [Catppuccin](https://github.com/catppuccin/catppuccin) | MIT | Latte / Frappé / Macchiato / Mocha 色值参考 |
+| [Nord](https://www.nordtheme.com/) | MIT | 深色配色方案参考，按本项目的语义色重新映射 |
+| [Rosé Pine](https://rosepinetheme.com/) | MIT | Dawn / 深色配色参考，按本项目的语义色重新映射 |
+
+以上配色方案均以 MIT 许可发布，完整许可文本见各自项目仓库的 LICENSE 文件；本项目仅使用色值并映射到自己的 UI 语义键。
+
 ## 各语音识别服务
 
 VoxIME 本身不包含任何语音识别模型或服务，仅通过 HTTPS/WebSocket/本地进程调用用户自行配置的服务。各厂商 API 的计费、数据使用政策与合规要求请以厂商官方文档和协议为准（OpenAI、硅基流动、小米 MiMo 开放平台、阿里云百炼/DashScope、腾讯云、科大讯飞等）。

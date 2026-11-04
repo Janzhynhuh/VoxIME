@@ -149,9 +149,76 @@ public static class ThemeCatalog
             Warning = "#F9E2AF"
         });
 
+    private static readonly ColorScheme Nord = new(
+        "nord",
+        "Nord",
+        "深色 · 极地冷调 Frost 蓝",
+        light: null,
+        dark: new ThemeColorSet
+        {
+            Background = "#2E3440",
+            Surface = "#3B4252",
+            SurfaceHover = "#434C5E",
+            Input = "#2E3440",
+            Popup = "#3B4252",
+            Accent = "#88C0D0",
+            AccentSecondary = "#81A1C1",
+            Text = "#ECEFF4",
+            TextSubtle = "#D8DEE9",
+            TextMuted = "#8A97AB",
+            Border = "#434C5E",
+            BorderStrong = "#4C566A",
+            Success = "#A3BE8C",
+            Danger = "#BF616A",
+            Warning = "#EBCB8B"
+        });
+
+    private static readonly ColorScheme RosePine = new(
+        "rose-pine",
+        "Rosé Pine",
+        "浅色 Dawn / 深色 柔雾玫瑰",
+        light: new ThemeColorSet
+        {
+            Background = "#FAF4ED",
+            Surface = "#F2E9E1",
+            SurfaceHover = "#F4EDE8",
+            Input = "#FFFDF8",
+            Popup = "#FFFDF8",
+            Accent = "#D7827E",
+            AccentSecondary = "#907AA9",
+            Text = "#575279",
+            TextSubtle = "#797593",
+            TextMuted = "#9893A5",
+            Border = "#DFDAD9",
+            BorderStrong = "#CECACD",
+            Success = "#286983",
+            Danger = "#B4637A",
+            Warning = "#EA9D34"
+        },
+        dark: new ThemeColorSet
+        {
+            Background = "#191724",
+            Surface = "#1F1D2E",
+            SurfaceHover = "#26233A",
+            Input = "#26233A",
+            Popup = "#1F1D2E",
+            Accent = "#EBBCBA",
+            AccentSecondary = "#C4A7E7",
+            Text = "#E0DEF4",
+            TextSubtle = "#908CAA",
+            TextMuted = "#6E6A86",
+            Border = "#403D52",
+            BorderStrong = "#524F67",
+            Success = "#31748F",
+            Danger = "#EB6F92",
+            Warning = "#F6C177"
+        });
+
     private static readonly IReadOnlyList<ColorScheme> AllSchemes = new[]
     {
         Voxime,
+        Nord,
+        RosePine,
         CatppuccinLatte,
         CatppuccinFrappe,
         CatppuccinMacchiato,

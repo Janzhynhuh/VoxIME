@@ -193,7 +193,7 @@ sequenceDiagram
 
 ### 5.8 主题与配色（`VoxIME.App` + `VoxIME.Core.Appearance`）
 
-- 两个正交维度：**主题模式**（`system` 跟随 Windows「应用模式」/ `light` / `dark`）与**配色方案**（`voxime`、`catppuccin-latte`、`catppuccin-frappe`、`catppuccin-macchiato`、`catppuccin-mocha`）。
+- 两个正交维度：**主题模式**（`system` 跟随 Windows「应用模式」/ `light` / `dark`）与**配色方案**（`voxime`、`nord`、`rose-pine`、`catppuccin-latte`、`catppuccin-frappe`、`catppuccin-macchiato`、`catppuccin-mocha`）。
 - 数据在 Core（无 UI 依赖、可离线单测）：`ThemeCatalog` 保存每套方案的浅/深语义色（背景、卡片、输入、强调、文字、边框、状态色）；`ThemeTokens` 由语义色派生悬停遮罩、滚动条、导航选中、HUD 半透明卡片、渐变端点等全部派生色；`ThemeResolver` 把「主题 + 配色 + 系统明暗」解析成实际生效的 `ResolvedTheme`，模式失配时按同族回退（Catppuccin → Latte/Mocha，其它 → 默认双主题方案）。
 - 渲染在 App：`Infrastructure.ThemeManager` 在启动时把 `ThemeTokens` 展开成 `ResourceDictionary`（颜色键 + 自动派生 `*Brush` + `AccentGradient` / `HeroGradient` / `AccentGlow`），追加到 `Application.Resources.MergedDictionaries`；切换时替换该字典并触发 `ThemeChanged`。`App.OnStartup` 先注入默认调色板（保证单实例提示框等早期窗口有颜色），`AppHost.Start` 再套用用户配置。
 - XAML 约定：所有颜色一律 `{DynamicResource ...}`；禁止写死十六进制颜色或把颜色用 `StaticResource` 烘焙进样式（否则运行期换肤不生效、浅色主题错色）。字体、圆角、黑色阴影等主题无关资源放 `Themes/Base.xaml`。
@@ -289,7 +289,7 @@ sequenceDiagram
 - [x] 解压发布包直接运行（无 .NET SDK）
 - [x] 托盘图标/菜单/双击打开设置
 - [x] 设置七页签（含「外观」）保存后热键/桌宠/朗读/主题立即生效
-- [x] 浅色/深色与 Catppuccin 四种配色即时换肤；重启后保持；跟随系统随 Windows 应用模式切换
+- [x] 浅色/深色与 7 套配色（VoxIME、Nord、Rosé Pine、Catppuccin 四种）即时换肤；重启后保持；跟随系统随 Windows 应用模式切换
 - [x] 无模型 → 内置矢量兜底形象；选择 Hiyori 模型 → 透明桌宠 + 待机/口型/眼动/气泡
 - [x] 关闭穿透后桌宠可拖动；点击穿透开启时鼠标事件穿透到桌面
 - [x] 无 WebView2 / 模型损坏 → 自动降级并给出 `LastError`

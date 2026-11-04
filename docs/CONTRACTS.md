@@ -173,13 +173,13 @@ dotnet build VoxIME.sln
 配置文件（`UiConfig`）：
 
 - `theme`：`system`（跟随 Windows 应用模式）/ `light` / `dark`；`AppConfig.Normalize` 负责规范化，非法值回退 `dark`。
-- `colorScheme`：`voxime` / `catppuccin-latte` / `catppuccin-frappe` / `catppuccin-macchiato` / `catppuccin-mocha`；非法值回退 `voxime`。
+- `colorScheme`：`voxime` / `nord` / `rose-pine` / `catppuccin-latte` / `catppuccin-frappe` / `catppuccin-macchiato` / `catppuccin-mocha`；非法值回退 `voxime`。
 - 旧字段 `accentColor` 已移除（此前只是占位、从未接线）。
 
 Core（`VoxIME.Core.Appearance`，无 UI 依赖，可离线单测）：
 
 - `ThemeModes`：规范化主题模式、按「模式 + 系统明暗」判断实际明暗。
-- `ThemeCatalog`：配色方案目录。`voxime` 同时提供浅/深两套色；Catppuccin Latte 仅浅色，Frappé / Macchiato / Mocha 仅深色。
+- `ThemeCatalog`：配色方案目录。`voxime`、`rose-pine` 同时提供浅/深两套色；`nord` 与 Catppuccin Frappé / Macchiato / Mocha 仅深色，Catppuccin Latte 仅浅色。
 - `ThemeResolver.Resolve(theme, colorScheme, systemIsLight)` → `ResolvedTheme`；模式失配时同族回退（Catppuccin → Latte/Mocha，其它 → `voxime`）。
 - `ThemeTokens.Build(ThemeColorSet, isLight)` → 完整颜色资源键：普通颜色键以 `Color` 结尾（UI 层自动生成同名 `*Brush`），渐变端点用 `AccentGradient*` / `HeroGradient*`。
 
