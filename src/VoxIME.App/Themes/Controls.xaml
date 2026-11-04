@@ -139,71 +139,69 @@
          ============================================================ -->
 
     <ControlTemplate x:Key="SolidButtonTemplate" TargetType="Button">
-        <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}"
-                CornerRadius="9" Padding="{TemplateBinding Padding}"
-                SnapsToDevicePixels="True">
-            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+        <Grid>
+            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="9" SnapsToDevicePixels="True" />
+            <Border x:Name="PART_HoverLayer" Background="{DynamicResource GhostHoverBrush}"
+                    CornerRadius="9" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="PART_PressedLayer" Background="{DynamicResource GhostPressedBrush}"
+                    CornerRadius="9" Opacity="0" IsHitTestVisible="False" />
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                               RecognizesAccessKey="True" />
-        </Border>
+        </Grid>
         <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.87" />
-            </Trigger>
-            <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.72" />
-            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
+                <Setter Property="Opacity" Value="0.4" />
             </Trigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
 
     <ControlTemplate x:Key="GhostButtonTemplate" TargetType="Button">
-        <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
-                BorderThickness="1" CornerRadius="9" Padding="{TemplateBinding Padding}"
-                SnapsToDevicePixels="True">
-            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+        <Grid>
+            <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
+                    BorderThickness="1" CornerRadius="9" SnapsToDevicePixels="True" />
+            <Border x:Name="PART_HoverLayer" Background="{DynamicResource GhostHoverBrush}"
+                    CornerRadius="9" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="PART_PressedLayer" Background="{DynamicResource GhostPressedBrush}"
+                    CornerRadius="9" Opacity="0" IsHitTestVisible="False" />
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                               RecognizesAccessKey="True" />
-        </Border>
+        </Grid>
         <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GhostHoverBrush}" />
-            </Trigger>
-            <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GhostPressedBrush}" />
-            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
+                <Setter Property="Opacity" Value="0.4" />
             </Trigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
 
     <ControlTemplate x:Key="DangerGhostButtonTemplate" TargetType="Button">
-        <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
-                BorderThickness="1" CornerRadius="9" Padding="{TemplateBinding Padding}"
-                SnapsToDevicePixels="True">
-            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+        <Grid>
+            <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent"
+                    BorderThickness="1" CornerRadius="9" SnapsToDevicePixels="True" />
+            <Border x:Name="PART_HoverLayer" Background="{DynamicResource DangerHoverBrush}"
+                    CornerRadius="9" Opacity="0" IsHitTestVisible="False" />
+            <Border x:Name="PART_PressedLayer" Background="{DynamicResource DangerPressedBrush}"
+                    CornerRadius="9" Opacity="0" IsHitTestVisible="False" />
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                               RecognizesAccessKey="True" />
-        </Border>
+        </Grid>
         <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DangerHoverBrush}" />
-            </Trigger>
-            <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource DangerPressedBrush}" />
-            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
+                <Setter Property="Opacity" Value="0.4" />
             </Trigger>
         </ControlTemplate.Triggers>
     </ControlTemplate>
 
     <Style x:Key="BaseButton" TargetType="Button">
+        <Setter Property="inf:ControlMotion.Enabled" Value="True" />
         <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -259,6 +257,7 @@
     </Style>
 
     <Style x:Key="IconButton" TargetType="Button">
+        <Setter Property="inf:ControlMotion.Enabled" Value="True" />
         <Setter Property="Width" Value="32" />
         <Setter Property="Height" Value="30" />
         <Setter Property="Background" Value="Transparent" />
@@ -281,6 +280,7 @@
          ============================================================ -->
 
     <Style TargetType="{x:Type CheckBox}">
+        <Setter Property="inf:ControlMotion.Enabled" Value="True" />
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource AppFont}" />
         <Setter Property="FontSize" Value="13" />
@@ -291,22 +291,23 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type CheckBox}">
                     <StackPanel Orientation="Horizontal" Background="Transparent">
-                        <Border x:Name="Track" Width="38" Height="21" CornerRadius="11"
+                        <Border x:Name="PART_Track" Width="38" Height="21" CornerRadius="11"
                                 Background="{DynamicResource BorderBrush}" VerticalAlignment="Center">
-                            <Ellipse x:Name="Thumb" Width="15" Height="15" Fill="{DynamicResource ToggleThumbBrush}"
-                                     HorizontalAlignment="Left" Margin="3,0" />
+                            <Grid>
+                                <Border x:Name="PART_TrackOn" CornerRadius="11"
+                                        Background="{DynamicResource AccentGradientHorizontal}"
+                                        Opacity="0" IsHitTestVisible="False" />
+                                <Ellipse x:Name="PART_Thumb" Width="15" Height="15"
+                                         Fill="{DynamicResource ToggleThumbBrush}"
+                                         HorizontalAlignment="Left" Margin="3,0" />
+                            </Grid>
                         </Border>
                         <ContentPresenter x:Name="Cp" Margin="10,0,0,0" VerticalAlignment="Center"
                                           RecognizesAccessKey="True" />
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentGradientHorizontal}" />
-                            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
-                            <Setter TargetName="Thumb" Property="Fill" Value="{StaticResource WhiteBrush}" />
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Track" Property="Opacity" Value="0.82" />
+                            <Setter TargetName="PART_Thumb" Property="Fill" Value="{StaticResource WhiteBrush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45" />
@@ -760,6 +761,7 @@
     </Style>
 
     <Style TargetType="{x:Type ListBoxItem}">
+        <Setter Property="inf:ControlMotion.Enabled" Value="True" />
         <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="Padding" Value="10,8" />
         <Setter Property="Margin" Value="0,0,0,2" />
@@ -767,18 +769,15 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ListBoxItem}">
-                    <Border x:Name="Bd" Background="Transparent" CornerRadius="9"
-                            Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
-                        <ContentPresenter />
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource NavHoverBrush}" />
-                        </Trigger>
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource NavSelectedBrush}" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
+                    <Grid>
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="9"
+                                SnapsToDevicePixels="True" />
+                        <Border x:Name="PART_HoverLayer" Background="{DynamicResource NavHoverBrush}"
+                                CornerRadius="9" Opacity="0" IsHitTestVisible="False" />
+                        <Border x:Name="PART_SelectedLayer" Background="{DynamicResource NavSelectedBrush}"
+                                CornerRadius="9" Opacity="0" IsHitTestVisible="False" />
+                        <ContentPresenter Margin="{TemplateBinding Padding}" />
+                    </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -792,27 +791,29 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ListBoxItem}">
-                    <Border x:Name="Bd" Background="Transparent" CornerRadius="10" Padding="12,10"
-                            SnapsToDevicePixels="True">
-                        <Grid>
+                    <Grid>
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="10"
+                                SnapsToDevicePixels="True" />
+                        <Border x:Name="PART_HoverLayer" Background="{DynamicResource NavHoverBrush}"
+                                CornerRadius="10" Opacity="0" IsHitTestVisible="False" />
+                        <Border x:Name="PART_SelectedLayer" Background="{DynamicResource NavSelectedBrush}"
+                                CornerRadius="10" Opacity="0" IsHitTestVisible="False" />
+                        <Grid Margin="{TemplateBinding Padding}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="3" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Border x:Name="Indicator" Grid.Column="0" Width="3" Height="16" CornerRadius="2"
-                                    Background="{DynamicResource AccentBrush}" Visibility="Collapsed"
+                            <Border x:Name="PART_Indicator" Grid.Column="0" Width="3" Height="16" CornerRadius="2"
+                                    Background="{DynamicResource AccentBrush}" Opacity="0"
                                     VerticalAlignment="Center" />
                             <ContentPresenter Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" />
                         </Grid>
-                    </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource NavHoverBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource NavSelectedBrush}" />
-                            <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
                             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
