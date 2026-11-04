@@ -14,42 +14,42 @@ public static class ThemeCatalog
 
     private static readonly ColorScheme Voxime = new(
         "voxime",
-        "VoxIME 紫罗兰",
-        "原版紫罗兰强调色，深浅双主题",
+        "VoxIME 石墨",
+        "默认 · 中性石墨灰，深浅双主题",
         light: new ThemeColorSet
         {
-            Background = "#F6F5FB",
+            Background = "#F5F5F7",
             Surface = "#FFFFFF",
-            SurfaceHover = "#F1EEF9",
-            Input = "#EFEDF8",
+            SurfaceHover = "#EFEFF2",
+            Input = "#EAEAEE",
             Popup = "#FFFFFF",
-            Accent = "#6D4BFF",
-            AccentSecondary = "#2F9BFF",
-            Text = "#1D1B2D",
-            TextSubtle = "#5E5A76",
-            TextMuted = "#8B87A0",
-            Border = "#E3E0F0",
-            BorderStrong = "#CEC9E6",
-            Success = "#1E9E57",
-            Danger = "#D6224B",
-            Warning = "#B07A00"
+            Accent = "#4B5563",
+            AccentSecondary = "#9CA3AF",
+            Text = "#1C1E22",
+            TextSubtle = "#5C616B",
+            TextMuted = "#8D939D",
+            Border = "#E2E3E8",
+            BorderStrong = "#C8CBD2",
+            Success = "#15803D",
+            Danger = "#B91C1C",
+            Warning = "#A16207"
         },
         dark: new ThemeColorSet
         {
-            Background = "#12121A",
-            Surface = "#1C1C27",
-            SurfaceHover = "#232331",
-            Input = "#15151F",
-            Popup = "#1E1E2B",
-            Accent = "#7C5CFF",
-            AccentSecondary = "#4ECBFF",
-            Text = "#E8E8F0",
-            TextSubtle = "#8A8AA0",
-            TextMuted = "#5F5F74",
-            Border = "#2A2A3A",
-            BorderStrong = "#3A3A52",
+            Background = "#111113",
+            Surface = "#1A1A1E",
+            SurfaceHover = "#242429",
+            Input = "#151518",
+            Popup = "#1D1D22",
+            Accent = "#6B7280",
+            AccentSecondary = "#9CA3AF",
+            Text = "#E9E9ED",
+            TextSubtle = "#A6A6B0",
+            TextMuted = "#70707C",
+            Border = "#2C2C33",
+            BorderStrong = "#3E3E47",
             Success = "#4ADE80",
-            Danger = "#FF6B6B",
+            Danger = "#F87171",
             Warning = "#FBBF24"
         });
 
@@ -213,6 +213,7 @@ public static class ThemeCatalog
             Danger = "#EB6F92",
             Warning = "#F6C177"
         });
+
 
     private static readonly IReadOnlyList<ColorScheme> AllSchemes = new[]
     {

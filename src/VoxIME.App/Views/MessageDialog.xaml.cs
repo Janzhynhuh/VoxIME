@@ -67,8 +67,8 @@ public partial class MessageDialog : Window
             MessageKind.Success => ("\uE73E", "SuccessBrush", "#4ADE80"),
             MessageKind.Warning => ("\uE7BA", "WarningBrush", "#FBBF24"),
             MessageKind.Error => ("\uE783", "DangerBrush", "#FF6B6B"),
-            MessageKind.Question => ("\uE897", "AccentBrush", "#7C5CFF"),
-            _ => ("\uE946", "AccentBrush", "#7C5CFF")
+            MessageKind.Question => ("\uE897", "AccentBrush", "#6B7280"),
+            _ => ("\uE946", "AccentBrush", "#6B7280")
         };
 
         IconGlyph.Text = glyph;

@@ -13,7 +13,7 @@ public sealed class HudViewModel : ObservableObject
 {
     // 状态色跟随当前调色板；切换主题/配色后由 ThemeManager.ThemeChanged 触发重新求值。
     private static Brush IdleBrush => ThemeBrushes.FindOrFallback("SubtleTextBrush", "#8A8AA0");
-    private static Brush ListeningBrush => ThemeBrushes.FindOrFallback("AccentBrush", "#7C5CFF");
+    private static Brush ListeningBrush => ThemeBrushes.FindOrFallback("AccentBrush", "#6B7280");
     private static Brush RecognizingBrush => ThemeBrushes.FindOrFallback("WarningBrush", "#FBBF24");
     private static Brush SpeakingBrush => ThemeBrushes.FindOrFallback("SuccessBrush", "#4ADE80");
     private static Brush ErrorBrush => ThemeBrushes.FindOrFallback("DangerBrush", "#FF6B6B");

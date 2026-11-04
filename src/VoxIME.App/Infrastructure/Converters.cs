@@ -130,7 +130,7 @@ public sealed class StateToBrushConverter : IValueConverter
         var state = value?.ToString();
         return state switch
         {
-            "Listening" => ThemeBrushes.FindOrFallback("AccentBrush", "#7C5CFF"),
+            "Listening" => ThemeBrushes.FindOrFallback("AccentBrush", "#6B7280"),
             "Recognizing" => ThemeBrushes.FindOrFallback("WarningBrush", "#FBBF24"),
             "Speaking" => ThemeBrushes.FindOrFallback("SuccessBrush", "#4ADE80"),
             "Error" => ThemeBrushes.FindOrFallback("DangerBrush", "#FF6B6B"),

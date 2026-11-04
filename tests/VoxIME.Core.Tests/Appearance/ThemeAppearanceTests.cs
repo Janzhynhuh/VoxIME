@@ -103,7 +103,7 @@ public sealed class ThemeAppearanceTests
         Assert.Equal("dark", theme.ThemeMode);
         Assert.Equal("voxime", theme.ColorSchemeId);
         Assert.False(theme.IsLight);
-        Assert.Equal("#12121A", theme.Colors.Background);
+        Assert.Equal("#111113", theme.Colors.Background);
     }
 
     [Fact]
@@ -113,9 +113,9 @@ public sealed class ThemeAppearanceTests
         var dark = ThemeResolver.Resolve("system", "voxime", systemIsLight: false);
 
         Assert.True(light.IsLight);
-        Assert.Equal("#F6F5FB", light.Colors.Background);
+        Assert.Equal("#F5F5F7", light.Colors.Background);
         Assert.False(dark.IsLight);
-        Assert.Equal("#12121A", dark.Colors.Background);
+        Assert.Equal("#111113", dark.Colors.Background);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class ThemeAppearanceTests
     [Fact]
     public void Resolve_DarkHeavySchemeFallsBackToSameFamilyLight()
     {
-        // Mocha 只有深色；跑到浅色模式时应回退同族 Latte，而不是直接变回紫罗兰。
+        // Mocha 只有深色；跑到浅色模式时应回退同族 Latte，而不是直接变回默认方案。
         var theme = ThemeResolver.Resolve("light", "catppuccin-mocha", systemIsLight: false);
 
         Assert.True(theme.IsLight);
