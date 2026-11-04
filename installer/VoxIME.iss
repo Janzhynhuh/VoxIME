@@ -7,7 +7,7 @@
 #define AppUrl "https://github.com/Janzhynhuh/VoxIME"
 
 #ifndef AppVersion
-  #define AppVersion "0.4.0"
+  #define AppVersion "0.4.1"
 #endif
 
 #ifndef SourceDirectory
