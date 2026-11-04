@@ -241,6 +241,65 @@ public static class Motion
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, down);
     }
 
+    /// <summary>按钮 hover 缩放：悬停轻微放大，离开恢复；跟随动效档位，Off 时不动画。</summary>
+    public static void PlayButtonHover(FrameworkElement element, bool hovered) =>
+        AnimateButtonScale(element, hovered ? ButtonHoverScale : 1d, TimeSpan.FromMilliseconds(130));
+
+    /// <summary>按钮按下：缩小一点。</summary>
+    public static void PlayButtonPress(FrameworkElement element) =>
+        AnimateButtonScale(element, ButtonPressScale, TimeSpan.FromMilliseconds(90));
+
+    /// <summary>按钮松开：回到 hover 尺寸或原尺寸（带轻微回弹）。</summary>
+    public static void PlayButtonRelease(FrameworkElement element, bool stillHovered) =>
+        AnimateButtonScale(element, stillHovered ? ButtonHoverScale : 1d, TimeSpan.FromMilliseconds(120), overshoot: true);
+
+    /// <summary>清除按钮缩放动画并恢复到 1。</summary>
+    public static void ResetButtonScale(FrameworkElement element)
+    {
+        if (element.RenderTransform is not TransformGroup group
+            || group.Children.Count < 2
+            || group.Children[1] is not ScaleTransform scale)
+        {
+            return;
+        }
+
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        scale.ScaleX = 1;
+        scale.ScaleY = 1;
+    }
+
+    private static double ButtonHoverScale => Style switch
+    {
+        MotionStyle.Off => 1d,
+        MotionStyle.Subtle => 1.008d,
+        _ => 1.015d
+    };
+
+    private static double ButtonPressScale => Style switch
+    {
+        MotionStyle.Off => 1d,
+        MotionStyle.Subtle => 0.985d,
+        _ => 0.96d
+    };
+
+    private static void AnimateButtonScale(FrameworkElement element, double target, TimeSpan duration, bool overshoot = false)
+    {
+        if (!Enabled)
+        {
+            ResetButtonScale(element);
+            return;
+        }
+
+        var (_, scale) = EnsureTransforms(element);
+        var span = Duration(duration);
+        var easing = overshoot ? OvershootEasing : EaseOutEasing;
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(scale.ScaleX, target, span) { EasingFunction = easing });
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(scale.ScaleY, target, span) { EasingFunction = easing });
+    }
+
     /// <summary>重置元素到静止状态并清除动画。</summary>
     public static void Reset(FrameworkElement element)
     {
