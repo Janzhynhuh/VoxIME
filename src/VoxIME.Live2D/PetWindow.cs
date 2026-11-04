@@ -26,6 +26,7 @@ internal sealed class PetWindow : Window
     private const int SmYVirtualScreen = 77;
     private const int SmCxVirtualScreen = 78;
     private const int SmCyVirtualScreen = 79;
+    private const int SmRemoteSession = 0x1000;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
@@ -52,6 +53,18 @@ internal sealed class PetWindow : Window
         public uint dwFlags;
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct MONITORINFOEX
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
 
@@ -72,6 +85,12 @@ internal sealed class PetWindow : Window
 
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfoEx(IntPtr hMonitor, ref MONITORINFOEX lpmi);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT pt);
 
     private readonly Grid _contentHost;
     private readonly FallbackAvatar _avatar;
@@ -489,6 +508,63 @@ internal sealed class PetWindow : Window
         return GetWindowScale();
     }
 
+    /// <summary>当前窗口所在显示器的记忆键（会话类型 + 设备名 + 物理分辨率）。</summary>
+    public string GetDisplayKeyForWindow()
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero)
+            {
+                return string.Empty;
+            }
+
+            return BuildDisplayKey(MonitorFromWindow(hwnd, MonitorDefaultToNearest));
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>指定窗口矩形（DIP）中心点所在显示器的记忆键。</summary>
+    public string GetDisplayKeyForSavedPosition(double left, double top)
+    {
+        try
+        {
+            var scale = GetPhysicalDisplayScale();
+            var point = new POINT
+            {
+                X = (int)Math.Round((left + Width / 2) * scale),
+                Y = (int)Math.Round((top + Height / 2) * scale)
+            };
+            return BuildDisplayKey(MonitorFromPoint(point, MonitorDefaultToNearest));
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string BuildDisplayKey(IntPtr monitor)
+    {
+        if (monitor == IntPtr.Zero)
+        {
+            return string.Empty;
+        }
+
+        var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+        if (!GetMonitorInfoEx(monitor, ref info))
+        {
+            return string.Empty;
+        }
+
+        var width = info.rcMonitor.Right - info.rcMonitor.Left;
+        var height = info.rcMonitor.Bottom - info.rcMonitor.Top;
+        var session = GetSystemMetrics(SmRemoteSession) != 0 ? "RDP" : "LOCAL";
+        var device = string.IsNullOrWhiteSpace(info.szDevice) ? "UNKNOWN" : info.szDevice.Trim();
+        return $"{session}:{device}:{width}x{height}";
+    }
     /// <summary>
     /// 远控/DPI 切换后，WPF 可能保留旧物理尺寸（ActualWidth 与 Width 不一致）。
     /// 这种情况下必须按物理像素重新施加几何，否则吸附会按错误的 DIP 计算。
@@ -899,7 +975,7 @@ internal sealed class PetWindow : Window
         finally
         {
             IsDragging = false;
-            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(Left, Top));
+            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(Left, Top, GetDisplayKeyForWindow()));
         }
 
         e.Handled = true;

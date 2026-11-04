@@ -408,8 +408,23 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
 
             config.Live2D.Left = e.Left;
             config.Live2D.Top = e.Top;
+            if (!string.IsNullOrWhiteSpace(e.DisplayKey))
+            {
+                config.Live2D.PositionsByDisplay[e.DisplayKey] = new Live2DPosition
+                {
+                    Left = e.Left,
+                    Top = e.Top
+                };
+
+                // 防止显示器组合反复变化导致字典无限增长。
+                while (config.Live2D.PositionsByDisplay.Count > 16)
+                {
+                    config.Live2D.PositionsByDisplay.Remove(config.Live2D.PositionsByDisplay.Keys.First());
+                }
+            }
+
             ConfigStore.Save(config);
-            _logger.Debug($"[Live2D] 保存桌宠位置：({e.Left:0},{e.Top:0})");
+            _logger.Debug($"[Live2D] 保存桌宠位置：({e.Left:0},{e.Top:0}) display={e.DisplayKey}");
         }
         catch (Exception ex)
         {

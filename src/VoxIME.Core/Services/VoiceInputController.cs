@@ -255,6 +255,7 @@ public sealed class VoiceInputController : IVoiceInputController
             // (-1,-1) 是“没有保存位置”的哨兵值；开启贴边时回到当前屏右下角，否则居中。
             config.Live2D.Left = -1;
             config.Live2D.Top = -1;
+            config.Live2D.PositionsByDisplay.Clear();
             _configStore.Save(config);
             _live2d.ApplyConfig(config.Live2D);
             if (config.Live2D.Enabled)

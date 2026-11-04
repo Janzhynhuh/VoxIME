@@ -247,6 +247,7 @@ public sealed class AppConfig
         Live2D.EyeFollowInvertYByModel ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         Live2D.ExpressionByModel ??= new Dictionary<string, Live2DExpressionMap>(StringComparer.OrdinalIgnoreCase);
         Live2D.MotionByModel ??= new Dictionary<string, Live2DMotionMap>(StringComparer.OrdinalIgnoreCase);
+    Live2D.PositionsByDisplay ??= new Dictionary<string, Live2DPosition>(StringComparer.OrdinalIgnoreCase);
         Live2D.ModelLibraryDirectory = string.IsNullOrWhiteSpace(Live2D.ModelLibraryDirectory)
             ? null
             : Live2D.ModelLibraryDirectory.Trim();
@@ -418,6 +419,13 @@ public sealed class InsertionConfig
     public List<TextReplacement> Replacements { get; set; } = new();
 }
 
+/// <summary>某台显示器上记住的桌宠位置（WPF DIP）。</summary>
+public sealed class Live2DPosition
+{
+    public double Left { get; set; } = -1;
+    public double Top { get; set; } = -1;
+}
+
 public sealed class Live2DConfig
 {
     public bool Enabled { get; set; } = true;
@@ -440,6 +448,13 @@ public sealed class Live2DConfig
     /// <summary>-1 表示自动吸附屏幕右下角。</summary>
     public double Left { get; set; } = -1;
     public double Top { get; set; } = -1;
+
+    /// <summary>
+    /// 按显示器记忆的位置。key 由「会话类型(本地/RDP)+显示器设备名+物理分辨率」组成，
+    /// 用于远控屏/主屏等不同显示环境之间分别恢复桌宠位置；值使用 WPF DIP。
+    /// </summary>
+    public Dictionary<string, Live2DPosition> PositionsByDisplay { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
     public double Opacity { get; set; } = 0.96;
     public double Scale { get; set; } = 1.0;
     public bool ClickThrough { get; set; } = true;
