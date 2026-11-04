@@ -30,7 +30,7 @@ public static class ThemeTokens
             ["AccentHoverColor"] = isLight ? ThemeColorMath.Darken(accent, 0.16) : ThemeColorMath.Lighten(accent, 0.10),
             ["AccentSoftColor"] = ThemeColorMath.Blend(background, accent, isLight ? 0.12 : 0.22),
             ["AccentSecondaryColor"] = colors.AccentSecondary,
-            ["AccentForegroundColor"] = PickAccentForeground(accent),
+            ["AccentForegroundColor"] = colors.AccentForeground ?? PickAccentForeground(accent),
 
             // ---- 文字 ----
             ["TextColor"] = colors.Text,

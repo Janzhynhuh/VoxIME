@@ -73,7 +73,8 @@ public static class ThemeCatalog
             BorderStrong = "#BCC0CC",
             Success = "#40A02B",
             Danger = "#D20F39",
-            Warning = "#DF8E1D"
+            Warning = "#DF8E1D",
+            AccentForeground = "#000000"
         },
         dark: null);
 
