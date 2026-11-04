@@ -526,7 +526,7 @@
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                           ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                           ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
-                                          Margin="{TemplateBinding Padding}"
+                                          Margin="10,0,34,0"
                                           VerticalAlignment="Center" HorizontalAlignment="Stretch" />
                         <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
                                AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
@@ -798,7 +798,7 @@
                                 CornerRadius="10" Opacity="0" IsHitTestVisible="False" />
                         <Border x:Name="PART_SelectedLayer" Background="{DynamicResource NavSelectedBrush}"
                                 CornerRadius="10" Opacity="0" IsHitTestVisible="False" />
-                        <Grid Margin="{TemplateBinding Padding}">
+                        <Grid Margin="12,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="3" />
                                 <ColumnDefinition Width="*" />

@@ -376,7 +376,17 @@ public static class SmoothScroll
     {
         while (source is not null)
         {
-            if (source is TextBoxBase)
+            // 只有真正会纵向滚动的文本输入（多行/可滚动输入、富文本）才让原生滚轮优先；
+            // 单行 TextBox/PasswordBox 上继续让页面平滑滚动，避免指针扫过输入框时突然没有惯性。
+            if (source is TextBox textBox
+                && (textBox.AcceptsReturn
+                    || textBox.TextWrapping != TextWrapping.NoWrap
+                    || textBox.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled))
+            {
+                return true;
+            }
+
+            if (source is RichTextBox)
             {
                 return true;
             }
