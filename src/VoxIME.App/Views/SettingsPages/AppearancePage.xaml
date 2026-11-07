@@ -284,10 +284,10 @@
                     <Border Background="{DynamicResource BgBrush}" BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1" CornerRadius="10" Height="190" ClipToBounds="True">
                         <Grid IsHitTestVisible="False">
-                            <Grid Width="640" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            <Grid Width="684" HorizontalAlignment="Center" VerticalAlignment="Center"
                                   LayoutTransform="{Binding HudPreviewTransform}"
                                   Opacity="{Binding HudPreviewCardOpacity}">
-                                <Border Margin="18" BorderBrush="{Binding HudPreviewBorderBrush}"
+                                <Border Margin="40" BorderBrush="{Binding HudPreviewBorderBrush}"
                                         BorderThickness="{Binding HudPreviewBorderThickness}"
                                         CornerRadius="{Binding HudPreviewCornerRadius}"
                                         Effect="{StaticResource HudShadow}">

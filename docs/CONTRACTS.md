@@ -200,7 +200,7 @@ App（`VoxIME.App.Infrastructure`）：
   - `imageOpacity` 0.2–1.0、`blurRadius` 0–60、`dim` 0–0.95、`fit`（`cover`/`contain`/`fill`）、`surfaceOpacity` 0.35–1.0（玻璃强度）；
   - `solidColor` / `gradientStart` / `gradientEnd`：`#RRGGBB`，空=跟随主题。文字颜色由主题的浅色/深色决定（浅色主题=深色字、深色主题=浅色字）；外观页提供「按背景亮度匹配主题」：按自定义背景的平均亮度自动切浅色/深色主题，不再单独做文字反色。
 - `hudBackground`：只作用于录音悬浮窗（HUD），字段与 `background` 相同，与低频窗口背景互相独立；默认 `theme`（沿用主题的半透明 HUD 卡片），自定义后替换 HUD 背景并叠加 `dim` 暗化遮罩。`surfaceOpacity` 对 HUD 无效（HUD 只有一层卡片）。
-- HUD 外观字段：`hudScale` 0.7–1.5（默认 1.0，整体等比缩放；窗口宽度=640×scale，高度随内容）、`hudCornerRadius` 0–28（默认 18）、`hudCardOpacity` 0.35–1.0（默认 1.0）、`hudBorderColor`（`#RRGGBB`/`#AARRGGBB`，空=跟随主题 `HudBorderBrush`）、`hudBorderThickness` 0–4（默认 1；0=无描边，用于去掉默认的主题细边框）、`hudBottomMargin` 0–300（默认 42，默认位置距工作区底部）、`hudHorizontalOffset` -400–400（默认 0，水平偏移）；手动拖动保存的 `overlay.left/top` 优先，「重置悬浮窗位置」后按默认位置摆放。外观页的 HUD 预览面板实时使用当前主题 + 草稿画刷，不写入全局调色板。
+- HUD 外观字段：`hudScale` 0.7–1.5（默认 1.0，整体等比缩放；窗口宽度=684×scale（卡片仍为 604 设计宽，四周 40px 透明边距留给阴影），高度随内容）、`hudCornerRadius` 0–28（默认 18）、`hudCardOpacity` 0.35–1.0（默认 1.0）、`hudBorderColor`（`#RRGGBB`/`#AARRGGBB`，空=跟随主题 `HudBorderBrush`）、`hudBorderThickness` 0–4（默认 1；0=无描边，用于去掉默认的主题细边框）、`hudBottomMargin` 0–300（默认 42，默认位置距工作区底部）、`hudHorizontalOffset` -400–400（默认 0，水平偏移）；手动拖动保存的 `overlay.left/top` 优先，「重置悬浮窗位置」后按默认位置摆放。外观页的 HUD 预览面板实时使用当前主题 + 草稿画刷，不写入全局调色板。HUD 窗口在首次显示时调用 `NativeMethods.TryDisableDwmDecoration`（`DWMWCP_DONOTROUND` + `DWMNCRP_DISABLED` + border none），禁止 DWM 给透明窗口额外绘制圆角/边框/阴影。
 
 Core：
 

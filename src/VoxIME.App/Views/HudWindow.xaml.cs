@@ -29,6 +29,9 @@ public partial class HudWindow : Window
     private readonly DispatcherTimer _hideTimer;
     private readonly DispatcherTimer _levelTimer;
 
+    /// <summary>HUD 设计宽度（含四周透明边距）；窗口宽度 = 该值 × HudScale。</summary>
+    private const double HudDesignWidth = 684;
+
     private volatile float _pendingLevel;
     private bool _hasPosition;
     private bool _allowClose;
@@ -220,8 +223,9 @@ public partial class HudWindow : Window
         try
         {
             // 注意：首次 Show 时才触发 Loaded，这里不能 Hide，否则 HUD 会被立刻隐藏。
+            // 透明 HUD 自己画圆角/阴影，必须关掉 DWM 的窗口圆角/边框/阴影，否则窗口矩形外会多一圈描边。
             var hwnd = new WindowInteropHelper(this).Handle;
-            NativeMethods.TryEnableRoundedCorners(hwnd);
+            NativeMethods.TryDisableDwmDecoration(hwnd);
         }
         catch (Exception ex)
         {
@@ -253,7 +257,7 @@ public partial class HudWindow : Window
         {
             var overlay = _configStore.Current.Overlay;
             var workArea = WindowHelper.GetPrimaryWorkArea();
-            var width = ActualWidth > 10 ? ActualWidth : 640;
+            var width = ActualWidth > 10 ? ActualWidth : HudDesignWidth;
             var height = ActualHeight > 10 ? ActualHeight : 160;
 
             var virtualLeft = SystemParameters.VirtualScreenLeft;
@@ -430,7 +434,7 @@ public partial class HudWindow : Window
         {
             var ui = config.Ui;
             var scale = Math.Clamp(ui.HudScale, 0.7, 1.5);
-            var width = 640 * scale;
+            var width = HudDesignWidth * scale;
             if (Math.Abs(Width - width) > 0.5)
             {
                 Width = width;
