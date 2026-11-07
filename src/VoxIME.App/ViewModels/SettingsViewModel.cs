@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using VoxIME.App.Infrastructure;
@@ -163,6 +164,32 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private string _selectedMotionMode = MotionModes.Expressive;
     private DispatcherTimer? _backgroundPreviewTimer;
 
+    // ---- 录音悬浮窗（HUD）背景 ----
+    private string _hudBackgroundMode = BackgroundConfig.ModeTheme;
+    private string? _hudBackgroundImagePath;
+    private double _hudBackgroundImageOpacity = 0.92;
+    private double _hudBackgroundBlurRadius = 22;
+    private double _hudBackgroundDim = 0.42;
+    private string _hudBackgroundFit = "cover";
+    private string? _hudBackgroundSolidColor;
+    private string? _hudBackgroundGradientStart;
+    private string? _hudBackgroundGradientEnd;
+
+    // ---- 录音悬浮窗（HUD）缩放/圆角/不透明度/默认位置 ----
+    private double _hudScale = 1.0;
+    private double _hudCornerRadius = 18;
+    private double _hudCardOpacity = 1.0;
+    private double _hudBottomMargin = 42;
+    private double _hudHorizontalOffset;
+
+    // ---- HUD 设置页实时预览 ----
+    private Brush? _hudPreviewBackgroundBrush;
+    private Brush? _hudPreviewDimBrush;
+    private CornerRadius _hudPreviewCornerRadius = new(18);
+    private CornerRadius _hudPreviewInnerCornerRadius = new(17);
+    private ScaleTransform _hudPreviewTransform = new(0.55, 0.55);
+    private double _hudPreviewCardOpacity = 1.0;
+
     public SettingsViewModel(
         IConfigStore configStore,
         IVoiceInputController controller,
@@ -243,6 +270,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ClearBackgroundImageCommand = new RelayCommand(ClearBackgroundImage);
         ResetBackgroundCommand = new RelayCommand(ResetBackground);
         MatchThemeToBackgroundCommand = new RelayCommand(MatchThemeToBackground);
+        PickHudBackgroundImageCommand = new RelayCommand(PickHudBackgroundImage);
+        ClearHudBackgroundImageCommand = new RelayCommand(ClearHudBackgroundImage);
+        ResetHudBackgroundCommand = new RelayCommand(ResetHudBackground);
 
         InitializeFrom(_working);
         _controller.MicrophoneLevelChanged += OnMicrophoneLevelChanged;
@@ -1438,7 +1468,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         try
         {
             Motion.Apply(_selectedMotionMode);
-            ThemeManager.ApplyAppearance(_selectedThemeMode, _selectedColorSchemeId, BuildBackgroundDraft());
+            ThemeManager.ApplyAppearance(
+                _selectedThemeMode,
+                _selectedColorSchemeId,
+                BuildBackgroundDraft(),
+                BuildHudBackgroundDraft());
+            RefreshHudPreview();
         }
         finally
         {
@@ -1461,6 +1496,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             return;
         }
 
+        RefreshHudPreview();
         RefreshColorSchemeOptions(applyTheme: false);
     }
 
@@ -1495,6 +1531,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand ClearBackgroundImageCommand { get; }
     public RelayCommand ResetBackgroundCommand { get; }
     public RelayCommand MatchThemeToBackgroundCommand { get; }
+    public RelayCommand PickHudBackgroundImageCommand { get; }
+    public RelayCommand ClearHudBackgroundImageCommand { get; }
+    public RelayCommand ResetHudBackgroundCommand { get; }
 
     /// <summary>背景模式：theme / image / solid / gradient。</summary>
     public string SelectedBackgroundMode
@@ -1656,6 +1695,276 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
+    // ==================== 录音悬浮窗（HUD）背景 ====================
+
+    /// <summary>HUD 背景模式：theme / image / solid / gradient。</summary>
+    public string SelectedHudBackgroundMode
+    {
+        get => _hudBackgroundMode;
+        set
+        {
+            var normalized = BackgroundConfig.NormalizeMode(value);
+            if (SetProperty(ref _hudBackgroundMode, normalized))
+            {
+                OnPropertiesChanged(nameof(IsHudBackgroundImageMode), nameof(IsHudBackgroundSolidMode),
+                    nameof(IsHudBackgroundGradientMode), nameof(IsHudBackgroundCustom), nameof(HudBackgroundStatusText));
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public bool IsHudBackgroundImageMode => _hudBackgroundMode == BackgroundConfig.ModeImage;
+    public bool IsHudBackgroundSolidMode => _hudBackgroundMode == BackgroundConfig.ModeSolid;
+    public bool IsHudBackgroundGradientMode => _hudBackgroundMode == BackgroundConfig.ModeGradient;
+    public bool IsHudBackgroundCustom => _hudBackgroundMode != BackgroundConfig.ModeTheme;
+    public bool HasHudBackgroundImage => !string.IsNullOrWhiteSpace(_hudBackgroundImagePath);
+
+    /// <summary>HUD 背景区状态提示。</summary>
+    public string HudBackgroundStatusText
+    {
+        get
+        {
+            if (!IsHudBackgroundCustom)
+            {
+                return "当前使用主题的 HUD 半透明卡片。";
+            }
+
+            if (IsHudBackgroundImageMode && !HasHudBackgroundImage)
+            {
+                return "尚未选择图片，暂用主题 HUD 卡片。";
+            }
+
+            return IsHudBackgroundImageMode
+                ? "图片只保存在本机（%APPDATA%\\VoxIME\\backgrounds），可随时更换。"
+                : "自定义背景会替换 HUD 的半透明卡片，并自动叠加暗化遮罩。";
+        }
+    }
+
+    public string HudBackgroundImagePath => _hudBackgroundImagePath ?? "";
+    public string HudBackgroundImageName => string.IsNullOrWhiteSpace(_hudBackgroundImagePath)
+        ? "未选择图片"
+        : Path.GetFileName(_hudBackgroundImagePath);
+
+    public double HudBackgroundImageOpacity
+    {
+        get => _hudBackgroundImageOpacity;
+        set
+        {
+            if (SetProperty(ref _hudBackgroundImageOpacity, Math.Clamp(value, 0.2, 1.0)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public double HudBackgroundBlurRadius
+    {
+        get => _hudBackgroundBlurRadius;
+        set
+        {
+            if (SetProperty(ref _hudBackgroundBlurRadius, Math.Clamp(value, 0, 60)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public double HudBackgroundDim
+    {
+        get => _hudBackgroundDim;
+        set
+        {
+            if (SetProperty(ref _hudBackgroundDim, Math.Clamp(value, 0, 0.95)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string SelectedHudBackgroundFit
+    {
+        get => _hudBackgroundFit;
+        set
+        {
+            if (SetProperty(ref _hudBackgroundFit, BackgroundConfig.NormalizeFit(value)))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string? HudBackgroundSolidColor
+    {
+        get => _hudBackgroundSolidColor;
+        set
+        {
+            if (SetProperty(ref _hudBackgroundSolidColor, value))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string? HudBackgroundGradientStart
+    {
+        get => _hudBackgroundGradientStart;
+        set
+        {
+            if (SetProperty(ref _hudBackgroundGradientStart, value))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string? HudBackgroundGradientEnd
+    {
+        get => _hudBackgroundGradientEnd;
+        set
+        {
+            if (SetProperty(ref _hudBackgroundGradientEnd, value))
+            {
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    // ==================== 录音悬浮窗（HUD）缩放/圆角/不透明度/默认位置 ====================
+
+    public double HudScale
+    {
+        get => _hudScale;
+        set
+        {
+            if (SetProperty(ref _hudScale, Math.Clamp(value, 0.7, 1.5)))
+            {
+                OnPropertiesChanged(nameof(HudScaleText));
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string HudScaleText => $"{_hudScale:P0}";
+
+    public double HudCornerRadius
+    {
+        get => _hudCornerRadius;
+        set
+        {
+            if (SetProperty(ref _hudCornerRadius, Math.Clamp(value, 0, 28)))
+            {
+                OnPropertiesChanged(nameof(HudCornerRadiusText));
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string HudCornerRadiusText => $"{_hudCornerRadius:0}px";
+
+    public double HudCardOpacity
+    {
+        get => _hudCardOpacity;
+        set
+        {
+            if (SetProperty(ref _hudCardOpacity, Math.Clamp(value, 0.35, 1.0)))
+            {
+                OnPropertiesChanged(nameof(HudCardOpacityText));
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string HudCardOpacityText => $"{_hudCardOpacity:P0}";
+
+    public double HudBottomMargin
+    {
+        get => _hudBottomMargin;
+        set
+        {
+            if (SetProperty(ref _hudBottomMargin, Math.Clamp(value, 0, 300)))
+            {
+                OnPropertiesChanged(nameof(HudBottomMarginText));
+            }
+        }
+    }
+
+    public string HudBottomMarginText => $"{_hudBottomMargin:0}px";
+
+    public double HudHorizontalOffset
+    {
+        get => _hudHorizontalOffset;
+        set
+        {
+            if (SetProperty(ref _hudHorizontalOffset, Math.Clamp(value, -400, 400)))
+            {
+                OnPropertiesChanged(nameof(HudHorizontalOffsetText));
+            }
+        }
+    }
+
+    public string HudHorizontalOffsetText => $"{_hudHorizontalOffset:0}px";
+
+    // ==================== HUD 设置页实时预览 ====================
+
+    public Brush? HudPreviewBackgroundBrush
+    {
+        get => _hudPreviewBackgroundBrush;
+        private set => SetProperty(ref _hudPreviewBackgroundBrush, value);
+    }
+
+    public Brush? HudPreviewDimBrush
+    {
+        get => _hudPreviewDimBrush;
+        private set => SetProperty(ref _hudPreviewDimBrush, value);
+    }
+
+    public CornerRadius HudPreviewCornerRadius
+    {
+        get => _hudPreviewCornerRadius;
+        private set => SetProperty(ref _hudPreviewCornerRadius, value);
+    }
+
+    public CornerRadius HudPreviewInnerCornerRadius
+    {
+        get => _hudPreviewInnerCornerRadius;
+        private set => SetProperty(ref _hudPreviewInnerCornerRadius, value);
+    }
+
+    public ScaleTransform HudPreviewTransform
+    {
+        get => _hudPreviewTransform;
+        private set => SetProperty(ref _hudPreviewTransform, value);
+    }
+
+    public double HudPreviewCardOpacity
+    {
+        get => _hudPreviewCardOpacity;
+        private set => SetProperty(ref _hudPreviewCardOpacity, value);
+    }
+
+    private void RefreshHudPreview()
+    {
+        try
+        {
+            var (background, dim) = ThemeManager.CreateHudPreviewBrushes(BuildHudBackgroundDraft());
+            HudPreviewBackgroundBrush = background;
+            HudPreviewDimBrush = dim;
+
+            var radius = Math.Clamp(_hudCornerRadius, 0, 28);
+            HudPreviewCornerRadius = new CornerRadius(radius);
+            HudPreviewInnerCornerRadius = new CornerRadius(Math.Max(0, radius - 1));
+            HudPreviewCardOpacity = Math.Clamp(_hudCardOpacity, 0.35, 1.0);
+
+            // 设置页里按 55% 显示，既能看清缩放差异又能塞进设置页宽度。
+            var previewScale = Math.Clamp(_hudScale, 0.7, 1.5) * 0.55;
+            HudPreviewTransform = new ScaleTransform(previewScale, previewScale);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"刷新 HUD 预览失败：{ex.Message}");
+        }
+    }
+
     private BackgroundConfig BuildBackgroundDraft() => new()
     {
         Mode = _backgroundMode,
@@ -1668,6 +1977,19 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         GradientStart = _backgroundGradientStart,
         GradientEnd = _backgroundGradientEnd,
         SurfaceOpacity = _backgroundSurfaceOpacity
+    };
+
+    private BackgroundConfig BuildHudBackgroundDraft() => new()
+    {
+        Mode = _hudBackgroundMode,
+        ImagePath = _hudBackgroundImagePath,
+        ImageOpacity = _hudBackgroundImageOpacity,
+        BlurRadius = _hudBackgroundBlurRadius,
+        Dim = _hudBackgroundDim,
+        Fit = _hudBackgroundFit,
+        SolidColor = _hudBackgroundSolidColor,
+        GradientStart = _hudBackgroundGradientStart,
+        GradientEnd = _hudBackgroundGradientEnd
     };
 
     private void PickBackgroundImage()
@@ -1737,6 +2059,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             var config = ConfigJson.CloneAppConfig(_configStore.Current);
             config.Ui.Background = BuildBackgroundDraft();
             config.Ui.Background.Normalize();
+            config.Ui.HudBackground = BuildHudBackgroundDraft();
+            config.Ui.HudBackground.Normalize();
             _configStore.Save(config);
             return true;
         }
@@ -1767,6 +2091,95 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             nameof(BackgroundGradientStart), nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode),
             nameof(IsBackgroundSolidMode), nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom),
             nameof(BackgroundStatusText));
+        ApplyAppearancePreview();
+    }
+
+    private void PickHudBackgroundImage()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择录音悬浮窗背景图片",
+            Filter = "图片文件 (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件 (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var stored = BackgroundImageStore.Import(dialog.FileName);
+            if (stored is null)
+            {
+                return;
+            }
+
+            _hudBackgroundImagePath = stored;
+            _hudBackgroundMode = BackgroundConfig.ModeImage;
+            OnPropertiesChanged(nameof(HudBackgroundImagePath), nameof(HudBackgroundImageName),
+                nameof(HasHudBackgroundImage), nameof(SelectedHudBackgroundMode), nameof(IsHudBackgroundImageMode),
+                nameof(IsHudBackgroundSolidMode), nameof(IsHudBackgroundGradientMode), nameof(IsHudBackgroundCustom),
+                nameof(HudBackgroundStatusText));
+            ApplyAppearancePreview();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"导入录音悬浮窗背景图片失败：{ex.Message}");
+            Ui.Warn("无法使用这张图片：" + ex.Message);
+        }
+    }
+
+    private void ClearHudBackgroundImage()
+    {
+        var oldPath = _hudBackgroundImagePath;
+        _hudBackgroundImagePath = null;
+        _hudBackgroundMode = BackgroundConfig.ModeTheme;
+        OnPropertiesChanged(nameof(HudBackgroundImagePath), nameof(HudBackgroundImageName),
+            nameof(HasHudBackgroundImage), nameof(SelectedHudBackgroundMode), nameof(IsHudBackgroundImageMode),
+            nameof(IsHudBackgroundSolidMode), nameof(IsHudBackgroundGradientMode), nameof(IsHudBackgroundCustom),
+            nameof(HudBackgroundStatusText));
+        ApplyAppearancePreview();
+
+        // 移除是破坏性操作：立即写入配置，避免“文件已删、配置还留着旧路径”。
+        if (TryPersistBackgroundDraft())
+        {
+            BackgroundImageStore.Delete(oldPath);
+            StatusText = "录音悬浮窗背景图片已移除并保存。";
+        }
+        else
+        {
+            StatusText = "录音悬浮窗背景图片已移除，但写入配置失败。";
+        }
+    }
+
+    private void ResetHudBackground()
+    {
+        var defaults = new BackgroundConfig();
+        _hudBackgroundMode = defaults.Mode;
+        _hudBackgroundImagePath = null;
+        _hudBackgroundImageOpacity = defaults.ImageOpacity;
+        _hudBackgroundBlurRadius = defaults.BlurRadius;
+        _hudBackgroundDim = defaults.Dim;
+        _hudBackgroundFit = defaults.Fit;
+        _hudBackgroundSolidColor = null;
+        _hudBackgroundGradientStart = null;
+        _hudBackgroundGradientEnd = null;
+        _hudScale = 1.0;
+        _hudCornerRadius = 18;
+        _hudCardOpacity = 1.0;
+        _hudBottomMargin = 42;
+        _hudHorizontalOffset = 0;
+        OnPropertiesChanged(nameof(SelectedHudBackgroundMode), nameof(SelectedHudBackgroundFit),
+            nameof(HudBackgroundImagePath), nameof(HudBackgroundImageName), nameof(HasHudBackgroundImage),
+            nameof(HudBackgroundImageOpacity), nameof(HudBackgroundBlurRadius), nameof(HudBackgroundDim),
+            nameof(HudBackgroundSolidColor), nameof(HudBackgroundGradientStart), nameof(HudBackgroundGradientEnd),
+            nameof(IsHudBackgroundImageMode), nameof(IsHudBackgroundSolidMode), nameof(IsHudBackgroundGradientMode),
+            nameof(IsHudBackgroundCustom), nameof(HudBackgroundStatusText),
+            nameof(HudScale), nameof(HudScaleText), nameof(HudCornerRadius), nameof(HudCornerRadiusText),
+            nameof(HudCardOpacity), nameof(HudCardOpacityText), nameof(HudBottomMargin), nameof(HudBottomMarginText),
+            nameof(HudHorizontalOffset), nameof(HudHorizontalOffsetText));
         ApplyAppearancePreview();
     }
 
@@ -2007,6 +2420,25 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _backgroundGradientStart = background.GradientStart;
         _backgroundGradientEnd = background.GradientEnd;
         _backgroundSurfaceOpacity = background.SurfaceOpacity;
+
+        var hudBackground = config.Ui.HudBackground ?? new BackgroundConfig();
+        hudBackground.Normalize();
+        _hudBackgroundMode = hudBackground.Mode;
+        _hudBackgroundImagePath = hudBackground.ImagePath;
+        _hudBackgroundImageOpacity = hudBackground.ImageOpacity;
+        _hudBackgroundBlurRadius = hudBackground.BlurRadius;
+        _hudBackgroundDim = hudBackground.Dim;
+        _hudBackgroundFit = hudBackground.Fit;
+        _hudBackgroundSolidColor = hudBackground.SolidColor;
+        _hudBackgroundGradientStart = hudBackground.GradientStart;
+        _hudBackgroundGradientEnd = hudBackground.GradientEnd;
+
+        _hudScale = Math.Clamp(config.Ui.HudScale, 0.7, 1.5);
+        _hudCornerRadius = Math.Clamp(config.Ui.HudCornerRadius, 0, 28);
+        _hudCardOpacity = Math.Clamp(config.Ui.HudCardOpacity, 0.35, 1.0);
+        _hudBottomMargin = Math.Clamp(config.Ui.HudBottomMargin, 0, 300);
+        _hudHorizontalOffset = Math.Clamp(config.Ui.HudHorizontalOffset, -400, 400);
+
         _selectedMotionMode = MotionModes.Normalize(config.Ui.Motion);
         OnPropertiesChanged(nameof(SelectedBackgroundMode), nameof(SelectedBackgroundFit),
             nameof(BackgroundImagePath), nameof(BackgroundImageName), nameof(HasBackgroundImage),
@@ -2014,7 +2446,18 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             nameof(BackgroundSurfaceOpacity), nameof(BackgroundSolidColor),
             nameof(BackgroundGradientStart), nameof(BackgroundGradientEnd), nameof(IsBackgroundImageMode),
             nameof(IsBackgroundSolidMode), nameof(IsBackgroundGradientMode), nameof(IsBackgroundCustom),
-            nameof(BackgroundStatusText), nameof(SelectedMotionMode));
+            nameof(BackgroundStatusText), nameof(SelectedMotionMode),
+            nameof(SelectedHudBackgroundMode), nameof(SelectedHudBackgroundFit),
+            nameof(HudBackgroundImagePath), nameof(HudBackgroundImageName), nameof(HasHudBackgroundImage),
+            nameof(HudBackgroundImageOpacity), nameof(HudBackgroundBlurRadius), nameof(HudBackgroundDim),
+            nameof(HudBackgroundSolidColor), nameof(HudBackgroundGradientStart), nameof(HudBackgroundGradientEnd),
+            nameof(IsHudBackgroundImageMode), nameof(IsHudBackgroundSolidMode),
+            nameof(IsHudBackgroundGradientMode), nameof(IsHudBackgroundCustom), nameof(HudBackgroundStatusText),
+            nameof(HudScale), nameof(HudScaleText), nameof(HudCornerRadius), nameof(HudCornerRadiusText),
+            nameof(HudCardOpacity), nameof(HudCardOpacityText), nameof(HudBottomMargin), nameof(HudBottomMarginText),
+            nameof(HudHorizontalOffset), nameof(HudHorizontalOffsetText));
+
+        RefreshHudPreview();
 
         ValidateHotkeys();
         _expressionMapModelDirectory = NormalizeModelDirectory(ModelDirectory);
@@ -3257,6 +3700,12 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ColorScheme = _selectedColorSchemeId,
             Motion = _selectedMotionMode,
             Background = BuildBackgroundDraft(),
+            HudBackground = BuildHudBackgroundDraft(),
+            HudScale = _hudScale,
+            HudCornerRadius = _hudCornerRadius,
+            HudCardOpacity = _hudCardOpacity,
+            HudBottomMargin = _hudBottomMargin,
+            HudHorizontalOffset = _hudHorizontalOffset,
             ShowWelcomeOnStartup = ShowWelcomeOnStartup
         };
 

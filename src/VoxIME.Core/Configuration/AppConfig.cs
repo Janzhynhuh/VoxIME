@@ -263,6 +263,13 @@ public sealed class AppConfig
         Ui.Motion = MotionModes.Normalize(Ui.Motion);
         Ui.Background ??= new BackgroundConfig();
         Ui.Background.Normalize();
+        Ui.HudBackground ??= new BackgroundConfig();
+        Ui.HudBackground.Normalize();
+        Ui.HudScale = Math.Clamp(Ui.HudScale, 0.7, 1.5);
+        Ui.HudCornerRadius = Math.Clamp(Ui.HudCornerRadius, 0, 28);
+        Ui.HudCardOpacity = Math.Clamp(Ui.HudCardOpacity, 0.35, 1.0);
+        Ui.HudBottomMargin = Math.Clamp(Ui.HudBottomMargin, 0, 300);
+        Ui.HudHorizontalOffset = Math.Clamp(Ui.HudHorizontalOffset, -400, 400);
 
         Overlay ??= new OverlayConfig();
         Overlay.AutoHideMs = Math.Clamp(Overlay.AutoHideMs, 500, 30000);
@@ -562,6 +569,24 @@ public sealed class UiConfig
 
     /// <summary>设置中心/欢迎/历史等窗口的自定义背景（主题色/纯色/渐变/图片）。</summary>
     public BackgroundConfig Background { get; set; } = new();
+
+    /// <summary>录音悬浮窗（HUD）的自定义背景；默认主题模式（沿用 HUD 半透明卡片）。</summary>
+    public BackgroundConfig HudBackground { get; set; } = new();
+
+    /// <summary>录音悬浮窗（HUD）整体缩放（0.7–1.5，1=原尺寸；字体/间距一起缩放）。</summary>
+    public double HudScale { get; set; } = 1.0;
+
+    /// <summary>录音悬浮窗（HUD）圆角半径（0–28 DIP，默认 18）。</summary>
+    public double HudCornerRadius { get; set; } = 18;
+
+    /// <summary>录音悬浮窗卡片的整体不透明度（0.35–1.0，默认 1.0）。</summary>
+    public double HudCardOpacity { get; set; } = 1.0;
+
+    /// <summary>HUD 默认位置：距工作区底部距离（0–300 DIP，默认 42）；手动拖动之后以拖动坐标为准。</summary>
+    public double HudBottomMargin { get; set; } = 42;
+
+    /// <summary>HUD 默认位置：水平偏移（-400–400 DIP，0=居中）。</summary>
+    public double HudHorizontalOffset { get; set; } = 0;
 
     public bool ShowWelcomeOnStartup { get; set; } = true;
 }

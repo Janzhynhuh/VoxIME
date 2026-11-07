@@ -12,7 +12,8 @@ namespace VoxIME.App.Infrastructure;
 /// 生成「设置中心 / 欢迎 / 历史 / 关于」等窗口的自定义背景画刷（PCL2 风格）：
 /// 主题色 / 纯色 / 渐变 / 本地图片（预模糊、透明度、暗化、填充方式）。
 /// 结果以 DynamicResource 键 <see cref="BackgroundBrushKey"/> / <see cref="DimBrushKey"/> 注入调色板，
-/// 窗口 XAML 只引用这两个键；HUD 与 Live2D 桌宠不使用。
+/// 窗口 XAML 只引用这两个键；录音悬浮窗（HUD）通过 <see cref="PopulateHud"/> 输出
+/// <see cref="HudBackgroundBrushKey"/> / <see cref="HudDimBrushKey"/>，与低频窗口背景互相独立。
 /// </summary>
 public static class BackgroundRenderer
 {
@@ -22,11 +23,22 @@ public static class BackgroundRenderer
     /// <summary>暗化遮罩画刷资源键（保证文字对比度）。</summary>
     public const string DimBrushKey = "WindowDimBrush";
 
+    /// <summary>录音悬浮窗（HUD）背景画刷资源键。</summary>
+    public const string HudBackgroundBrushKey = "HudBackgroundBrush";
+
+    /// <summary>录音悬浮窗（HUD）暗化遮罩资源键。</summary>
+    public const string HudDimBrushKey = "HudDimBrush";
+
     /// <summary>图片预模糊的渲染宽度（与设置窗口内宽接近，其它窗口按比例拉伸）。</summary>
     private const int TargetWidth = 980;
 
+    /// <summary>HUD 尺寸较小，按更小的宽度解码即可，避免大图浪费内存。</summary>
+    private const int HudTargetWidth = 640;
+
     private static string? _cachedKey;
     private static ImageBrush? _cachedBrush;
+    private static string? _hudCachedKey;
+    private static ImageBrush? _hudCachedBrush;
 
     /// <summary>把当前背景配置展开成两个画刷，写入调色板字典。</summary>
     public static void Populate(ResourceDictionary dictionary, BackgroundConfig? background, ResolvedTheme theme)
@@ -40,6 +52,32 @@ public static class BackgroundRenderer
         dictionary[DimBrushKey] = CreateDimBrush(config, theme);
     }
 
+    /// <summary>
+    /// 把录音悬浮窗（HUD）的背景配置展开成两个画刷。
+    /// 主题模式沿用主题生成的 HudCardBrush；自定义模式才覆盖为纯色/渐变/图片，并给出暗化遮罩。
+    /// </summary>
+    public static void PopulateHud(ResourceDictionary dictionary, BackgroundConfig? background, ResolvedTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(dictionary);
+        ArgumentNullException.ThrowIfNull(theme);
+
+        var config = Clone(background);
+        config.Normalize();
+
+        if (!config.IsCustom)
+        {
+            var themeBrush = dictionary.Contains("HudCardBrush") ? dictionary["HudCardBrush"] : null;
+            dictionary[HudBackgroundBrushKey] = themeBrush is Brush brush
+                ? brush
+                : CreateSolid(theme.Colors.Surface);
+            dictionary[HudDimBrushKey] = CreateTransparent();
+            return;
+        }
+
+        dictionary[HudBackgroundBrushKey] = CreateBackgroundBrush(config, theme, forHud: true);
+        dictionary[HudDimBrushKey] = CreateDimBrush(config, theme);
+    }
+
     /// <summary>图片模式但文件缺失/损坏时返回 null（调用方回退主题背景）。</summary>
     public static Brush? TryCreateImageBrush(BackgroundConfig background, ResolvedTheme theme)
     {
@@ -51,12 +89,12 @@ public static class BackgroundRenderer
     private static BackgroundConfig Clone(BackgroundConfig? source) =>
         source is null ? new BackgroundConfig() : ConfigJson.Clone(source);
 
-    private static Brush CreateBackgroundBrush(BackgroundConfig config, ResolvedTheme theme)
+    private static Brush CreateBackgroundBrush(BackgroundConfig config, ResolvedTheme theme, bool forHud = false)
     {
         switch (config.Mode)
         {
             case BackgroundConfig.ModeImage:
-                return TryCreateImageBrushCore(config, theme) is { } imageBrush
+                return TryCreateImageBrushCore(config, theme, forHud) is { } imageBrush
                     ? imageBrush
                     : CreateSolid(theme.Colors.Background);
 
@@ -85,7 +123,14 @@ public static class BackgroundRenderer
         return brush;
     }
 
-    private static ImageBrush? TryCreateImageBrushCore(BackgroundConfig config, ResolvedTheme theme)
+    private static SolidColorBrush CreateTransparent()
+    {
+        var brush = new SolidColorBrush(Colors.Transparent);
+        brush.Freeze();
+        return brush;
+    }
+
+    private static ImageBrush? TryCreateImageBrushCore(BackgroundConfig config, ResolvedTheme theme, bool forHud = false)
     {
         var path = config.ImagePath;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -98,13 +143,20 @@ public static class BackgroundRenderer
             var stamp = File.GetLastWriteTimeUtc(path).Ticks;
             var key = string.Join('|',
                 path, stamp, config.BlurRadius.ToString("0.#"), config.ImageOpacity.ToString("0.##"),
-                config.Fit, theme.IsLight ? "light" : "dark");
-            if (string.Equals(key, _cachedKey, StringComparison.Ordinal) && _cachedBrush is not null)
+                config.Fit, theme.IsLight ? "light" : "dark", forHud ? "hud" : "window");
+            if (forHud)
+            {
+                if (string.Equals(key, _hudCachedKey, StringComparison.Ordinal) && _hudCachedBrush is not null)
+                {
+                    return _hudCachedBrush;
+                }
+            }
+            else if (string.Equals(key, _cachedKey, StringComparison.Ordinal) && _cachedBrush is not null)
             {
                 return _cachedBrush;
             }
 
-            var source = LoadBitmap(path);
+            var source = LoadBitmap(path, forHud ? HudTargetWidth : TargetWidth);
             var blurred = BlurBitmap(source, config.BlurRadius, ParseColor(theme.Colors.Background) ?? Colors.Black);
             var brush = new ImageBrush(blurred)
             {
@@ -120,8 +172,17 @@ public static class BackgroundRenderer
             };
             brush.Freeze();
 
-            _cachedKey = key;
-            _cachedBrush = brush;
+            if (forHud)
+            {
+                _hudCachedKey = key;
+                _hudCachedBrush = brush;
+            }
+            else
+            {
+                _cachedKey = key;
+                _cachedBrush = brush;
+            }
+
             return brush;
         }
         catch (Exception ex)
@@ -131,14 +192,14 @@ public static class BackgroundRenderer
         }
     }
 
-    private static BitmapSource LoadBitmap(string path)
+    private static BitmapSource LoadBitmap(string path, int decodeWidth)
     {
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
         image.UriSource = new Uri(path, UriKind.Absolute);
-        image.DecodePixelWidth = TargetWidth;
+        image.DecodePixelWidth = decodeWidth;
         image.EndInit();
         image.Freeze();
         return image;

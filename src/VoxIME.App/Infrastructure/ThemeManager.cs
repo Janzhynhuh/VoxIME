@@ -29,6 +29,7 @@ public static class ThemeManager
     private static string _lastThemeMode = ThemeModes.Dark;
     private static string _lastColorSchemeId = ThemeCatalog.DefaultColorSchemeId;
     private static BackgroundConfig _lastBackground = new();
+    private static BackgroundConfig _lastHudBackground = new();
 
     /// <summary>当前生效外观（主题模式 / 实际明暗 / 配色方案）。</summary>
     public static ResolvedTheme Current { get; private set; } =
@@ -53,27 +54,68 @@ public static class ThemeManager
         }
 
         Motion.ApplyConfig(config);
-        ApplyAppearance(config.Ui.Theme, config.Ui.ColorScheme, config.Ui.Background);
+        ApplyAppearance(config.Ui.Theme, config.Ui.ColorScheme, config.Ui.Background, config.Ui.HudBackground);
     }
 
     /// <summary>只换主题/配色（沿用当前背景；设置页实时预览与跟随系统切换用）。</summary>
     public static void Apply(string? themeMode, string? colorSchemeId) =>
-        ApplyAppearance(themeMode, colorSchemeId, _lastBackground);
+        ApplyAppearance(themeMode, colorSchemeId, _lastBackground, _lastHudBackground);
 
-    /// <summary>同时应用主题/配色与自定义背景（设置页实时预览）。任意线程可调用。</summary>
-    public static void ApplyAppearance(string? themeMode, string? colorSchemeId, BackgroundConfig? background) =>
-        WindowHelper.RunOnUi(() => ApplyCore(themeMode, colorSchemeId, background));
+    /// <summary>同时应用主题/配色、低频窗口背景与录音悬浮窗（HUD）背景（设置页实时预览）。任意线程可调用。</summary>
+    public static void ApplyAppearance(
+        string? themeMode,
+        string? colorSchemeId,
+        BackgroundConfig? background,
+        BackgroundConfig? hudBackground = null) =>
+        WindowHelper.RunOnUi(() =>
+            ApplyCore(themeMode, colorSchemeId, background, hudBackground ?? _lastHudBackground));
 
     /// <summary>系统当前是否为浅色应用模式。</summary>
     public static bool IsSystemLight => SystemTheme.IsLight();
 
-    private static void ApplyCore(string? themeMode, string? colorSchemeId, BackgroundConfig? background)
+    /// <summary>
+    /// 为设置页的 HUD 实时预览生成画刷：使用当前主题 + 传入的 HUD 背景草稿，
+    /// 不修改全局调色板（预览面板专用）。任意线程可调用。
+    /// </summary>
+    public static (Brush Background, Brush Dim) CreateHudPreviewBrushes(BackgroundConfig? hudBackground)
+    {
+        ResolvedTheme theme;
+        Brush? themeHudCardBrush;
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            return dispatcher.Invoke(() => CreateHudPreviewBrushes(hudBackground));
+        }
+
+        theme = Current;
+        themeHudCardBrush = Application.Current?.TryFindResource("HudCardBrush") as Brush;
+
+        var dictionary = new ResourceDictionary();
+        if (themeHudCardBrush is not null)
+        {
+            // 主题模式时 BackgroundRenderer 会复用该画刷，保证预览和真实 HUD 一致。
+            dictionary["HudCardBrush"] = themeHudCardBrush;
+        }
+
+        BackgroundRenderer.PopulateHud(dictionary, hudBackground, theme);
+        var background = dictionary[BackgroundRenderer.HudBackgroundBrushKey] as Brush ?? Brushes.Transparent;
+        var dim = dictionary[BackgroundRenderer.HudDimBrushKey] as Brush ?? Brushes.Transparent;
+        return (background, dim);
+    }
+
+    private static void ApplyCore(
+        string? themeMode,
+        string? colorSchemeId,
+        BackgroundConfig? background,
+        BackgroundConfig? hudBackground)
     {
         var resolved = ThemeResolver.Resolve(themeMode, colorSchemeId, SystemTheme.IsLight());
         _lastThemeMode = resolved.ThemeMode;
         _lastColorSchemeId = resolved.ColorSchemeId;
         _lastBackground = background is null ? new BackgroundConfig() : ConfigJson.Clone(background);
         _lastBackground.Normalize();
+        _lastHudBackground = hudBackground is null ? new BackgroundConfig() : ConfigJson.Clone(hudBackground);
+        _lastHudBackground.Normalize();
 
         var app = Application.Current;
         if (app is null)
@@ -86,6 +128,7 @@ public static class ThemeManager
         var surfaceOpacity = _lastBackground.IsCustom ? _lastBackground.SurfaceOpacity : 1.0;
         var nextPalette = BuildPaletteDictionary(resolved, surfaceOpacity);
         BackgroundRenderer.Populate(nextPalette, _lastBackground, resolved);
+        BackgroundRenderer.PopulateHud(nextPalette, _lastHudBackground, resolved);
 
         var merged = app.Resources.MergedDictionaries;
         if (_palette is not null)

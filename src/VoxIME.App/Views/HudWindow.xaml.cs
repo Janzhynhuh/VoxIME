@@ -47,6 +47,7 @@ public partial class HudWindow : Window
         _logger = logger;
 
         DataContext = viewModel;
+        ApplyHudAppearance(_configStore.Current);
 
         _hideTimer = new DispatcherTimer();
         _hideTimer.Tick += OnHideTimerTick;
@@ -265,8 +266,11 @@ public partial class HudWindow : Window
 
             if (!valid)
             {
-                left = workArea.Left + (workArea.Width - width) / 2;
-                top = workArea.Bottom - height - 42;
+                var ui = _configStore.Current.Ui;
+                var bottomMargin = Math.Clamp(ui.HudBottomMargin, 0, 300);
+                var horizontalOffset = Math.Clamp(ui.HudHorizontalOffset, -400, 400);
+                left = workArea.Left + (workArea.Width - width) / 2 + horizontalOffset;
+                top = workArea.Bottom - height - bottomMargin;
             }
 
             Left = Math.Clamp(left, virtualLeft, Math.Max(virtualLeft, virtualRight - width));
@@ -410,7 +414,47 @@ public partial class HudWindow : Window
 
     private void OnConfigChanged(object? sender, AppConfig config)
     {
-        Dispatcher.BeginInvoke(new Action(_viewModel.UpdateHint));
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            ApplyHudAppearance(config);
+            _viewModel.UpdateHint();
+        }));
+    }
+
+    /// <summary>应用外观页保存的 HUD 缩放/圆角/整体不透明度（背景由 DynamicResource 自动更新）。</summary>
+    private void ApplyHudAppearance(AppConfig config)
+    {
+        try
+        {
+            var ui = config.Ui;
+            var scale = Math.Clamp(ui.HudScale, 0.7, 1.5);
+            var width = 640 * scale;
+            if (Math.Abs(Width - width) > 0.5)
+            {
+                Width = width;
+            }
+
+            var radius = Math.Clamp(ui.HudCornerRadius, 0, 28);
+            Card.CornerRadius = new CornerRadius(radius);
+            var innerRadius = new CornerRadius(Math.Max(0, radius - 1));
+            CardBackground.CornerRadius = innerRadius;
+            CardDim.CornerRadius = innerRadius;
+            Card.Opacity = Math.Clamp(ui.HudCardOpacity, 0.35, 1.0);
+
+            if (IsVisible)
+            {
+                UpdateLayout();
+                if (!_hasPosition)
+                {
+                    PositionWindow();
+                    _hasPosition = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"应用 HUD 外观设置失败：{ex.Message}");
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

@@ -194,11 +194,13 @@ App（`VoxIME.App.Infrastructure`）：
 配置文件（`UiConfig`）：
 
 - `motion`：`expressive`（明显，默认）/ `subtle`（克制）/ `off`（关闭）；`Normalize` 非法值回退 `expressive`。
-- `background`：只作用于设置/历史/关于/欢迎等低频窗口，**HUD 与 Live2D 桌宠不使用**。字段：
+- `background`：只作用于设置/历史/关于/欢迎等低频窗口，**Live2D 桌宠不使用**（录音悬浮窗使用独立的 `hudBackground`）。字段：
   - `mode`：`theme`（默认）/ `solid` / `gradient` / `image`；
   - `imagePath`：选择图片时复制到 `%APPDATA%\VoxIME\backgrounds`（源文件移动/删除不影响）；
   - `imageOpacity` 0.2–1.0、`blurRadius` 0–60、`dim` 0–0.95、`fit`（`cover`/`contain`/`fill`）、`surfaceOpacity` 0.35–1.0（玻璃强度）；
   - `solidColor` / `gradientStart` / `gradientEnd`：`#RRGGBB`，空=跟随主题。文字颜色由主题的浅色/深色决定（浅色主题=深色字、深色主题=浅色字）；外观页提供「按背景亮度匹配主题」：按自定义背景的平均亮度自动切浅色/深色主题，不再单独做文字反色。
+- `hudBackground`：只作用于录音悬浮窗（HUD），字段与 `background` 相同，与低频窗口背景互相独立；默认 `theme`（沿用主题的半透明 HUD 卡片），自定义后替换 HUD 背景并叠加 `dim` 暗化遮罩。`surfaceOpacity` 对 HUD 无效（HUD 只有一层卡片）。
+- HUD 外观字段：`hudScale` 0.7–1.5（默认 1.0，整体等比缩放；窗口宽度=640×scale，高度随内容）、`hudCornerRadius` 0–28（默认 18）、`hudCardOpacity` 0.35–1.0（默认 1.0）、`hudBottomMargin` 0–300（默认 42，默认位置距工作区底部）、`hudHorizontalOffset` -400–400（默认 0，水平偏移）；手动拖动保存的 `overlay.left/top` 优先，「重置悬浮窗位置」后按默认位置摆放。外观页的 HUD 预览面板实时使用当前主题 + 草稿画刷，不写入全局调色板。
 
 Core：
 
@@ -208,8 +210,9 @@ Core：
 App：
 
 - `Infrastructure.Motion`：动效 token（明显档时长/位移，克制档按时长 ×0.62、幅度 ×0.5），提供 `PlayEnter/PlayExit/PlaySlideIn/PlayDialogEnter/PlayLift/PlayPress`；按钮/开关/导航/列表项的控件动效统一由 `ControlMotion` 按 `docs/MOTION.md` 规范执行；只动画 `Opacity` 与 `RenderTransform`，XAML 不写 Storyboard 时长。
-- `Infrastructure.BackgroundRenderer`：把背景配置展开为 `WindowBackgroundBrush` / `WindowDimBrush` 两个 DynamicResource；图片先按 980 宽解码 + `RenderTargetBitmap` 预烘焙模糊并缓存，不挂实时 `BlurEffect`；图片模式会让 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷按 `surfaceOpacity` 变半透明（玻璃质感）。消息框使用不受玻璃影响的 `DialogCardBrush`。
+- `Infrastructure.ThemeManager.CreateHudPreviewBrushes`：为设置页 HUD 实时预览生成画刷（当前主题 + 草稿，不修改全局调色板）。
+- `Infrastructure.BackgroundRenderer`：把背景配置展开为 `WindowBackgroundBrush` / `WindowDimBrush` 两个 DynamicResource；图片先按 980 宽解码 + `RenderTargetBitmap` 预烘焙模糊并缓存，不挂实时 `BlurEffect`；图片模式会让 `Card/CardHover/Input/Popup/Nav*/Bg/AccentSoft` 画刷按 `surfaceOpacity` 变半透明（玻璃质感）。消息框使用不受玻璃影响的 `DialogCardBrush`。另由 `PopulateHud` 输出 HUD 专用的 `HudBackgroundBrush` / `HudDimBrush`：主题模式=主题 `HudCardBrush` + 透明遮罩，自定义模式=纯色/渐变/图片（按 640 宽解码并单独缓存）+ 暗化遮罩。
 - `Infrastructure.BackgroundImageStore`：背景图片本机存储（复制/清理旧图，只保留最近 8 张）。
-- 窗口 XAML 约定：低频窗口根 `Border.Background` 用 `{DynamicResource WindowBackgroundBrush}`，内部第一层加 `{DynamicResource WindowDimBrush}` 遮罩（`CornerRadius` 必须与窗口一致，主题色模式下为透明）；HUD/桌宠保持原样。`ScrollViewer` 用 `inf:SmoothScroll.IsEnabled="True"` 启用滚轮平滑惯性：平滑滚动与拖动滚动条同路径：每帧调用 ScrollToVerticalOffset 把真实偏移推向目标，滚动条/内容天然同步。运动模型为指数跟随目标（`VoxIME.Core.Services.ScrollMotion`，τ≈50ms（优先用合成器 RenderingTime，回退 Stopwatch 高精度帧间隔））：滚轮累加目标、偏移连续逼近，无逐格脉冲；程序化滚动入口为 `SmoothScroll.ScrollBy`。滚动不再触碰任何窗口特效；只处理纵向滚轮，文本输入框与拖拽滚动条保持原生。整窗有打开的下拉框时，右侧表单滚轮先按 150px 阈值/600ms 过期做防误触，达到阈值先关闭下拉框再滚动；左栏等无滚动目标区域的滚轮不转发、不关闭下拉框。下拉框打开会捕获滚轮、事件不经过右侧 ScrollViewer，`SmoothScroll.InitializeWindowWheelFallback()` 在 Window 层按鼠标位置反查启用了 SmoothScroll 的 ScrollViewer 补上这条路径。
+- 窗口 XAML 约定：低频窗口根 `Border.Background` 用 `{DynamicResource WindowBackgroundBrush}`，内部第一层加 `{DynamicResource WindowDimBrush}` 遮罩（`CornerRadius` 必须与窗口一致，主题色模式下为透明）；录音悬浮窗根卡片用 `{DynamicResource HudBackgroundBrush}` + 内层 `{DynamicResource HudDimBrush}`；Live2D 桌宠保持原样。`ScrollViewer` 用 `inf:SmoothScroll.IsEnabled="True"` 启用滚轮平滑惯性：平滑滚动与拖动滚动条同路径：每帧调用 ScrollToVerticalOffset 把真实偏移推向目标，滚动条/内容天然同步。运动模型为指数跟随目标（`VoxIME.Core.Services.ScrollMotion`，τ≈50ms（优先用合成器 RenderingTime，回退 Stopwatch 高精度帧间隔））：滚轮累加目标、偏移连续逼近，无逐格脉冲；程序化滚动入口为 `SmoothScroll.ScrollBy`。滚动不再触碰任何窗口特效；只处理纵向滚轮，文本输入框与拖拽滚动条保持原生。整窗有打开的下拉框时，右侧表单滚轮先按 150px 阈值/600ms 过期做防误触，达到阈值先关闭下拉框再滚动；左栏等无滚动目标区域的滚轮不转发、不关闭下拉框。下拉框打开会捕获滚轮、事件不经过右侧 ScrollViewer，`SmoothScroll.InitializeWindowWheelFallback()` 在 Window 层按鼠标位置反查启用了 SmoothScroll 的 ScrollViewer 补上这条路径。
 - ComboBox 下拉契约：全局样式必须保留 `<Setter Property="inf:ComboBoxPopupAlignment.Enabled" Value="True" />`。`ComboBoxPopupAlignment` 用 Custom placement 让弹层在输入框下方水平居中（弹层内容更宽时左右对称溢出），并保留靠屏幕边缘时的左/右对齐与上翻候选；新增或改写 ComboBox 样式时不得移除该 Setter，否则窄输入框 + 长选项的下拉会重新出现左偏。
 - 窗口阴影：设置/历史/关于/欢迎用 `inf:WindowShadowLayer`（静态阴影位图，首次显示生成并缓存，禁止在根容器上挂 `DropShadowEffect`）；消息框等小窗口可继续用 `WindowShadow` 资源。

@@ -103,25 +103,36 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
     {
         try
         {
-            var background = Config.Ui.Background;
-            if (background is null
-                || !string.Equals(background.Mode, BackgroundConfig.ModeImage, StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrWhiteSpace(background.ImagePath)
-                || File.Exists(background.ImagePath))
+            var changed = false;
+            changed |= TryRepairMissingBackgroundImage(Config.Ui.Background, "窗口背景");
+            changed |= TryRepairMissingBackgroundImage(Config.Ui.HudBackground, "录音悬浮窗背景");
+            if (changed)
             {
-                return;
+                ConfigStore.Save(Config);
             }
-
-            _logger.Warn($"背景图片不存在，已回退主题背景：{background.ImagePath}");
-            background.Mode = BackgroundConfig.ModeTheme;
-            background.ImagePath = null;
-            background.Normalize();
-            ConfigStore.Save(Config);
         }
         catch (Exception ex)
         {
             _logger.Warn($"清理失效背景图片失败：{ex.Message}");
         }
+    }
+
+    /// <summary>背景配置指向的图片已被删除时回退主题背景；返回是否做了修改。</summary>
+    private bool TryRepairMissingBackgroundImage(BackgroundConfig? background, string label)
+    {
+        if (background is null
+            || !string.Equals(background.Mode, BackgroundConfig.ModeImage, StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(background.ImagePath)
+            || File.Exists(background.ImagePath))
+        {
+            return false;
+        }
+
+        _logger.Warn($"{label}图片不存在，已回退主题背景：{background.ImagePath}");
+        background.Mode = BackgroundConfig.ModeTheme;
+        background.ImagePath = null;
+        background.Normalize();
+        return true;
     }
 
     /// <summary>首次启动是否显示欢迎引导（尚未配置真实服务时）。</summary>

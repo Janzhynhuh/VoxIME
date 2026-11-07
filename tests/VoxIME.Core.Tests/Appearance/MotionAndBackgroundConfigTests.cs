@@ -36,6 +36,14 @@ public sealed class MotionAndBackgroundConfigTests
         Assert.NotNull(config.Ui.Background);
         Assert.Equal(BackgroundConfig.ModeTheme, config.Ui.Background.Mode);
         Assert.False(config.Ui.Background.IsCustom);
+        Assert.NotNull(config.Ui.HudBackground);
+        Assert.Equal(BackgroundConfig.ModeTheme, config.Ui.HudBackground.Mode);
+        Assert.False(config.Ui.HudBackground.IsCustom);
+        Assert.Equal(1.0, config.Ui.HudScale);
+        Assert.Equal(18, config.Ui.HudCornerRadius);
+        Assert.Equal(1.0, config.Ui.HudCardOpacity);
+        Assert.Equal(42, config.Ui.HudBottomMargin);
+        Assert.Equal(0, config.Ui.HudHorizontalOffset);
     }
 
     [Fact]
@@ -58,7 +66,21 @@ public sealed class MotionAndBackgroundConfigTests
                     SolidColor = "not-a-color",
                     GradientStart = "#a1b2c3",
                     GradientEnd = ""
-                }
+                },
+                HudBackground = new BackgroundConfig
+                {
+                    Mode = "bogus",
+                    Fit = "zap",
+                    ImageOpacity = -1,
+                    BlurRadius = 999,
+                    Dim = -2,
+                    SolidColor = "#zzzzzz"
+                },
+                HudScale = 9,
+                HudCornerRadius = -5,
+                HudCardOpacity = 0,
+                HudBottomMargin = 999,
+                HudHorizontalOffset = -999
             }
         };
 
@@ -76,6 +98,20 @@ public sealed class MotionAndBackgroundConfigTests
         Assert.Null(background.SolidColor);
         Assert.Equal("#A1B2C3", background.GradientStart);
         Assert.Null(background.GradientEnd);
+
+        var hudBackground = config.Ui.HudBackground;
+        Assert.Equal(BackgroundConfig.ModeTheme, hudBackground.Mode);
+        Assert.Equal("cover", hudBackground.Fit);
+        Assert.Equal(0.2, hudBackground.ImageOpacity);
+        Assert.Equal(60, hudBackground.BlurRadius);
+        Assert.Equal(0, hudBackground.Dim);
+        Assert.Null(hudBackground.SolidColor);
+
+        Assert.Equal(1.5, config.Ui.HudScale);
+        Assert.Equal(0, config.Ui.HudCornerRadius);
+        Assert.Equal(0.35, config.Ui.HudCardOpacity);
+        Assert.Equal(300, config.Ui.HudBottomMargin);
+        Assert.Equal(-400, config.Ui.HudHorizontalOffset);
     }
 
     [Fact]
@@ -111,12 +147,14 @@ public sealed class MotionAndBackgroundConfigTests
     [Fact]
     public void Normalize_DefaultsNullBackground()
     {
-        var config = new AppConfig { Ui = new UiConfig { Background = null! } };
+        var config = new AppConfig { Ui = new UiConfig { Background = null!, HudBackground = null! } };
 
         config.Normalize();
 
         Assert.NotNull(config.Ui.Background);
         Assert.Equal(BackgroundConfig.ModeTheme, config.Ui.Background.Mode);
+        Assert.NotNull(config.Ui.HudBackground);
+        Assert.Equal(BackgroundConfig.ModeTheme, config.Ui.HudBackground.Mode);
     }
 
     [Fact]
@@ -131,11 +169,24 @@ public sealed class MotionAndBackgroundConfigTests
             GradientEnd = "#445566",
             SurfaceOpacity = 0.7
         };
+        config.Ui.HudBackground = new BackgroundConfig
+        {
+            Mode = "solid",
+            SolidColor = "#AABBCC",
+            Dim = 0.6
+        };
+        config.Ui.HudScale = 1.25;
+        config.Ui.HudCornerRadius = 6;
+        config.Ui.HudCardOpacity = 0.8;
+        config.Ui.HudBottomMargin = 80;
+        config.Ui.HudHorizontalOffset = -120;
 
         var json = JsonSerializer.Serialize(config, ConfigJson.Options);
         Assert.Contains("\"motion\": \"subtle\"", json);
         Assert.Contains("\"background\"", json);
+        Assert.Contains("\"hudBackground\"", json);
         Assert.Contains("\"mode\": \"gradient\"", json);
+        Assert.Contains("\"mode\": \"solid\"", json);
 
         var loaded = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options)!;
         loaded.Normalize();
@@ -143,6 +194,14 @@ public sealed class MotionAndBackgroundConfigTests
         Assert.Equal("gradient", loaded.Ui.Background.Mode);
         Assert.Equal("#112233", loaded.Ui.Background.GradientStart);
         Assert.Equal(0.7, loaded.Ui.Background.SurfaceOpacity);
+        Assert.Equal("solid", loaded.Ui.HudBackground.Mode);
+        Assert.Equal("#AABBCC", loaded.Ui.HudBackground.SolidColor);
+        Assert.Equal(0.6, loaded.Ui.HudBackground.Dim);
+        Assert.Equal(1.25, loaded.Ui.HudScale);
+        Assert.Equal(6, loaded.Ui.HudCornerRadius);
+        Assert.Equal(0.8, loaded.Ui.HudCardOpacity);
+        Assert.Equal(80, loaded.Ui.HudBottomMargin);
+        Assert.Equal(-120, loaded.Ui.HudHorizontalOffset);
     }
 
     [Fact]
