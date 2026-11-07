@@ -49,6 +49,12 @@ public interface ILive2DController : IDisposable
     void Show();
     void Hide();
 
+    /// <summary>当前配置中的点击穿透目标状态（窗口实际样式由 SetClickThrough / ApplyConfig 应用）。</summary>
+    bool IsClickThrough { get; }
+
+    /// <summary>立即切换点击穿透并写入内部配置快照（不负责持久化，宿主可据此写回配置）。</summary>
+    void SetClickThrough(bool clickThrough);
+
     void SetState(Live2DState state);
 
     /// <summary>在桌宠上预览一个动作组（设置页动作预览用）；空组名忽略。</summary>

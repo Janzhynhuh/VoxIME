@@ -314,11 +314,13 @@ public sealed class VoiceInputControllerTests
         var config = _configStore.Current;
         config.Hotkeys.PushToTalk = "F2";
         config.Live2D.Opacity = 0.5;
+        config.Live2D.ClickThrough = false;
 
         _controller.ApplyConfig(config);
 
         Assert.Equal("F2", _hotkeys.Config!.PushToTalk);
         Assert.Equal(0.5, _live2d.Config!.Opacity);
+        Assert.False(_live2d.IsClickThrough);
     }
 
     [Fact]

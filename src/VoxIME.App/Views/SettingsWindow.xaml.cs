@@ -31,6 +31,9 @@ public partial class SettingsWindow : Window
     /// <summary>退出流程中允许真正关闭。</summary>
     public bool AllowClose { get; set; }
 
+    /// <summary>托盘菜单切换点击穿透后，同步设置页草稿与界面，避免之后“保存”把托盘切换改回去。</summary>
+    public void SyncClickThrough(bool enabled) => _viewModel.SyncClickThrough(enabled);
+
     protected override void OnActivated(EventArgs e)
     {
         base.OnActivated(e);

@@ -218,6 +218,7 @@ internal sealed class FakeLive2DController : ILive2DController
 {
     public bool IsAvailable { get; private set; }
     public bool IsVisible { get; private set; }
+    public bool IsClickThrough { get; private set; } = true;
     public Live2DState State { get; private set; } = Live2DState.Idle;
     public string? LastError { get; private set; }
     public double MouthOpen { get; private set; }
@@ -241,14 +242,28 @@ internal sealed class FakeLive2DController : ILive2DController
         Config = config;
         Initialized = true;
         IsAvailable = true;
+        IsClickThrough = config.ClickThrough;
         Ready?.Invoke(this, EventArgs.Empty);
     }
 
-    public void ApplyConfig(Live2DConfig config) => Config = config;
+    public void ApplyConfig(Live2DConfig config)
+    {
+        Config = config;
+        IsClickThrough = config.ClickThrough;
+    }
 
     public void Show() => IsVisible = true;
 
     public void Hide() => IsVisible = false;
+
+    public void SetClickThrough(bool clickThrough)
+    {
+        IsClickThrough = clickThrough;
+        if (Config is not null)
+        {
+            Config.ClickThrough = clickThrough;
+        }
+    }
 
     public void SetState(Live2DState state)
     {

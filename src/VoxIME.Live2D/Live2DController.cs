@@ -123,6 +123,18 @@ public sealed class Live2DController : ILive2DController
     public bool IsVisible => _visible;
 
     /// <inheritdoc />
+    public bool IsClickThrough
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _config.ClickThrough;
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public Live2DState State
     {
         get
@@ -514,6 +526,44 @@ public sealed class Live2DController : ILive2DController
 
     /// <inheritdoc />
     public void Hide() => RunOnUiThread(HideCore, "Hide");
+
+    /// <inheritdoc />
+    public void SetClickThrough(bool clickThrough)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        lock (_sync)
+        {
+            if (_config.ClickThrough == clickThrough)
+            {
+                return;
+            }
+
+            // 同步到内部配置快照，后续 ApplyWindowConfiguration / DPI 修复等路径不会把状态改回去。
+            _config.ClickThrough = clickThrough;
+        }
+
+        RunOnUiThread(() =>
+        {
+            if (_disposed || _window is null)
+            {
+                return;
+            }
+
+            try
+            {
+                _window.ClickThrough = clickThrough;
+                _logger.Info($"[Live2D] 点击穿透 -> {(clickThrough ? "开" : "关")}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn($"[Live2D] 切换点击穿透失败：{ex.Message}");
+            }
+        }, "SetClickThrough");
+    }
 
     /// <inheritdoc />
     public void SetState(Live2DState state)

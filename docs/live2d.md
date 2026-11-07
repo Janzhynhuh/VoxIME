@@ -454,7 +454,7 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 | 模型加载成功但不动/不眨眼 | 模型缺少 EyeBlink 组时不会眨眼；扫描到的 `Animation/*.motion3.json` 组名带 `Animation/` 前缀，不会被默认当待机组；需要时在「待机动作组」里显式选择。动作播放期间 Cubism 会跳过自动眨眼，若想恢复眨眼/物理，待机组选「不播放」或关闭待机动作 |
 | 嘴巴不动 | 模型未声明 `LipSync` 组且没有 `ParamMouthOpenY`；或 `MouthSync=false`/音量为 0 |
 | 眼动不跟随 | 模型没有 `ParamEyeBallX/Y`/`ParamAngleX/Y`；或 `EyeFollow=false` |
-| 点击穿透失效/拖不动 | `ClickThrough=true` 时整窗穿透（鼠标事件给下层窗口），这是预期；需要拖动时在设置里关闭点击穿透（或 `ApplyConfig` 热切换），此时窗口整体可拖动 |
+| 点击穿透失效/拖不动 | `ClickThrough=true` 时整窗穿透（鼠标事件给下层窗口），这是预期；需要拖动时在托盘右键菜单选择「关闭桌宠点击穿透」，或到设置里关闭点击穿透（或 `ApplyConfig` 热切换），此时窗口整体可拖动 |
 | 导入/选择模型后没变化 | 需要点「保存」应用配置；确认模型目录里有 `*.model3.json`；导入会复制到模型库位置，可点「打开模型库目录」核对 |
 | 多开应用时 WebView2 报错/卡住 | WebView2 用户数据目录被占用。产品默认使用 `%APPDATA%\VoxIME\webview2`，多实例请只保留一个；开发/验证可用环境变量 `VOXIME_LIVE2D_USER_DATA_DIR` 指定独立目录 |
 | 截图里看不到模型/白屏 | headless 简单模式不支持动画（fps=0）；用 9.4 的 CDP 脚本或真实窗口工具；确认 `--enable-unsafe-swiftshader`（无 GPU 环境） |

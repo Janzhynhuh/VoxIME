@@ -268,6 +268,35 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
     public void ShowBalloon(string title, string text, bool isError = false) =>
         Tray?.ShowBalloon(title, text, isError);
 
+    /// <summary>托盘菜单：切换桌宠点击穿透（立即生效并持久化，免去打开设置）。</summary>
+    public void TogglePetClickThrough()
+    {
+        WindowHelper.RunOnUi(() =>
+        {
+            try
+            {
+                // 在克隆上修改并保存：保存失败时不会留下“内存配置已翻转、窗口未应用”的半更新状态。
+                var config = ConfigJson.CloneAppConfig(ConfigStore.Current);
+                var enabled = !config.Live2D.ClickThrough;
+                config.Live2D.ClickThrough = enabled;
+                ConfigStore.Save(config);
+                Live2D.SetClickThrough(enabled);
+
+                // 设置窗口可能开着并持有旧草稿：同步过去，避免之后点“保存”把托盘切换改回去。
+                Settings?.SyncClickThrough(enabled);
+
+                _logger.Info($"[Live2D] 点击穿透 -> {(enabled ? "开" : "关")}（托盘菜单）");
+                Tray?.ShowBalloon(
+                    "VoxIME 声语",
+                    enabled ? "桌宠已开启点击穿透：鼠标可直接点击桌面。" : "桌宠已关闭点击穿透：现在可以拖动桌宠。");
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn($"切换桌宠点击穿透失败：{ex.Message}");
+            }
+        });
+    }
+
     // ==================== 内部装配 ====================
 
     public static AppHost Create()
@@ -367,7 +396,8 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
                 OpenHistory,
                 OpenAbout,
                 OpenLogDirectory,
-                RequestExit)
+                RequestExit,
+                TogglePetClickThrough)
             {
                 IsVisible = Config.Ui.ShowTrayIcon
             };

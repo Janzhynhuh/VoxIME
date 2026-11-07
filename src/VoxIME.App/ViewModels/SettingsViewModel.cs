@@ -976,6 +976,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _clickThrough, value);
     }
 
+    /// <summary>托盘菜单切换点击穿透后同步草稿与界面，避免保存设置时覆盖托盘切换结果。</summary>
+    public void SyncClickThrough(bool enabled)
+    {
+        _working.Live2D.ClickThrough = enabled;
+        ClickThrough = enabled;
+    }
+
     public bool AlwaysOnTop
     {
         get => _alwaysOnTop;

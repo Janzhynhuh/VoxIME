@@ -15,6 +15,7 @@ public sealed class TrayIconService : IDisposable
     private readonly NotifyIcon _notifyIcon;
     private readonly ContextMenuStrip _menu;
     private readonly ToolStripMenuItem _live2DItem;
+    private readonly ToolStripMenuItem _clickThroughItem;
     private readonly ToolStripMenuItem _pauseItem;
     private readonly ToolStripMenuItem _settingsItem;
     private readonly IVoiceInputController _controller;
@@ -29,13 +30,20 @@ public sealed class TrayIconService : IDisposable
         Action openHistory,
         Action openAbout,
         Action openLogs,
-        Action exitRequested)
+        Action exitRequested,
+        Action togglePetClickThrough)
     {
         _controller = controller;
         _logger = logger;
 
         _live2DItem = new ToolStripMenuItem("隐藏桌宠");
         _live2DItem.Click += (_, _) => RunOnUi(ToggleLive2D);
+
+        _clickThroughItem = new ToolStripMenuItem("桌宠点击穿透")
+        {
+            ToolTipText = "开启后鼠标可穿过桌宠点击下层窗口；关闭后可拖动桌宠"
+        };
+        _clickThroughItem.Click += (_, _) => RunOnUi(togglePetClickThrough);
 
         _pauseItem = new ToolStripMenuItem("暂停热键");
         _pauseItem.Click += (_, _) => RunOnUi(TogglePause);
@@ -59,10 +67,12 @@ public sealed class TrayIconService : IDisposable
         {
             Renderer = new ToolStripProfessionalRenderer(new DarkMenuColorTable()),
             ShowImageMargin = false,
+            ShowItemToolTips = true,
             Font = new Font("Microsoft YaHei UI", 9F),
             Padding = new Padding(4)
         };
         _menu.Items.Add(_live2DItem);
+        _menu.Items.Add(_clickThroughItem);
         _menu.Items.Add(_pauseItem);
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(_settingsItem);
@@ -127,6 +137,9 @@ public sealed class TrayIconService : IDisposable
     {
         var live2D = _controller.Live2D;
         _live2DItem.Text = live2D.IsVisible ? "隐藏桌宠" : "显示桌宠";
+        // 与“隐藏/显示桌宠”“暂停/恢复热键”一致，用可执行动作表示当前状态。
+        // 本菜单 ShowImageMargin=false 且 ShowCheckMargin 默认 false，Checked 勾选标记实际不会渲染，故不能依赖勾选状态。
+        _clickThroughItem.Text = live2D.IsClickThrough ? "关闭桌宠点击穿透" : "开启桌宠点击穿透";
         _pauseItem.Text = _controller.IsPaused ? "恢复热键" : "暂停热键";
         _settingsItem.Enabled = true;
     }
