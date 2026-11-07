@@ -179,6 +179,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _hudScale = 1.0;
     private double _hudCornerRadius = 18;
     private double _hudCardOpacity = 1.0;
+    private string? _hudBorderColor;
+    private double _hudBorderThickness = 1.0;
     private double _hudBottomMargin = 42;
     private double _hudHorizontalOffset;
 
@@ -189,6 +191,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private CornerRadius _hudPreviewInnerCornerRadius = new(17);
     private ScaleTransform _hudPreviewTransform = new(0.55, 0.55);
     private double _hudPreviewCardOpacity = 1.0;
+    private Brush? _hudPreviewBorderBrush;
+    private Thickness _hudPreviewBorderThickness;
 
     public SettingsViewModel(
         IConfigStore configStore,
@@ -1490,13 +1494,15 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        // 跟随系统模式：系统明暗切换后主题已由 ThemeManager 应用，这里只刷新可用配色与文案。
+        // 主题/背景资源已由 ThemeManager 替换：HUD 预览需要跟着刷新（描边可能跟随主题）。
+        RefreshHudPreview();
+
+        // 跟随系统模式：系统明暗切换后这里只刷新可用配色与文案。
         if (ThemeModes.Normalize(_selectedThemeMode) != ThemeModes.System)
         {
             return;
         }
 
-        RefreshHudPreview();
         RefreshColorSchemeOptions(applyTheme: false);
     }
 
@@ -1876,6 +1882,43 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     public string HudCardOpacityText => $"{_hudCardOpacity:P0}";
 
+    /// <summary>HUD 描边颜色；空=跟随主题。</summary>
+    public string? HudBorderColor
+    {
+        get => _hudBorderColor;
+        set
+        {
+            if (SetProperty(ref _hudBorderColor, value))
+            {
+                OnPropertiesChanged(nameof(HudBorderStatusText));
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public double HudBorderThickness
+    {
+        get => _hudBorderThickness;
+        set
+        {
+            if (SetProperty(ref _hudBorderThickness, Math.Clamp(value, 0, 4)))
+            {
+                OnPropertiesChanged(nameof(HudBorderThicknessText), nameof(HudBorderStatusText));
+                ApplyBackgroundPreviewDebounced();
+            }
+        }
+    }
+
+    public string HudBorderThicknessText => _hudBorderThickness <= 0.01
+        ? "无描边"
+        : $"{_hudBorderThickness:0.#}px";
+
+    public string HudBorderStatusText => _hudBorderThickness <= 0.01
+        ? "当前不显示描边（0px）。"
+        : string.IsNullOrWhiteSpace(_hudBorderColor)
+            ? "描边颜色跟随主题；可在上面填写 #RRGGBB / #AARRGGBB 自定义。"
+            : $"描边颜色：{_hudBorderColor}";
+
     public double HudBottomMargin
     {
         get => _hudBottomMargin;
@@ -1942,6 +1985,18 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _hudPreviewCardOpacity, value);
     }
 
+    public Brush? HudPreviewBorderBrush
+    {
+        get => _hudPreviewBorderBrush;
+        private set => SetProperty(ref _hudPreviewBorderBrush, value);
+    }
+
+    public Thickness HudPreviewBorderThickness
+    {
+        get => _hudPreviewBorderThickness;
+        private set => SetProperty(ref _hudPreviewBorderThickness, value);
+    }
+
     private void RefreshHudPreview()
     {
         try
@@ -1955,6 +2010,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             HudPreviewInnerCornerRadius = new CornerRadius(Math.Max(0, radius - 1));
             HudPreviewCardOpacity = Math.Clamp(_hudCardOpacity, 0.35, 1.0);
 
+            HudPreviewBorderThickness = new Thickness(Math.Clamp(_hudBorderThickness, 0, 4));
+            HudPreviewBorderBrush = ResolvePreviewBorderBrush(_hudBorderColor);
+
             // 设置页里按 55% 显示，既能看清缩放差异又能塞进设置页宽度。
             var previewScale = Math.Clamp(_hudScale, 0.7, 1.5) * 0.55;
             HudPreviewTransform = new ScaleTransform(previewScale, previewScale);
@@ -1963,6 +2021,30 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         {
             _logger.Debug($"刷新 HUD 预览失败：{ex.Message}");
         }
+    }
+
+    private static Brush ResolvePreviewBorderBrush(string? color)
+    {
+        if (!string.IsNullOrWhiteSpace(color))
+        {
+            try
+            {
+                var parsed = (Color)ColorConverter.ConvertFromString(color.Trim());
+                var brush = new SolidColorBrush(parsed);
+                brush.Freeze();
+                return brush;
+            }
+            catch (FormatException)
+            {
+                // 非法颜色回退主题边框。
+            }
+            catch (NotSupportedException)
+            {
+                // 非法颜色回退主题边框。
+            }
+        }
+
+        return Application.Current?.TryFindResource("HudBorderBrush") as Brush ?? Brushes.Transparent;
     }
 
     private BackgroundConfig BuildBackgroundDraft() => new()
@@ -2169,6 +2251,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _hudScale = 1.0;
         _hudCornerRadius = 18;
         _hudCardOpacity = 1.0;
+        _hudBorderColor = null;
+        _hudBorderThickness = 1.0;
         _hudBottomMargin = 42;
         _hudHorizontalOffset = 0;
         OnPropertiesChanged(nameof(SelectedHudBackgroundMode), nameof(SelectedHudBackgroundFit),
@@ -2179,7 +2263,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             nameof(IsHudBackgroundCustom), nameof(HudBackgroundStatusText),
             nameof(HudScale), nameof(HudScaleText), nameof(HudCornerRadius), nameof(HudCornerRadiusText),
             nameof(HudCardOpacity), nameof(HudCardOpacityText), nameof(HudBottomMargin), nameof(HudBottomMarginText),
-            nameof(HudHorizontalOffset), nameof(HudHorizontalOffsetText));
+            nameof(HudHorizontalOffset), nameof(HudHorizontalOffsetText),
+            nameof(HudBorderColor), nameof(HudBorderThickness), nameof(HudBorderThicknessText), nameof(HudBorderStatusText));
         ApplyAppearancePreview();
     }
 
@@ -2436,6 +2521,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _hudScale = Math.Clamp(config.Ui.HudScale, 0.7, 1.5);
         _hudCornerRadius = Math.Clamp(config.Ui.HudCornerRadius, 0, 28);
         _hudCardOpacity = Math.Clamp(config.Ui.HudCardOpacity, 0.35, 1.0);
+        _hudBorderColor = config.Ui.HudBorderColor;
+        _hudBorderThickness = Math.Clamp(config.Ui.HudBorderThickness, 0, 4);
         _hudBottomMargin = Math.Clamp(config.Ui.HudBottomMargin, 0, 300);
         _hudHorizontalOffset = Math.Clamp(config.Ui.HudHorizontalOffset, -400, 400);
 
@@ -2455,7 +2542,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             nameof(IsHudBackgroundGradientMode), nameof(IsHudBackgroundCustom), nameof(HudBackgroundStatusText),
             nameof(HudScale), nameof(HudScaleText), nameof(HudCornerRadius), nameof(HudCornerRadiusText),
             nameof(HudCardOpacity), nameof(HudCardOpacityText), nameof(HudBottomMargin), nameof(HudBottomMarginText),
-            nameof(HudHorizontalOffset), nameof(HudHorizontalOffsetText));
+            nameof(HudHorizontalOffset), nameof(HudHorizontalOffsetText),
+            nameof(HudBorderColor), nameof(HudBorderThickness), nameof(HudBorderThicknessText), nameof(HudBorderStatusText));
 
         RefreshHudPreview();
 
@@ -3704,6 +3792,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             HudScale = _hudScale,
             HudCornerRadius = _hudCornerRadius,
             HudCardOpacity = _hudCardOpacity,
+            HudBorderColor = _hudBorderColor,
+            HudBorderThickness = _hudBorderThickness,
             HudBottomMargin = _hudBottomMargin,
             HudHorizontalOffset = _hudHorizontalOffset,
             ShowWelcomeOnStartup = ShowWelcomeOnStartup
