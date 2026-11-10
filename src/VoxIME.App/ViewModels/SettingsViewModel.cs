@@ -2448,15 +2448,15 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private static string NormalizeModelDirectory(string? directory) => (directory ?? "").Trim();
 
-    /// <summary>读配置时的动作组来源：新列表优先，其次旧单数字段。</summary>
-    private static List<string>? ResolveMotionGroups(List<string>? groups, string? legacy)
+    /// <summary>读配置时的动作组来源：新条目列表优先，其次旧单数字段。</summary>
+    private static List<Live2DMotionEntry>? ResolveMotionGroups(List<Live2DMotionEntry>? groups, string? legacy)
     {
         if (groups is { Count: > 0 })
         {
             return groups;
         }
 
-        return string.IsNullOrWhiteSpace(legacy) ? null : new List<string> { legacy.Trim() };
+        return string.IsNullOrWhiteSpace(legacy) ? null : new List<Live2DMotionEntry> { new(legacy.Trim()) };
     }
 
     private void SaveExpressionMapForModel(string? modelDirectory)
@@ -2500,8 +2500,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private static string? EmptyToNull(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static List<string> ToMotionGroups(MotionGroupSelectionViewModel mapping) =>
-        mapping.ToGroupList() ?? new List<string>();
+    private static List<Live2DMotionEntry> ToMotionGroups(MotionGroupSelectionViewModel mapping) =>
+        mapping.ToGroupList() ?? new List<Live2DMotionEntry>();
 
     private void SaveMotionMapForModel(string? modelDirectory)
     {
@@ -2515,7 +2515,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _working.Live2D.MotionByModel[key] = new Live2DMotionMap
         {
             IdleGroups = idleGroups,
-            IdleGroup = idleGroups.FirstOrDefault() ?? "Idle",
+            IdleGroup = idleGroups.FirstOrDefault()?.Group ?? "Idle",
             Listening = ToMotionGroups(ListeningMotion),
             Thinking = ToMotionGroups(ThinkingMotion),
             Speaking = ToMotionGroups(SpeakingMotion),
@@ -3680,7 +3680,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ShowBubble = ShowBubble,
             IdleMotionGroups = idleMotionGroups,
             // 旧单数字段同步第一项；空列表回写 "Idle" 维持旧版本默认。
-            IdleMotionGroup = idleMotionGroups?.FirstOrDefault() ?? "Idle",
+            IdleMotionGroup = idleMotionGroups?.FirstOrDefault()?.Group ?? "Idle",
             ListeningExpression = NullIfEmpty(ListeningExpression),
             ThinkingExpression = NullIfEmpty(ThinkingExpression),
             SpeakingExpression = NullIfEmpty(SpeakingExpression),
@@ -3690,10 +3690,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             SpeakingMotionGroups = speakingMotionGroups,
             ErrorMotionGroups = errorMotionGroups,
             // 旧单数字段同步第一项，旧版本仍能读到“一个动作组”。
-            ListeningMotionGroup = listeningMotionGroups?.FirstOrDefault(),
-            ThinkingMotionGroup = thinkingMotionGroups?.FirstOrDefault(),
-            SpeakingMotionGroup = speakingMotionGroups?.FirstOrDefault(),
-            ErrorMotionGroup = errorMotionGroups?.FirstOrDefault(),
+            ListeningMotionGroup = listeningMotionGroups?.FirstOrDefault()?.Group,
+            ThinkingMotionGroup = thinkingMotionGroups?.FirstOrDefault()?.Group,
+            SpeakingMotionGroup = speakingMotionGroups?.FirstOrDefault()?.Group,
+            ErrorMotionGroup = errorMotionGroups?.FirstOrDefault()?.Group,
             ExpressionByModel = ConfigJson.Clone(_working.Live2D.ExpressionByModel),
             MotionByModel = ConfigJson.Clone(_working.Live2D.MotionByModel),
             FallbackAvatarTheme = string.IsNullOrWhiteSpace(FallbackAvatarTheme) ? "violet" : FallbackAvatarTheme.Trim(),

@@ -3,6 +3,25 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:inf="clr-namespace:VoxIME.App.Infrastructure">
 
+    <UserControl.Resources>
+        <!-- 动作组复选项：勾选 + 播放模式（循环 / 播一次并保持末帧） -->
+        <DataTemplate x:Key="MotionGroupOptionRow">
+            <Grid Margin="0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="96" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Grid.Column="0" Content="{Binding Group}" VerticalAlignment="Center"
+                          IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                <ComboBox Grid.Column="1" Margin="6,0,0,0" Height="26"
+                          ItemsSource="{Binding ModeChoices}"
+                          SelectedItem="{Binding SelectedMode, Mode=TwoWay}"
+                          DisplayMemberPath="Label"
+                          ToolTip="循环：持续播放；单次保持：播一次后保持最后姿势（适合举手/切换动作）" />
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <ScrollViewer inf:SmoothScroll.IsEnabled="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                   Padding="0,0,8,0">
         <StackPanel Margin="0,0,0,20">
@@ -262,14 +281,8 @@
                     <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   IsEnabled="{Binding IdleMotion}">
-                        <ItemsControl ItemsSource="{Binding IdleMotionMapping.Options}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <CheckBox Content="{Binding Group}" Margin="0,1"
-                                              IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <ItemsControl ItemsSource="{Binding IdleMotionMapping.Options}"
+                                      ItemTemplate="{StaticResource MotionGroupOptionRow}" />
                     </ScrollViewer>
                     <TextBlock Text="{Binding IdleMotionMapping.Summary}" Style="{StaticResource HintText}"
                                Margin="0,6,0,0" TextWrapping="Wrap" />
@@ -311,14 +324,8 @@
                             <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           IsEnabled="{Binding ListeningMotion.SelectionEnabled}">
-                                <ItemsControl ItemsSource="{Binding ListeningMotion.Options}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <CheckBox Content="{Binding Group}" Margin="0,1"
-                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding ListeningMotion.Options}"
+                                              ItemTemplate="{StaticResource MotionGroupOptionRow}" />
                             </ScrollViewer>
                             <TextBlock Text="{Binding ListeningMotion.Summary}" Style="{StaticResource HintText}"
                                        Margin="0,6,0,0" TextWrapping="Wrap" />
@@ -336,14 +343,8 @@
                             <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           IsEnabled="{Binding ThinkingMotion.SelectionEnabled}">
-                                <ItemsControl ItemsSource="{Binding ThinkingMotion.Options}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <CheckBox Content="{Binding Group}" Margin="0,1"
-                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding ThinkingMotion.Options}"
+                                              ItemTemplate="{StaticResource MotionGroupOptionRow}" />
                             </ScrollViewer>
                             <TextBlock Text="{Binding ThinkingMotion.Summary}" Style="{StaticResource HintText}"
                                        Margin="0,6,0,0" TextWrapping="Wrap" />
@@ -363,14 +364,8 @@
                             <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           IsEnabled="{Binding SpeakingMotion.SelectionEnabled}">
-                                <ItemsControl ItemsSource="{Binding SpeakingMotion.Options}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <CheckBox Content="{Binding Group}" Margin="0,1"
-                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding SpeakingMotion.Options}"
+                                              ItemTemplate="{StaticResource MotionGroupOptionRow}" />
                             </ScrollViewer>
                             <TextBlock Text="{Binding SpeakingMotion.Summary}" Style="{StaticResource HintText}"
                                        Margin="0,6,0,0" TextWrapping="Wrap" />
@@ -388,14 +383,8 @@
                             <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           IsEnabled="{Binding ErrorMotion.SelectionEnabled}">
-                                <ItemsControl ItemsSource="{Binding ErrorMotion.Options}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <CheckBox Content="{Binding Group}" Margin="0,1"
-                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <ItemsControl ItemsSource="{Binding ErrorMotion.Options}"
+                                              ItemTemplate="{StaticResource MotionGroupOptionRow}" />
                             </ScrollViewer>
                             <TextBlock Text="{Binding ErrorMotion.Summary}" Style="{StaticResource HintText}"
                                        Margin="0,6,0,0" TextWrapping="Wrap" />

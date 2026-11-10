@@ -82,6 +82,10 @@
   var idleMotionActive = false;
   var idleSignature = '';
   var idleTokens = [];
+  var idleLayerLoops = [];
+  var idlePoseSnapshot = null;
+  var IDLE_MANAGED_GROUP = '__voxime_idle_managed__';
+  var IDLE_DISABLED_GROUP = '__voxime_idle_disabled__';
   var modelBaseline = null;
   var mouthParamIds = ['ParamMouthOpenY'];
   var mouthParamHandles = [];
@@ -375,7 +379,7 @@
     return null;
   }
 
-  /** 解析待机动作组：显式勾选优先；未勾选或全部不存在时回退“名字含 idle”的组（兼容旧行为）。 */
+  /** 解析待机动作条目：显式勾选优先；未勾选或全部不存在时回退“名字含 idle”的组（循环）。 */
   function resolveIdleGroups() {
     var definitions = (model && model.internalModel && model.internalModel.motionManager)
       ? (model.internalModel.motionManager.definitions || {})
@@ -384,36 +388,59 @@
     var configured = normalizeStateMotionSelection(config.idleMotionGroups, MAX_IDLE_LAYERS);
     var resolved = [];
     for (var i = 0; i < configured.length && resolved.length < MAX_IDLE_LAYERS; i++) {
-      var name = configured[i];
+      var name = configured[i].name;
       var hit = null;
       for (var g = 0; g < groups.length; g++) {
         if (groups[g].toLowerCase() === name.toLowerCase()) { hit = groups[g]; break; }
       }
-      if (hit && resolved.indexOf(hit) < 0) resolved.push(hit);
+      if (!hit) continue;
+      var duplicated = false;
+      for (var d = 0; d < resolved.length; d++) {
+        if (resolved[d].name === hit) { duplicated = true; break; }
+      }
+      if (!duplicated) resolved.push({ name: hit, loop: configured[i].loop });
     }
     if (resolved.length === 0) {
       for (var a = 0; a < groups.length; a++) {
-        if (groups[a].toLowerCase().indexOf('idle') >= 0) { resolved.push(groups[a]); break; }
+        if (groups[a].toLowerCase().indexOf('idle') >= 0) {
+          resolved.push({ name: groups[a], loop: true });
+          break;
+        }
       }
     }
     return resolved;
   }
 
-  /** 重建待机层：勾选的每个待机动作组各占一条层循环叠加；签名未变时不打断当前循环。 */
+  /** 当前待机层的“组名(模式)”文本，用于日志/调试。 */
+  function idleLayerLabel() {
+    var labels = [];
+    var groups = motionLayers.idleGroups || [];
+    for (var i = 0; i < groups.length; i++) {
+      if (groups[i]) {
+        labels.push(groups[i] + (idleLayerLoops[i] ? '(循环)' : '(单次保持)'));
+      }
+    }
+    return labels.join(', ');
+  }
+
+  /** 重建待机层：勾选的每个待机组各占一条层；循环组持续播放，单次组播一次后保持末帧。 */
   function setupIdleLayers() {
     if (!model) return [];
     var mm = model.internalModel.motionManager;
     var groups = Object.keys(mm.definitions || {});
     var nextGroups = config.idleMotion ? resolveIdleGroups() : [];
-    var signature = (config.idleMotion ? '1' : '0') + '|' + nextGroups.join('\n');
+    var signature = (config.idleMotion ? '1' : '0') + '|'
+      + nextGroups.map(function (item) {
+        return item.name + ':' + (item.loop ? 'loop' : 'once');
+      }).join('|');
     if (signature === idleSignature) {
       return groups;
     }
     idleSignature = signature;
-    var previousLabel = (motionLayers.idleGroups || []).filter(Boolean).join(', ');
+    var previousLabel = idleLayerLabel();
     try {
-      // 切组前先停掉待机层并重置参数。像“脱捕”这种动作会改很多自定义参数，
-      // 如果不清空，切回待机时这些参数会残留在模型上。
+      // 换配置相当于重新摆姿势：清掉旧快照、停层并回基线，单次组会按新配置重播一次。
+      idlePoseSnapshot = null;
       if (previewSession.finishHandler || previewSession.motionTimer) cancelMotionPreview(false);
       stopAllIdleLayers();
       mm.stopAllMotions();
@@ -421,72 +448,68 @@
       if (config.idleMotion && nextGroups.length > 0) {
         // 主 MotionManager 不再自动播待机，避免和待机层重复：给一个不存在的组名，
         // 引擎的 shouldRequestIdleMotion 分支会自行放弃。
-        mm.groups.idle = '__voxime_idle_managed__';
-        idleGroup = nextGroups[0];
+        mm.groups.idle = IDLE_MANAGED_GROUP;
+        idleGroup = nextGroups[0].name;
         idleMotionActive = true;
         for (var i = 0; i < nextGroups.length && i < motionLayers.idle.length; i++) {
-          startIdleLayer(i, nextGroups[i]);
+          startIdleLayer(i, nextGroups[i].name, nextGroups[i].loop);
         }
       } else {
-        mm.groups.idle = '__voxime_idle_disabled__';
+        mm.groups.idle = IDLE_DISABLED_GROUP;
         idleGroup = null;
         idleMotionActive = false;
       }
       sendHost({
         type: 'debug',
         message: '待机动作层：' + (previousLabel || '(无)') + ' -> '
-          + (nextGroups.length ? nextGroups.join(', ') : '(不播放)') + '，已重置参数'
+          + (nextGroups.length ? idleLayerLabel() : '(不播放)') + '，已重置参数'
       });
     } catch (e) {
       log('待机动作设置失败（模型可能无动作组）', e);
     }
-    log('动作组: ' + groups.join(', ') + ' / 待机组: ' + (nextGroups.join(', ') || '无'));
+    log('动作组: ' + groups.join(', ') + ' / 待机组: ' + (idleLayerLabel() || '无'));
     return groups;
   }
 
-  /** 一条待机层：播放指定组里的随机动作；非 Loop 动作播完后继续随机下一个。 */
-  function startIdleLayer(slot, group) {
+  /** 一条待机层：循环组持续播放；单次组播一次即保持末帧（不重播、不重置）。 */
+  function startIdleLayer(slot, group, loop) {
     var manager = (motionLayers.idle || [])[slot];
     var name = String(group || '').trim();
     if (!manager || !name) return;
     var token = (idleTokens[slot] || 0) + 1;
     idleTokens[slot] = token;
-    motionLayers.idleGroups[slot] = name;
-    function playNext() {
-      if (token !== idleTokens[slot] || !model) return;
-      var index = 0;
-      try {
-        var list = (model.internalModel.motionManager.definitions || {})[name];
-        if (Array.isArray(list) && list.length > 1) {
-          index = Math.floor(Math.random() * list.length);
-        }
-      } catch (e) { index = 0; }
-      var result = null;
-      try {
-        result = manager.startMotion(name, index, 1, {});
-      } catch (e) {
-        log('待机层启动失败（忽略）: ' + name, e);
-        return;
+    if (motionLayers.idleGroups) motionLayers.idleGroups[slot] = name;
+    idleLayerLoops[slot] = loop === true;
+    var index = 0;
+    try {
+      var list = (model.internalModel.motionManager.definitions || {})[name];
+      if (Array.isArray(list) && list.length > 1) {
+        index = Math.floor(Math.random() * list.length);
       }
-      if (result && typeof result.then === 'function') {
-        result.then(function (ok) {
-          // Loop 标记的动作不会结束；普通动作播完后继续同一组内随机下一个。
-          if (ok === false) {
-            log('待机层动作无法播放，已跳过: ' + name);
-            return;
-          }
-          playNext();
-        }).catch(function (err) {
-          log('待机层播放结束（忽略）: ' + name, err);
-        });
-      }
+    } catch (e) { index = 0; }
+    var result = null;
+    try {
+      manager.stopAllMotions();
+      result = manager.startMotion(name, index, 1, { loop: loop === true });
+    } catch (e) {
+      log('待机层启动失败（忽略）: ' + name, e);
+      return;
     }
-    try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
-    playNext();
+    if (result && typeof result.then === 'function') {
+      result.then(function (ok) {
+        // 循环模式的动作不会结束；单次模式播完就停在最后一帧（引擎每帧保存参数）。
+        if (ok === false) {
+          log('待机层动作无法播放，已跳过: ' + name);
+        }
+      }).catch(function (err) {
+        log('待机层播放结束（忽略）: ' + name, err);
+      });
+    }
   }
 
   function stopIdleLayer(slot) {
     idleTokens[slot] = (idleTokens[slot] || 0) + 1;
+    idleLayerLoops[slot] = false;
     if (motionLayers.idleGroups) motionLayers.idleGroups[slot] = null;
     var manager = (motionLayers.idle || [])[slot];
     if (!manager) return;
@@ -500,15 +523,14 @@
     }
   }
 
-  /** 记录模型加载完成时的参数值与部件透明度，作为“默认姿态”基线。 */
-  function captureModelBaseline() {
+  /** 记录当前参数值与部件透明度，可作为姿势快照（基线 / 离开待机时的姿势）。 */
+  function capturePoseSnapshot() {
     try {
       var core = model && model.internalModel ? model.internalModel.coreModel : null;
       if (!core
           || typeof core.getParameterCount !== 'function'
           || typeof core.getParameterValueByIndex !== 'function') {
-        modelBaseline = null;
-        return;
+        return null;
       }
 
       var parameters = [];
@@ -523,11 +545,45 @@
         }
       }
 
-      modelBaseline = { parameters: parameters, partOpacities: partOpacities };
+      return { parameters: parameters, partOpacities: partOpacities };
     } catch (e) {
-      modelBaseline = null;
-      log('记录模型默认姿态失败（忽略）', e);
+      log('记录姿势快照失败（忽略）', e);
+      return null;
     }
+  }
+
+  /** 把快照里的参数/部件透明度写回模型。 */
+  function applyPoseSnapshot(snapshot) {
+    if (!snapshot) return;
+    try {
+      var core = model && model.internalModel ? model.internalModel.coreModel : null;
+      if (!core) return;
+
+      if (snapshot.parameters
+          && snapshot.parameters.length === core.getParameterCount()
+          && typeof core.setParameterValueByIndex === 'function') {
+        for (var i = 0; i < snapshot.parameters.length; i++) {
+          core.setParameterValueByIndex(i, snapshot.parameters[i]);
+        }
+      }
+
+      if (snapshot.partOpacities
+          && snapshot.partOpacities.length > 0
+          && typeof core.getPartCount === 'function'
+          && typeof core.setPartOpacityByIndex === 'function') {
+        var partCount = Math.min(snapshot.partOpacities.length, core.getPartCount());
+        for (var p = 0; p < partCount; p++) {
+          core.setPartOpacityByIndex(p, snapshot.partOpacities[p]);
+        }
+      }
+    } catch (e) {
+      log('恢复姿势快照失败（忽略）', e);
+    }
+  }
+
+  /** 记录模型加载完成时的参数值与部件透明度，作为“默认姿态”基线。 */
+  function captureModelBaseline() {
+    modelBaseline = capturePoseSnapshot();
   }
 
   /** 把模型恢复到加载完成时的默认参数/部件透明度，清除上一个动作的残留。 */
@@ -563,6 +619,14 @@
     }
   }
 
+  /** 恢复待机姿势：有待机快照就用快照（保留单次动作的保持末帧），否则回默认基线。 */
+  function restoreIdlePose() {
+    resetModelParametersToDefault();
+    if (idlePoseSnapshot) {
+      applyPoseSnapshot(idlePoseSnapshot);
+    }
+  }
+
   // Cubism 5 引擎的 CubismModel 参数 API 需要 CubismIdHandle，而不是裸字符串；
   // 直接传字符串会被当作“不存在的参数”静默忽略（口型/眼动回读全为空）。
   // ---------------- 动作层 / 程序层 ----------------
@@ -580,7 +644,9 @@
     motionLayers.previewGroups = [];
     motionLayers.ready = false;
     idleTokens = [];
+    idleLayerLoops = [];
     idleSignature = '';
+    idlePoseSnapshot = null;
     if (!model || !model.internalModel) return;
     try {
       var total = MAX_IDLE_LAYERS + MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS;
@@ -597,6 +663,17 @@
       motionLayers.idleGroups = new Array(motionLayers.idle.length).fill(null);
       motionLayers.stateGroups = new Array(motionLayers.state.length).fill(null);
       motionLayers.previewGroups = new Array(motionLayers.preview.length).fill(null);
+      idleLayerLoops = new Array(motionLayers.idle.length).fill(false);
+      // 每个并行层都可能在某次动作播完后自动去播 Idle 组；统一改成不存在的 sentinel，
+      // 否则单次动作刚播完就会被同层的 Idle 动作盖掉，“保持末帧”失效。
+      var allManagers = motionLayers.idle.concat(motionLayers.state, motionLayers.preview);
+      for (var mi = 0; mi < allManagers.length; mi++) {
+        try {
+          if (allManagers[mi] && allManagers[mi].groups) {
+            allManagers[mi].groups.idle = IDLE_MANAGED_GROUP;
+          }
+        } catch (e) { /* ignore */ }
+      }
       motionLayers.ready = motionLayers.idle.length > 0
         && motionLayers.state.length > 0
         && motionLayers.preview.length > 0;
@@ -668,27 +745,51 @@
     return false;
   }
 
-  /** 归一化配置里的动作组：兼容旧版单个字符串，去空、去重、最多 limit 个。 */
+  /**
+   * 归一化配置里的动作条目：兼容旧版字符串 / 新对象 {group, loop}，
+   * 去空、按组名去重、最多 limit 个；返回 [{name, loop}]（loop 取值已解析成布尔）。
+   */
   function normalizeStateMotionSelection(value, limit) {
     var maxCount = limit || MAX_STATE_LAYERS;
     var list = [];
     if (typeof value === 'string') {
-      list.push(value);
+      list.push({ group: value });
     } else if (Object.prototype.toString.call(value) === '[object Array]') {
       list = value.slice();
+    } else if (value && typeof value === 'object') {
+      list.push(value);
     }
     var result = [];
     var seen = {};
     for (var i = 0; i < list.length; i++) {
-      var name = String(list[i] == null ? '' : list[i]).trim();
+      var item = list[i];
+      var name = '';
+      var loop = null;
+      if (typeof item === 'string') {
+        name = item;
+      } else if (item && typeof item === 'object') {
+        var rawName = item.group != null ? item.group : (item.name != null ? item.name : '');
+        name = rawName;
+        if (typeof item.loop === 'boolean') loop = item.loop;
+      }
+      name = String(name == null ? '' : name).trim();
       if (!name) continue;
       var key = name.toLowerCase();
       if (seen[key]) continue;
       seen[key] = true;
-      result.push(name);
+      result.push({ name: name, loop: loop === null ? key.indexOf('idle') >= 0 : loop });
       if (result.length >= maxCount) break;
     }
     return result;
+  }
+
+  /** 取出条目里的组名列表（预览等只需要名字的场景）。 */
+  function motionSelectionNames(entries) {
+    var names = [];
+    for (var i = 0; i < entries.length; i++) {
+      names.push(entries[i].name);
+    }
+    return names;
   }
 
   /** 自动模式：找与状态同名的动作组（listening -> Listening/listening）。 */
@@ -1011,6 +1112,8 @@
     idleGroup = null;
     idleSignature = '';
     idleTokens = [];
+    idleLayerLoops = [];
+    idlePoseSnapshot = null;
     motionLayers.idle = [];
     motionLayers.idleGroups = [];
     motionLayers.state = [];
@@ -1055,6 +1158,11 @@
     }
     if (previous === state && !force) return;
 
+    if (previous === 'idle' && state !== 'idle') {
+      // 离开待机前冻结当前姿势（含单次动作保持的末帧），状态结束后回到待机时再恢复。
+      idlePoseSnapshot = capturePoseSnapshot();
+    }
+
     // 正常状态切换优先于预览：清掉预览冷却，避免 3 秒计时器覆盖真实状态。
     if (!force) {
       cancelExpressionPreview();
@@ -1092,37 +1200,48 @@
       var selection = state === 'idle' ? [] : normalizeStateMotionSelection(stateMotions[state]);
       var groups = [];
       if (state !== 'idle') {
-        if (selection.indexOf('__none__') >= 0) {
+        var noneSelected = false;
+        for (var n = 0; n < selection.length; n++) {
+          if (selection[n].name === '__none__') { noneSelected = true; break; }
+        }
+        if (noneSelected) {
           groups = [];
         } else if (selection.length > 0) {
           groups = selection;
         } else {
           var autoGroup = findStateMotionGroup(state);
-          if (autoGroup) groups = [autoGroup];
+          if (autoGroup) {
+            groups = [{ name: autoGroup, loop: autoGroup.toLowerCase().indexOf('idle') >= 0 }];
+          }
         }
       }
+      var startedLabels = [];
 
       stopAllMotionLayers('state');
       if (state === 'idle') {
-        // 清掉状态动作残留的自定义参数；下一帧待机层会重新写回待机曲线。
-        resetModelParametersToDefault();
+        // 回到待机：恢复离开前的姿势（含单次动作保持的末帧），再让待机层继续跑。
+        restoreIdlePose();
       } else if (groups.length > 0) {
         resetModelParametersToDefault();
-        var started = [];
+        // 清掉上个状态的残留后，把待机时保持的姿势铺回去；状态动作再叠加在上面。
+        if (idlePoseSnapshot) applyPoseSnapshot(idlePoseSnapshot);
         for (var i = 0; i < groups.length && i < motionLayers.state.length; i++) {
-          startMotionLayer('state', i, groups[i], 3);
-          started.push(groups[i]);
+          startMotionLayer('state', i, groups[i].name, 3, { loop: groups[i].loop });
+          startedLabels.push(groups[i].name + (groups[i].loop ? '(循环)' : '(单次保持)'));
         }
-        if (started.length === 0) {
+        if (startedLabels.length === 0) {
           // 并行层不可用时退回单动作模式，至少不影响状态动作。
-          model.motion(groups[0], undefined, 3);
+          model.motion(groups[0].name, undefined, 3);
         } else if (selection.length > 0) {
           sendHost({
             type: 'debug',
-            message: '状态动作（叠加 ' + started.length + ' 层）：' + state + ' -> ' + started.join(', ')
+            message: '状态动作（叠加 ' + startedLabels.length + ' 层）：' + state + ' -> ' + startedLabels.join(', ')
           });
         } else {
-          sendHost({ type: 'debug', message: '状态动作（自动）：' + state + ' -> ' + started.join(', ') });
+          sendHost({
+            type: 'debug',
+            message: '状态动作（自动）：' + state + ' -> ' + startedLabels.join(', ')
+          });
         }
       }
     } catch (e) {
@@ -1155,7 +1274,7 @@
     stopAllMotionLayers('preview');
 
     if (restoreIdle) {
-      resetModelParametersToDefault();
+      restoreIdlePose();
     }
   }
 
@@ -1182,7 +1301,7 @@
     previewSession.token++;
 
     stopAllMotionLayers('preview');
-    resetModelParametersToDefault();
+    restoreIdlePose();
     sendHost({ type: 'debug', message: '预览冷却结束，已恢复待机/状态层' });
   }
 
@@ -1196,9 +1315,10 @@
   /** 设置页“动作预览”：可同时预览多个动作组（各占一条预览层），播完后保持 3 秒。 */
   function previewMotion(motionGroups) {
     var groups = normalizeStateMotionSelection(motionGroups);
-    if (!groups.length || !model) return;
+    var names = motionSelectionNames(groups);
+    if (!names.length || !model) return;
 
-    var label = groups.join('+');
+    var label = names.join('+');
     cancelMotionPreview(false);
     var session = previewSession;
     var token = ++session.token;
@@ -1211,13 +1331,13 @@
     var finishHandler = function () {
       if (token !== session.token) return;
       session.finishHandler = null;
-      sendHost({ type: 'debug', message: '预览结束：' + groups.join(', ') + '，3 秒后恢复默认' });
+      sendHost({ type: 'debug', message: '预览结束：' + names.join(', ') + '，3 秒后恢复默认' });
       session.motionTimer = setTimeout(function () {
         finishMotionPreview(token);
       }, 3000);
     };
     session.finishHandler = finishHandler;
-    var watched = Math.min(groups.length, managers.length);
+    var watched = Math.min(names.length, managers.length);
     for (var w = 0; w < watched; w++) {
       if (managers[w] && typeof managers[w].once === 'function') {
         managers[w].once('motionFinish', finishHandler);
@@ -1230,10 +1350,10 @@
     }, 20000);
 
     try {
-      resetModelParametersToDefault();
+      restoreIdlePose();
       var lastResult = null;
-      for (var i = 0; i < groups.length && i < managers.length; i++) {
-        var started = startMotionLayer('preview', i, groups[i], 3, { loop: false });
+      for (var i = 0; i < names.length && i < managers.length; i++) {
+        var started = startMotionLayer('preview', i, names[i], 3, { loop: false });
         if (started) lastResult = started;
       }
       if (lastResult && typeof lastResult.then === 'function') {
@@ -1364,7 +1484,7 @@
         if (Object.prototype.hasOwnProperty.call(msg.motions, key)) {
           var next = normalizeStateMotionSelection(msg.motions[key]);
           var current = stateMotions[key] || [];
-          if (next.join('\n') !== current.join('\n')) {
+          if (JSON.stringify(next) !== JSON.stringify(current)) {
             motionsChanged = true;
           }
           stateMotions[key] = next;
@@ -2079,7 +2199,22 @@
         groups: modelGroups,
         idleGroup: idleGroup,
         idleGroups: (motionLayers.idleGroups || []).filter(Boolean),
+        idlePoseSnapshot: !!idlePoseSnapshot,
         idleLayerCount: (motionLayers.idle || []).length,
+        idleLayers: (motionLayers.idle || []).map(function (manager, index) {
+          var group = (motionLayers.idleGroups || [])[index];
+          if (!group) return null;
+          return {
+            group: group,
+            loop: idleLayerLoops[index] === true,
+            playing: !!(manager && manager.playing)
+          };
+        }).filter(Boolean),
+        stateLayers: (motionLayers.state || []).map(function (manager, index) {
+          var group = (motionLayers.stateGroups || [])[index];
+          if (!group) return null;
+          return { group: group, playing: !!(manager && manager.playing) };
+        }).filter(Boolean),
         stateGroups: (motionLayers.stateGroups || []).filter(Boolean),
         previewGroups: (motionLayers.previewGroups || []).filter(Boolean),
         stateLayerCount: (motionLayers.state || []).length,

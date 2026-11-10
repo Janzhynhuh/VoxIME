@@ -1196,7 +1196,7 @@ public sealed class Live2DController : ILive2DController
         };
         var motionMap = config.ResolveMotionMap(config.ModelDirectory);
         // 每个状态可叠加多个动作组：协议从 string 升级为数组（前端同时兼容旧的单个字符串）。
-        var motions = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        var motions = new Dictionary<string, IReadOnlyList<Live2DMotionEntry>>(StringComparer.OrdinalIgnoreCase)
         {
             ["listening"] = motionMap.Listening,
             ["thinking"] = motionMap.Thinking,

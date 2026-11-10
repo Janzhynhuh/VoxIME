@@ -5,6 +5,7 @@ using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using VoxIME.Core;
 using VoxIME.Core.Abstractions;
+using VoxIME.Core.Configuration;
 using VoxIME.Core.Logging;
 using VoxIME.Core.Services;
 
@@ -279,10 +280,10 @@ internal sealed class Live2DWebHost : IDisposable
         double offsetX,
         double offsetY,
         string idleMotionGroup,
-        IReadOnlyList<string> idleMotionGroups,
+        IReadOnlyList<Live2DMotionEntry> idleMotionGroups,
         bool showBubble,
         IReadOnlyDictionary<string, string?> expressions,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> motions,
+        IReadOnlyDictionary<string, IReadOnlyList<Live2DMotionEntry>> motions,
         Live2DModelAssetCatalog? modelAssets)
     {
         Send(new
@@ -295,10 +296,18 @@ internal sealed class Live2DWebHost : IDisposable
             offsetX,
             offsetY,
             idleMotionGroup,
-            idleMotionGroups,
+            idleMotionGroups = (idleMotionGroups ?? Array.Empty<Live2DMotionEntry>())
+                .Select(item => new { group = item.Group, loop = item.EffectiveLoop })
+                .ToArray(),
             showBubble,
             expressions,
-            motions,
+            motions = (motions ?? new Dictionary<string, IReadOnlyList<Live2DMotionEntry>>())
+                .ToDictionary(
+                    pair => pair.Key,
+                    pair => (pair.Value ?? Array.Empty<Live2DMotionEntry>())
+                        .Select(item => new { group = item.Group, loop = item.EffectiveLoop })
+                        .ToArray(),
+                    StringComparer.OrdinalIgnoreCase),
             modelAssets = modelAssets is null
                 ? null
                 : new

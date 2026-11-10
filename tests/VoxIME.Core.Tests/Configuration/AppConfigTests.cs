@@ -75,22 +75,23 @@ public sealed class AppConfigTests
     {
         var config = AppConfig.CreateDefault();
         config.Live2D.IdleMotionGroup = "Idle";
-        config.Live2D.ListeningMotionGroups = new List<string> { "global-listening" };
+        config.Live2D.ListeningMotionGroups = new List<Live2DMotionEntry> { new("global-listening") };
         config.Live2D.MotionByModel["E:\\models\\a"] = new Live2DMotionMap
         {
             IdleGroup = "a-idle",
-            Listening = new List<string> { "a-listening", "a-listening-2" },
-            Error = new List<string> { "__none__" }
+            Listening = new List<Live2DMotionEntry> { new("a-listening"), new("a-listening-2", loop: false) },
+            Error = new List<Live2DMotionEntry> { new("__none__") }
         };
 
         var a = config.Live2D.ResolveMotionMap("E:\\models\\a");
         Assert.Equal("a-idle", a.IdleGroup);
-        Assert.Equal(new[] { "a-listening", "a-listening-2" }, a.Listening);
-        Assert.Equal(new[] { "__none__" }, a.Error);
+        Assert.Equal(new[] { "a-listening", "a-listening-2" }, Groups(a.Listening));
+        Assert.False(a.Listening[1].Loop);
+        Assert.Equal(new[] { "__none__" }, Groups(a.Error));
 
         var b = config.Live2D.ResolveMotionMap("E:\\models\\b");
         Assert.Equal("Idle", b.IdleGroup);
-        Assert.Equal(new[] { "global-listening" }, b.Listening);
+        Assert.Equal(new[] { "global-listening" }, Groups(b.Listening));
         Assert.Empty(b.Thinking);
     }
 
@@ -275,18 +276,22 @@ public sealed class AppConfigTests
         var config = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
         Assert.NotNull(config);
         Assert.Equal("TapBody", config!.Live2D.ListeningMotionGroup);
-        Assert.Equal(new[] { "Think", "Breath" }, config.Live2D.ThinkingMotionGroups);
-        Assert.Equal(new[] { "Speak" }, config.Live2D.MotionByModel["E:\\models\\a"].Speaking);
+        Assert.Equal(new[] { "Think", "Breath" }, Groups(config.Live2D.ThinkingMotionGroups));
+        Assert.All(config.Live2D.ThinkingMotionGroups!, entry => Assert.Null(entry.Loop));
+        Assert.Equal(new[] { "Speak" }, Groups(config.Live2D.MotionByModel["E:\\models\\a"].Speaking));
     }
 
     [Fact]
     public void MotionLists_NormalizeDedupeTrimAndCap()
     {
         var config = AppConfig.CreateDefault();
-        config.Live2D.SpeakingMotionGroups = new List<string> { " A ", "a", "", "B", "C", "D", "E" };
+        config.Live2D.SpeakingMotionGroups = new List<Live2DMotionEntry>
+        {
+            new(" A "), new("a"), new(""), new("B"), new("C"), new("D"), new("E")
+        };
         config.Normalize();
 
-        Assert.Equal(new[] { "A", "B", "C", "D" }, config.Live2D.SpeakingMotionGroups);
+        Assert.Equal(new[] { "A", "B", "C", "D" }, Groups(config.Live2D.SpeakingMotionGroups));
         Assert.Equal("A", config.Live2D.SpeakingMotionGroup);
     }
 
@@ -294,10 +299,10 @@ public sealed class AppConfigTests
     public void MotionLists_NoneMarkerWins()
     {
         var config = AppConfig.CreateDefault();
-        config.Live2D.ErrorMotionGroups = new List<string> { "Shock", "__none__", "Sad" };
+        config.Live2D.ErrorMotionGroups = new List<Live2DMotionEntry> { new("Shock"), new("__none__"), new("Sad") };
         config.Normalize();
 
-        Assert.Equal(new[] { "__none__" }, config.Live2D.ErrorMotionGroups);
+        Assert.Equal(new[] { "__none__" }, Groups(config.Live2D.ErrorMotionGroups));
         Assert.Equal("__none__", config.Live2D.ErrorMotionGroup);
     }
 
@@ -308,7 +313,8 @@ public sealed class AppConfigTests
         config.Live2D.ThinkingMotionGroup = "Think";
         config.Normalize();
 
-        Assert.Equal(new[] { "Think" }, config.Live2D.ThinkingMotionGroups);
+        Assert.Equal(new[] { "Think" }, Groups(config.Live2D.ThinkingMotionGroups));
+        Assert.Null(config.Live2D.ThinkingMotionGroups![0].Loop);
         Assert.Equal("Think", config.Live2D.ThinkingMotionGroup);
     }
 
@@ -316,29 +322,36 @@ public sealed class AppConfigTests
     public void MotionLists_SerializeAsArrayAndClonePreserves()
     {
         var config = AppConfig.CreateDefault();
-        config.Live2D.ListeningMotionGroups = new List<string> { "Idle", "TapBody" };
+        config.Live2D.ListeningMotionGroups = new List<Live2DMotionEntry>
+        {
+            new("Idle", loop: true),
+            new("TapBody", loop: false)
+        };
         config.Normalize();
 
         var json = JsonSerializer.Serialize(config, ConfigJson.Options);
         Assert.Contains("\"listeningMotionGroups\": [", json);
-        Assert.Contains("\"Idle\"", json);
-        Assert.Contains("\"TapBody\"", json);
+        Assert.Contains("\"group\": \"Idle\"", json);
+        Assert.Contains("\"loop\": true", json);
+        Assert.Contains("\"loop\": false", json);
 
         var clone = config.Clone();
-        Assert.Equal(new[] { "Idle", "TapBody" }, clone.Live2D.ListeningMotionGroups);
+        Assert.Equal(new[] { "Idle", "TapBody" }, Groups(clone.Live2D.ListeningMotionGroups));
+        Assert.True(clone.Live2D.ListeningMotionGroups![0].Loop);
+        Assert.False(clone.Live2D.ListeningMotionGroups![1].Loop);
     }
 
     [Fact]
     public void ResolveMotionMap_FallsBackToGlobalListsAndLegacyField()
     {
         var config = AppConfig.CreateDefault();
-        config.Live2D.ListeningMotionGroups = new List<string> { "GlobalA", "GlobalB" };
+        config.Live2D.ListeningMotionGroups = new List<Live2DMotionEntry> { new("GlobalA"), new("GlobalB") };
         config.Live2D.ThinkingMotionGroup = "LegacyThink";
 
         var resolved = config.Live2D.ResolveMotionMap("E:\\models\\none");
 
-        Assert.Equal(new[] { "GlobalA", "GlobalB" }, resolved.Listening);
-        Assert.Equal(new[] { "LegacyThink" }, resolved.Thinking);
+        Assert.Equal(new[] { "GlobalA", "GlobalB" }, Groups(resolved.Listening));
+        Assert.Equal(new[] { "LegacyThink" }, Groups(resolved.Thinking));
         Assert.Empty(resolved.Speaking);
     }
 
@@ -349,14 +362,14 @@ public sealed class AppConfigTests
         config.Live2D.MotionByModel["E:\\models\\a"] = new Live2DMotionMap
         {
             IdleGroup = "  Idle  ",
-            Listening = new List<string> { "A", "A", "B", "C", "D", "E" },
-            Speaking = new List<string> { "" }
+            Listening = new List<Live2DMotionEntry> { new("A"), new("A"), new("B"), new("C"), new("D"), new("E") },
+            Speaking = new List<Live2DMotionEntry> { new("") }
         };
         config.Normalize();
 
         var map = config.Live2D.MotionByModel["E:\\models\\a"];
         Assert.Equal("Idle", map.IdleGroup);
-        Assert.Equal(new[] { "A", "B", "C", "D" }, map.Listening);
+        Assert.Equal(new[] { "A", "B", "C", "D" }, Groups(map.Listening));
         Assert.Empty(map.Speaking);
     }
 
@@ -378,9 +391,9 @@ public sealed class AppConfigTests
         Assert.NotNull(config);
         config!.Normalize();
 
-        Assert.Equal(new[] { "Animation/IDLE" }, config.Live2D.IdleMotionGroups);
+        Assert.Equal(new[] { "Animation/IDLE" }, Groups(config.Live2D.IdleMotionGroups));
         Assert.Equal("Animation/IDLE", config.Live2D.IdleMotionGroup);
-        Assert.Equal(new[] { "a-idle" }, config.Live2D.MotionByModel["E:\\models\\a"].IdleGroups);
+        Assert.Equal(new[] { "a-idle" }, Groups(config.Live2D.MotionByModel["E:\\models\\a"].IdleGroups));
         Assert.Equal("a-idle", config.Live2D.MotionByModel["E:\\models\\a"].IdleGroup);
     }
 
@@ -388,10 +401,13 @@ public sealed class AppConfigTests
     public void IdleMotionLists_NormalizeDedupeTrimAndCap()
     {
         var config = AppConfig.CreateDefault();
-        config.Live2D.IdleMotionGroups = new List<string> { " A ", "a", "", "B", "C", "D", "E" };
+        config.Live2D.IdleMotionGroups = new List<Live2DMotionEntry>
+        {
+            new(" A "), new("a"), new(""), new("B"), new("C"), new("D"), new("E")
+        };
         config.Normalize();
 
-        Assert.Equal(new[] { "A", "B", "C", "D" }, config.Live2D.IdleMotionGroups);
+        Assert.Equal(new[] { "A", "B", "C", "D" }, Groups(config.Live2D.IdleMotionGroups));
         Assert.Equal("A", config.Live2D.IdleMotionGroup);
     }
 
@@ -409,16 +425,110 @@ public sealed class AppConfigTests
     public void ResolveMotionMap_ReturnsIdleGroupsAndLegacyFirst()
     {
         var config = AppConfig.CreateDefault();
-        config.Live2D.IdleMotionGroups = new List<string> { "Animation/IDLE", "Animation/Swim" };
+        config.Live2D.IdleMotionGroups = new List<Live2DMotionEntry>
+        {
+            new("Animation/IDLE"),
+            new("Animation/Swim", loop: false)
+        };
 
         var resolved = config.Live2D.ResolveMotionMap(null);
-        Assert.Equal(new[] { "Animation/IDLE", "Animation/Swim" }, resolved.IdleGroups);
+        Assert.Equal(new[] { "Animation/IDLE", "Animation/Swim" }, Groups(resolved.IdleGroups));
+        Assert.False(resolved.IdleGroups[1].Loop);
         Assert.Equal("Animation/IDLE", resolved.IdleGroup);
 
         var defaultResolved = AppConfig.CreateDefault().Live2D.ResolveMotionMap(null);
         Assert.Empty(defaultResolved.IdleGroups);
         Assert.Equal("Idle", defaultResolved.IdleGroup);
     }
+
+    [Fact]
+    public void MotionEntries_DeserializeObjectsWithLoop()
+    {
+        const string json = """
+        {
+          "live2D": {
+            "speakingMotionGroups": [
+              { "group": "Animation/竖手指切出来动画", "loop": false },
+              { "group": "Animation/IDLE", "loop": true }
+            ],
+            "idleMotionGroups": [ "Animation/IDLE" ]
+          }
+        }
+        """;
+
+        var config = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
+        Assert.NotNull(config);
+        var speaking = config!.Live2D.SpeakingMotionGroups;
+        Assert.NotNull(speaking);
+        Assert.Equal(new[] { "Animation/竖手指切出来动画", "Animation/IDLE" }, Groups(speaking));
+        Assert.False(speaking[0].Loop);
+        Assert.True(speaking[1].Loop);
+        Assert.Null(config.Live2D.IdleMotionGroups![0].Loop);
+    }
+
+    [Fact]
+    public void MotionEntries_EffectiveLoopDefaultsByIdleName()
+    {
+        Assert.True(new Live2DMotionEntry("Idle").EffectiveLoop);
+        Assert.True(new Live2DMotionEntry("Animation/IDLE").EffectiveLoop);
+        Assert.True(new Live2DMotionEntry("swim_idle_loop").EffectiveLoop);
+        Assert.False(new Live2DMotionEntry("Animation/举手切默认手").EffectiveLoop);
+        Assert.False(new Live2DMotionEntry("Animation/竖手指切出来动画").EffectiveLoop);
+
+        // 显式模式优先于名字猜测。
+        Assert.True(new Live2DMotionEntry("Animation/举手切默认手", loop: true).EffectiveLoop);
+        Assert.False(new Live2DMotionEntry("Animation/IDLE", loop: false).EffectiveLoop);
+    }
+
+    [Fact]
+    public void NormalizeMotionEntries_DedupeCapPreserveMode()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.SpeakingMotionGroups = new List<Live2DMotionEntry>
+        {
+            new(" A ", loop: false),
+            new("a", loop: true),
+            new("B", loop: true),
+            new("C"),
+            new("D"),
+            new("E")
+        };
+        config.Normalize();
+
+        var normalized = config.Live2D.SpeakingMotionGroups;
+        Assert.NotNull(normalized);
+        Assert.Equal(new[] { "A", "B", "C", "D" }, Groups(normalized));
+        // 去重时保留首个条目的模式。
+        Assert.False(normalized[0].Loop);
+        Assert.True(normalized[1].Loop);
+    }
+
+    [Fact]
+    public void MotionEntries_SerializeOmitsAutoLoop()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.IdleMotionGroups = new List<Live2DMotionEntry>
+        {
+            new("Animation/IDLE"),
+            new("Animation/举手切默认手", loop: false)
+        };
+        config.Normalize();
+
+        var json = JsonSerializer.Serialize(config, ConfigJson.Options);
+        Assert.Contains("\"loop\": false", json);
+
+        // 自动模式不写 loop；非 ASCII 组名会被 JSON 转义，回读校验而不是直接匹配字符串。
+        var roundTrip = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
+        Assert.NotNull(roundTrip);
+        var entries = roundTrip!.Live2D.IdleMotionGroups;
+        Assert.NotNull(entries);
+        Assert.Equal(new[] { "Animation/IDLE", "Animation/举手切默认手" }, Groups(entries));
+        Assert.Null(entries[0].Loop);
+        Assert.False(entries[1].Loop);
+    }
+
+    private static string[] Groups(IEnumerable<Live2DMotionEntry>? entries) =>
+        entries?.Select(entry => entry.Group).ToArray() ?? Array.Empty<string>();
 
     [Fact]
     public void GetActiveProfile_SkipsDisabledProfiles()
