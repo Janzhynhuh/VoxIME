@@ -43,10 +43,10 @@ Windows x64 语音输入法 **VoxIME 声语**：悬浮语音助手形态。
 - `InsertionModels.cs`：`ITextInjector`、`IClipboardService`、`ITextPostProcessor`、`InsertionResult`
 - `HotkeyModels.cs`：`IHotkeyService`、`HotkeyEventArgs`、`HotkeyAction`
 - `TtsModels.cs`：`ITtsService`、`TtsOptions`
-- `Live2DModels.cs`：`ILive2DController`（含 `PreviewMotion`/`PreviewMotions`/`PreviewExpression` 预览；`PreviewMotions` 用于状态动作多选叠加预览）、`Live2DState`、`Live2DModelSizeEventArgs`（模型加载后上报原始宽高，用于窗口自适应）
+- `Live2DModels.cs`：`ILive2DController`（含 `PreviewMotion`/`PreviewMotions`/`PreviewExpression` 预览、`TriggerMotion`（tap=点击桌宠/托盘互动，start=模型加载后）触发式动作；`PreviewMotions` 用于状态动作多选叠加预览）、`Live2DState`、`Live2DModelSizeEventArgs`（模型加载后上报原始宽高，用于窗口自适应）
 - `VoiceInputModels.cs`：`IVoiceInputController`（UI 唯一依赖的主控接口）、`AppState`、`AppStateChangedEventArgs`、`TranscriptionRecord`
 
-配置类型在 `VoxIME.Core.Configuration`：`AppConfig`（含 `ProviderProfile`、`HotkeyConfig`、`AudioConfig`、`InsertionConfig`、`Live2DConfig`（状态动作与待机动作映射均为 `Live2DMotionEntry` 条目数组：`*MotionGroups` / `IdleMotionGroups`，条目含 `Group` 与可空 `Loop`（循环/单次保持，null=自动按名字猜）；旧 `*MotionGroup` / `IdleMotionGroup` 字符串字段仅兼容读取）、`TtsConfig`、`UiConfig`、`OverlayConfig`、`LoggingConfig`）、`IConfigStore`/`JsonConfigStore`、`ConfigExchangeService`、`ISecretProtector`/`DpapiSecretProtector`（仅旧版迁移）、`ConfigJson`。
+配置类型在 `VoxIME.Core.Configuration`：`AppConfig`（含 `ProviderProfile`、`HotkeyConfig`、`AudioConfig`、`InsertionConfig`、`Live2DConfig`（动作角色：`IdleMotionGroups`=`Live2DMotionEntry` 静默循环条目、`IdlePoolGroups`=`Live2DPoolEntry` 随机池条目（权重/保持末帧）+ `IdlePoolMinSeconds`/`IdlePoolMaxSeconds`、`TriggerActions`=`Live2DTriggerEntry`（tap/start 事件）；四个状态为 `*MotionGroups` 条目数组，条目含 `Group` 与可空 `Loop`（循环/进入时播一次，null=自动按名字猜）；旧 `*MotionGroup` / `IdleMotionGroup` 字符串字段仅兼容读取）、`TtsConfig`、`UiConfig`、`OverlayConfig`、`LoggingConfig`）、`IConfigStore`/`JsonConfigStore`、`ConfigExchangeService`、`ISecretProtector`/`DpapiSecretProtector`（仅旧版迁移）、`ConfigJson`。
 日志：`VoxIME.Core.Logging.IAppLogger`、`FileLogger`、`NullLogger`、`LogLevel`。
 历史：`VoxIME.Core.History.IHistoryStore`/`JsonlHistoryStore`。
 

@@ -428,12 +428,14 @@ public sealed class AppConfigTests
         config.Live2D.IdleMotionGroups = new List<Live2DMotionEntry>
         {
             new("Animation/IDLE"),
-            new("Animation/Swim", loop: false)
+            new("Animation/Swim")
         };
 
         var resolved = config.Live2D.ResolveMotionMap(null);
         Assert.Equal(new[] { "Animation/IDLE", "Animation/Swim" }, Groups(resolved.IdleGroups));
-        Assert.False(resolved.IdleGroups[1].Loop);
+        // 静默循环层一律按循环处理。
+        Assert.All(resolved.IdleGroups, entry => Assert.True(entry.Loop));
+        Assert.Empty(resolved.IdlePool);
         Assert.Equal("Animation/IDLE", resolved.IdleGroup);
 
         var defaultResolved = AppConfig.CreateDefault().Live2D.ResolveMotionMap(null);
@@ -507,7 +509,7 @@ public sealed class AppConfigTests
     public void MotionEntries_SerializeOmitsAutoLoop()
     {
         var config = AppConfig.CreateDefault();
-        config.Live2D.IdleMotionGroups = new List<Live2DMotionEntry>
+        config.Live2D.SpeakingMotionGroups = new List<Live2DMotionEntry>
         {
             new("Animation/IDLE"),
             new("Animation/举手切默认手", loop: false)
@@ -520,11 +522,138 @@ public sealed class AppConfigTests
         // 自动模式不写 loop；非 ASCII 组名会被 JSON 转义，回读校验而不是直接匹配字符串。
         var roundTrip = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
         Assert.NotNull(roundTrip);
-        var entries = roundTrip!.Live2D.IdleMotionGroups;
+        var entries = roundTrip!.Live2D.SpeakingMotionGroups;
         Assert.NotNull(entries);
         Assert.Equal(new[] { "Animation/IDLE", "Animation/举手切默认手" }, Groups(entries));
         Assert.Null(entries[0].Loop);
         Assert.False(entries[1].Loop);
+    }
+
+    [Fact]
+    public void IdlePool_DeserializeAndNormalize()
+    {
+        const string json = """
+        {
+          "live2D": {
+            "idlePoolGroups": [
+              { "group": " A ", "weight": 99, "hold": true },
+              { "group": "a", "weight": 1 },
+              { "group": "B", "weight": 0 }
+            ],
+            "idlePoolMinSeconds": 1,
+            "idlePoolMaxSeconds": 9999
+          }
+        }
+        """;
+
+        var config = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
+        Assert.NotNull(config);
+        config!.Normalize();
+
+        var pool = config.Live2D.IdlePoolGroups;
+        Assert.NotNull(pool);
+        Assert.Equal(new[] { "A", "B" }, pool!.Select(entry => entry.Group));
+        Assert.Equal(10, pool[0].Weight);
+        Assert.True(pool[0].Hold);
+        Assert.Equal(1, pool[1].Weight);
+        Assert.Equal(2, config.Live2D.IdlePoolMinSeconds);
+        Assert.Equal(3600, config.Live2D.IdlePoolMaxSeconds);
+    }
+
+    [Fact]
+    public void Triggers_DeserializeAndNormalize()
+    {
+        const string json = """
+        {
+          "live2D": {
+            "triggerActions": [
+              { "group": "Wave", "event": "start", "hold": true },
+              { "group": "Wave", "event": "start", "hold": false },
+              { "group": "Nod", "event": "unknown", "weight": 50 }
+            ]
+          }
+        }
+        """;
+
+        var config = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
+        Assert.NotNull(config);
+        config!.Normalize();
+
+        var triggers = config.Live2D.TriggerActions;
+        Assert.NotNull(triggers);
+        Assert.Equal(2, triggers!.Count);
+        Assert.Equal("Wave", triggers[0].Group);
+        Assert.Equal(Live2DTriggerEvents.Start, triggers[0].Event);
+        Assert.True(triggers[0].Hold);
+        Assert.Equal("Nod", triggers[1].Group);
+        Assert.Equal(Live2DTriggerEvents.Tap, triggers[1].Event);
+        Assert.Equal(10, triggers[1].Weight);
+    }
+
+    [Fact]
+    public void Normalize_MigratesOneShotIdleEntriesToPool()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.IdleMotionGroups = new List<Live2DMotionEntry>
+        {
+            new("Animation/IDLE"),
+            new("Animation/举手", loop: false)
+        };
+        config.Normalize();
+
+        var silent = config.Live2D.IdleMotionGroups;
+        Assert.NotNull(silent);
+        Assert.Equal(new[] { "Animation/IDLE" }, Groups(silent));
+        Assert.True(silent![0].Loop);
+
+        var pool = config.Live2D.IdlePoolGroups;
+        Assert.NotNull(pool);
+        Assert.Equal(new[] { "Animation/举手" }, pool!.Select(entry => entry.Group));
+        Assert.False(pool[0].Hold);
+    }
+
+    [Fact]
+    public void ResolveMotionMap_IncludesIdlePoolAndTriggers()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.IdlePoolGroups = new List<Live2DPoolEntry> { new("PoolA", 3) };
+        config.Live2D.IdlePoolMinSeconds = 5;
+        config.Live2D.IdlePoolMaxSeconds = 20;
+        config.Live2D.TriggerActions = new List<Live2DTriggerEntry>
+        {
+            new("Wave", Live2DTriggerEvents.Tap, hold: true)
+        };
+        config.Live2D.MotionByModel["E:\\models\\a"] = new Live2DMotionMap
+        {
+            IdlePool = new List<Live2DPoolEntry> { new("ModelPool", 2, hold: true) },
+            IdlePoolMinSeconds = 30,
+            IdlePoolMaxSeconds = 60,
+            Triggers = new List<Live2DTriggerEntry> { new("ModelTap", Live2DTriggerEvents.Start) }
+        };
+        config.Normalize();
+
+        var model = config.Live2D.ResolveMotionMap("E:\\models\\a");
+        Assert.Equal(new[] { "ModelPool" }, model.IdlePool.Select(entry => entry.Group));
+        Assert.True(model.IdlePool[0].Hold);
+        Assert.Equal(30, model.IdlePoolMinSeconds);
+        Assert.Equal(60, model.IdlePoolMaxSeconds);
+        Assert.Equal(new[] { "ModelTap" }, model.Triggers.Select(entry => entry.Group));
+        Assert.Equal(Live2DTriggerEvents.Start, model.Triggers[0].Event);
+
+        var global = config.Live2D.ResolveMotionMap("E:\\models\\b");
+        Assert.Equal(new[] { "PoolA" }, global.IdlePool.Select(entry => entry.Group));
+        Assert.Equal(5, global.IdlePoolMinSeconds);
+        Assert.Equal(new[] { "Wave" }, global.Triggers.Select(entry => entry.Group));
+        Assert.True(global.Triggers[0].Hold);
+    }
+
+    [Fact]
+    public void PoolInterval_ClampsAndDefaults()
+    {
+        Assert.Equal((15, 45), Live2DConfig.NormalizePoolInterval(0, 0));
+        Assert.Equal((2, 2), Live2DConfig.NormalizePoolInterval(1, 1));
+        Assert.Equal((90, 90), Live2DConfig.NormalizePoolInterval(90, 30));
+        Assert.Equal((600, 3600), Live2DConfig.NormalizePoolInterval(900, 9000));
     }
 
     private static string[] Groups(IEnumerable<Live2DMotionEntry>? entries) =>

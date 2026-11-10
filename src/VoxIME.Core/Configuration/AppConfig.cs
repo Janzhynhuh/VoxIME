@@ -250,11 +250,21 @@ public sealed class AppConfig
         Live2D.ModelLibraryDirectory = string.IsNullOrWhiteSpace(Live2D.ModelLibraryDirectory)
             ? null
             : Live2D.ModelLibraryDirectory.Trim();
-        // 待机动作组也支持多选：默认值 "Idle" 不种入列表（空列表 = 自动找名字含 idle 的组，
-        // 兼容模型没有 Idle 组的情况），旧字段回写 "Idle" 供旧版本读取。
-        Live2D.IdleMotionGroups = NormalizeStoredMotionEntries(
+        // 待机动作拆成两类角色：静默循环（IdleMotionGroups）与待机随机池（IdlePoolGroups）。
+        // 默认值 "Idle" 不种入列表（空列表 = 自动找名字含 idle 的组，兼容模型没有 Idle 组的情况）；
+        // 旧配置里显式“单次保持”的待机条目迁移到随机池，默认播完回待机。
+        var silentIdle = Live2DConfig.SplitIdleRoles(
             Live2D.IdleMotionGroups,
-            Live2DConfig.IsDefaultIdleGroup(Live2D.IdleMotionGroup) ? null : Live2D.IdleMotionGroup);
+            Live2DConfig.IsDefaultIdleGroup(Live2D.IdleMotionGroup) ? null : Live2D.IdleMotionGroup,
+            Live2D.IdlePoolGroups,
+            out var idlePool);
+        Live2D.IdleMotionGroups = silentIdle.Count == 0 ? null : silentIdle;
+        Live2D.IdlePoolGroups = idlePool.Count == 0 ? null : idlePool;
+        var idleInterval = Live2DConfig.NormalizePoolInterval(Live2D.IdlePoolMinSeconds, Live2D.IdlePoolMaxSeconds);
+        Live2D.IdlePoolMinSeconds = idleInterval.Min;
+        Live2D.IdlePoolMaxSeconds = idleInterval.Max;
+        var triggers = Live2DConfig.NormalizeTriggers(Live2D.TriggerActions);
+        Live2D.TriggerActions = triggers.Count == 0 ? null : triggers;
         Live2D.IdleMotionGroup = Live2D.IdleMotionGroups?.FirstOrDefault()?.Group ?? "Idle";
 
         // 状态动作映射从单选升级为多选：新列表字段优先，旧单数字段作为兼容来源；
@@ -275,10 +285,18 @@ public sealed class AppConfig
                 continue;
             }
 
-            map.IdleGroups = Live2DConfig.NormalizeMotionEntries(
+            var mapSilent = Live2DConfig.SplitIdleRoles(
                 map.IdleGroups,
-                Live2DConfig.IsDefaultIdleGroup(map.IdleGroup) ? null : map.IdleGroup);
-            map.IdleGroup = map.IdleGroups.FirstOrDefault()?.Group ?? "Idle";
+                Live2DConfig.IsDefaultIdleGroup(map.IdleGroup) ? null : map.IdleGroup,
+                map.IdlePool,
+                out var mapPool);
+            map.IdleGroups = mapSilent;
+            map.IdlePool = mapPool;
+            var mapInterval = Live2DConfig.NormalizePoolInterval(map.IdlePoolMinSeconds, map.IdlePoolMaxSeconds);
+            map.IdlePoolMinSeconds = mapInterval.Min;
+            map.IdlePoolMaxSeconds = mapInterval.Max;
+            map.Triggers = Live2DConfig.NormalizeTriggers(map.Triggers);
+            map.IdleGroup = mapSilent.FirstOrDefault()?.Group ?? "Idle";
             map.Listening = Live2DConfig.NormalizeMotionEntries(map.Listening);
             map.Thinking = Live2DConfig.NormalizeMotionEntries(map.Thinking);
             map.Speaking = Live2DConfig.NormalizeMotionEntries(map.Speaking);
@@ -507,9 +525,21 @@ public sealed class Live2DConfig
     /// <summary>旧字段：待机动作组（单个）；仅为兼容旧配置保留，保存时同步为 <see cref="IdleMotionGroups"/> 的第一项。</summary>
     public string IdleMotionGroup { get; set; } = "Idle";
 
-    /// <summary>待机动作组（可多选，各自循环或单次保持；空=自动找名字含 idle 的组）。</summary>
+    /// <summary>静默循环动作组（持续播放，可多选叠加；空=自动找名字含 idle 的组）。</summary>
     [JsonConverter(typeof(MotionEntryListJsonConverter))]
     public List<Live2DMotionEntry>? IdleMotionGroups { get; set; }
+
+    /// <summary>待机随机池：每隔 IdlePoolMinSeconds..MaxSeconds 秒按权重随机播一个单次动作，播完回静默。</summary>
+    public List<Live2DPoolEntry>? IdlePoolGroups { get; set; }
+
+    /// <summary>待机随机池最小间隔（秒，默认 15）。</summary>
+    public int IdlePoolMinSeconds { get; set; } = 15;
+
+    /// <summary>待机随机池最大间隔（秒，默认 45）。</summary>
+    public int IdlePoolMaxSeconds { get; set; } = 45;
+
+    /// <summary>触发式单次动作（点击桌宠 / 模型加载时）。</summary>
+    public List<Live2DTriggerEntry>? TriggerActions { get; set; }
     public string? ListeningExpression { get; set; }
     public string? ThinkingExpression { get; set; }
     public string? SpeakingExpression { get; set; }
@@ -575,13 +605,20 @@ public sealed class Live2DConfig
         var key = (modelDirectory ?? "").Trim();
         if (key.Length > 0 && MotionByModel.TryGetValue(key, out var map) && map is not null)
         {
-            var idleGroups = NormalizeMotionEntries(
+            var mapSilent = SplitIdleRoles(
                 map.IdleGroups,
-                IsDefaultIdleGroup(map.IdleGroup) ? null : map.IdleGroup);
+                IsDefaultIdleGroup(map.IdleGroup) ? null : map.IdleGroup,
+                map.IdlePool,
+                out var mapPool);
+            var mapInterval = NormalizePoolInterval(map.IdlePoolMinSeconds, map.IdlePoolMaxSeconds);
             return new Live2DMotionMap
             {
-                IdleGroups = idleGroups,
-                IdleGroup = idleGroups.FirstOrDefault()?.Group ?? "Idle",
+                IdleGroups = mapSilent,
+                IdleGroup = mapSilent.FirstOrDefault()?.Group ?? "Idle",
+                IdlePool = mapPool,
+                IdlePoolMinSeconds = mapInterval.Min,
+                IdlePoolMaxSeconds = mapInterval.Max,
+                Triggers = NormalizeTriggers(map.Triggers),
                 Listening = NormalizeMotionEntries(map.Listening),
                 Thinking = NormalizeMotionEntries(map.Thinking),
                 Speaking = NormalizeMotionEntries(map.Speaking),
@@ -589,18 +626,126 @@ public sealed class Live2DConfig
             };
         }
 
-        var globalIdleGroups = NormalizeMotionEntries(
+        var globalSilent = SplitIdleRoles(
             IdleMotionGroups,
-            IsDefaultIdleGroup(IdleMotionGroup) ? null : IdleMotionGroup);
+            IsDefaultIdleGroup(IdleMotionGroup) ? null : IdleMotionGroup,
+            IdlePoolGroups,
+            out var globalPool);
+        var globalInterval = NormalizePoolInterval(IdlePoolMinSeconds, IdlePoolMaxSeconds);
         return new Live2DMotionMap
         {
-            IdleGroups = globalIdleGroups,
-            IdleGroup = globalIdleGroups.FirstOrDefault()?.Group ?? "Idle",
+            IdleGroups = globalSilent,
+            IdleGroup = globalSilent.FirstOrDefault()?.Group ?? "Idle",
+            IdlePool = globalPool,
+            IdlePoolMinSeconds = globalInterval.Min,
+            IdlePoolMaxSeconds = globalInterval.Max,
+            Triggers = NormalizeTriggers(TriggerActions),
             Listening = NormalizeMotionEntries(ListeningMotionGroups, ListeningMotionGroup),
             Thinking = NormalizeMotionEntries(ThinkingMotionGroups, ThinkingMotionGroup),
             Speaking = NormalizeMotionEntries(SpeakingMotionGroups, SpeakingMotionGroup),
             Error = NormalizeMotionEntries(ErrorMotionGroups, ErrorMotionGroup)
         };
+    }
+
+    /// <summary>随机池 / 触发动作的最大条目数。</summary>
+    public const int MaxPoolEntries = 8;
+
+    /// <summary>
+    /// 把待机条目拆成“静默循环”和“随机池”两类角色：显式单次（Loop=false）的条目迁移进随机池，
+    /// 静默条目一律按循环处理。返回静默循环列表（Loop=true）。
+    /// </summary>
+    public static List<Live2DMotionEntry> SplitIdleRoles(
+        List<Live2DMotionEntry>? idleEntries,
+        string? legacy,
+        List<Live2DPoolEntry>? poolEntries,
+        out List<Live2DPoolEntry> pool)
+    {
+        pool = NormalizeIdlePool(poolEntries);
+        var silent = new List<Live2DMotionEntry>();
+        foreach (var entry in NormalizeMotionEntries(idleEntries, legacy))
+        {
+            if (entry.Loop == false)
+            {
+                if (!pool.Any(item => string.Equals(item.Group, entry.Group, StringComparison.OrdinalIgnoreCase)))
+                {
+                    pool.Add(new Live2DPoolEntry(entry.Group));
+                }
+
+                continue;
+            }
+
+            silent.Add(new Live2DMotionEntry(entry.Group, true));
+        }
+
+        return silent;
+    }
+
+    /// <summary>规范化待机随机池：trim、去空、按组名去重、权重 1..10、最多 <see cref="MaxPoolEntries"/> 个。</summary>
+    public static List<Live2DPoolEntry> NormalizeIdlePool(List<Live2DPoolEntry>? values)
+    {
+        var result = new List<Live2DPoolEntry>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var value in values ?? Enumerable.Empty<Live2DPoolEntry>())
+        {
+            if (value is null || string.IsNullOrWhiteSpace(value.Group))
+            {
+                continue;
+            }
+
+            var group = value.Group.Trim();
+            if (result.Count >= MaxPoolEntries || !seen.Add(group))
+            {
+                continue;
+            }
+
+            result.Add(new Live2DPoolEntry
+            {
+                Group = group,
+                Weight = Math.Clamp(value.Weight, 1, 10),
+                Hold = value.Hold
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>规范化触发动作：trim、事件归一化、按事件+组名去重、权重 1..10、最多 <see cref="MaxPoolEntries"/> 个。</summary>
+    public static List<Live2DTriggerEntry> NormalizeTriggers(List<Live2DTriggerEntry>? values)
+    {
+        var result = new List<Live2DTriggerEntry>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var value in values ?? Enumerable.Empty<Live2DTriggerEntry>())
+        {
+            if (value is null || string.IsNullOrWhiteSpace(value.Group))
+            {
+                continue;
+            }
+
+            var group = value.Group.Trim();
+            var triggerEvent = Live2DTriggerEvents.Normalize(value.Event);
+            if (result.Count >= MaxPoolEntries || !seen.Add(triggerEvent + "|" + group))
+            {
+                continue;
+            }
+
+            result.Add(new Live2DTriggerEntry
+            {
+                Group = group,
+                Event = triggerEvent,
+                Hold = value.Hold,
+                Weight = Math.Clamp(value.Weight, 1, 10)
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>规范化随机池间隔：min 2..600 秒，max 不小于 min 且不超过 3600 秒；0 视为默认 15/45。</summary>
+    public static (int Min, int Max) NormalizePoolInterval(int minSeconds, int maxSeconds)
+    {
+        var min = minSeconds <= 0 ? 15 : Math.Clamp(minSeconds, 2, 600);
+        var max = maxSeconds <= 0 ? 45 : Math.Clamp(maxSeconds, min, 3600);
+        return (min, Math.Max(max, min));
     }
 
     /// <summary>默认值 / 空值 = “自动”，不种入多选列表（模型可能没有名为 Idle 的组）。</summary>
@@ -680,9 +825,19 @@ public sealed class Live2DMotionMap
     /// <summary>旧字段：待机动作组（单个）；仅为兼容旧配置保留。</summary>
     public string? IdleGroup { get; set; }
 
-    /// <summary>待机动作组（可多选，各自循环或单次保持；空=自动找名字含 idle 的组）。</summary>
+    /// <summary>静默循环动作组（持续播放，可多选叠加；空=自动找名字含 idle 的组）。</summary>
     [JsonConverter(typeof(MotionEntryListJsonConverter))]
     public List<Live2DMotionEntry> IdleGroups { get; set; } = new();
+
+    /// <summary>待机随机池（播完回静默；权重 1..10）。</summary>
+    public List<Live2DPoolEntry> IdlePool { get; set; } = new();
+
+    /// <summary>待机随机池触发间隔（秒）。</summary>
+    public int IdlePoolMinSeconds { get; set; } = 15;
+    public int IdlePoolMaxSeconds { get; set; } = 45;
+
+    /// <summary>触发式单次动作（点击桌宠 / 模型加载时）。</summary>
+    public List<Live2DTriggerEntry> Triggers { get; set; } = new();
 
     /// <summary>聆听状态叠加的动作组；空=自动同名匹配，<see cref="NoneMarker"/>=不播放。</summary>
     [JsonConverter(typeof(MotionEntryListJsonConverter))]

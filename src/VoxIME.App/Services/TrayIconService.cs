@@ -31,7 +31,8 @@ public sealed class TrayIconService : IDisposable
         Action openAbout,
         Action openLogs,
         Action exitRequested,
-        Action togglePetClickThrough)
+        Action togglePetClickThrough,
+        Action interact)
     {
         _controller = controller;
         _logger = logger;
@@ -47,6 +48,12 @@ public sealed class TrayIconService : IDisposable
 
         _pauseItem = new ToolStripMenuItem("暂停热键");
         _pauseItem.Click += (_, _) => RunOnUi(TogglePause);
+
+        var interactItem = new ToolStripMenuItem("互动一下")
+        {
+            ToolTipText = "触发一次「点击桌宠」动作（也可直接单击桌宠，需关闭点击穿透）"
+        };
+        interactItem.Click += (_, _) => RunOnUi(interact);
 
         _settingsItem = new ToolStripMenuItem("设置…") { Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold) };
         _settingsItem.Click += (_, _) => RunOnUi(openSettings);
@@ -74,6 +81,7 @@ public sealed class TrayIconService : IDisposable
         _menu.Items.Add(_live2DItem);
         _menu.Items.Add(_clickThroughItem);
         _menu.Items.Add(_pauseItem);
+        _menu.Items.Add(interactItem);
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(_settingsItem);
         _menu.Items.Add(historyItem);

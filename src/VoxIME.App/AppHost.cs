@@ -408,7 +408,8 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
                 OpenAbout,
                 OpenLogDirectory,
                 RequestExit,
-                TogglePetClickThrough)
+                TogglePetClickThrough,
+                () => Live2D.TriggerMotion("tap"))
             {
                 IsVisible = Config.Ui.ShowTrayIcon
             };

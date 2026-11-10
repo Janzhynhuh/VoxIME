@@ -268,6 +268,10 @@ internal sealed class Live2DWebHost : IDisposable
 
     public void SendMouth(double value) => Send(new { type = "setMouth", value });
 
+    /// <summary>触发式动作事件（tap / start）：由托盘、点击桌宠或设置页试播调用。</summary>
+    public void SendTriggerMotion(string eventName) =>
+        Send(new { type = "triggerMotion", @event = eventName });
+
     public void SendGaze(double x, double y) => Send(new { type = "setGaze", x, y });
 
     public void SendBubble(string? text) => Send(new { type = "setBubble", text });
@@ -281,6 +285,10 @@ internal sealed class Live2DWebHost : IDisposable
         double offsetY,
         string idleMotionGroup,
         IReadOnlyList<Live2DMotionEntry> idleMotionGroups,
+        IReadOnlyList<Live2DPoolEntry> idlePool,
+        int idlePoolMinSeconds,
+        int idlePoolMaxSeconds,
+        IReadOnlyList<Live2DTriggerEntry> triggers,
         bool showBubble,
         IReadOnlyDictionary<string, string?> expressions,
         IReadOnlyDictionary<string, IReadOnlyList<Live2DMotionEntry>> motions,
@@ -298,6 +306,14 @@ internal sealed class Live2DWebHost : IDisposable
             idleMotionGroup,
             idleMotionGroups = (idleMotionGroups ?? Array.Empty<Live2DMotionEntry>())
                 .Select(item => new { group = item.Group, loop = item.EffectiveLoop })
+                .ToArray(),
+            idlePool = (idlePool ?? Array.Empty<Live2DPoolEntry>())
+                .Select(item => new { group = item.Group, weight = item.Weight, hold = item.Hold })
+                .ToArray(),
+            idlePoolMinSeconds,
+            idlePoolMaxSeconds,
+            triggers = (triggers ?? Array.Empty<Live2DTriggerEntry>())
+                .Select(item => new { group = item.Group, @event = item.Event, hold = item.Hold, weight = item.Weight })
                 .ToArray(),
             showBubble,
             expressions,

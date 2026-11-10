@@ -4,7 +4,53 @@
              xmlns:inf="clr-namespace:VoxIME.App.Infrastructure">
 
     <UserControl.Resources>
-        <!-- 动作组复选项：勾选 + 播放模式（循环 / 播一次并保持末帧） -->
+        <!-- 静默循环：只勾选（一律循环） -->
+        <DataTemplate x:Key="MotionGroupSimpleRow">
+            <CheckBox Content="{Binding Group}" Margin="0,1"
+                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+        </DataTemplate>
+
+        <!-- 待机随机池：勾选 + 权重 + 是否保持末帧 -->
+        <DataTemplate x:Key="MotionPoolRow">
+            <Grid Margin="0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="46" />
+                    <ColumnDefinition Width="96" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Grid.Column="0" Content="{Binding Group}" VerticalAlignment="Center"
+                          IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                <TextBox Grid.Column="1" Margin="6,0,0,0" Height="24" VerticalContentAlignment="Center"
+                         Text="{Binding Weight, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         ToolTip="随机权重 1-10，越大越容易被抽中" />
+                <CheckBox Grid.Column="2" Content="保持末帧" VerticalAlignment="Center" Margin="8,0,0,0"
+                          IsChecked="{Binding Hold, Mode=TwoWay}"
+                          ToolTip="勾选：播完停在最后姿势；不勾：播完回到静默循环姿势" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- 触发动作：勾选 + 事件（点击/加载） + 是否保持末帧 -->
+        <DataTemplate x:Key="MotionTriggerRow">
+            <Grid Margin="0,1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="104" />
+                    <ColumnDefinition Width="96" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Grid.Column="0" Content="{Binding Group}" VerticalAlignment="Center"
+                          IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                <ComboBox Grid.Column="1" Margin="6,0,0,0" Height="26"
+                          ItemsSource="{Binding EventChoices}"
+                          SelectedItem="{Binding TriggerEvent, Mode=TwoWay}"
+                          DisplayMemberPath="Label"
+                          ToolTip="点击桌宠（需关闭点击穿透，或从托盘「互动一下」触发）/ 模型加载时" />
+                <CheckBox Grid.Column="2" Content="保持末帧" VerticalAlignment="Center" Margin="8,0,0,0"
+                          IsChecked="{Binding Hold, Mode=TwoWay}"
+                          ToolTip="勾选：播完停在最后姿势；不勾：播完回到待机" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- 状态动作：勾选 + 模式（循环 / 进入时播一次） -->
         <DataTemplate x:Key="MotionGroupOptionRow">
             <Grid Margin="0,1">
                 <Grid.ColumnDefinitions>
@@ -17,7 +63,7 @@
                           ItemsSource="{Binding ModeChoices}"
                           SelectedItem="{Binding SelectedMode, Mode=TwoWay}"
                           DisplayMemberPath="Label"
-                          ToolTip="循环：持续播放；单次保持：播一次后保持最后姿势（适合举手/切换动作）" />
+                          ToolTip="循环：状态期间持续播放；进入时播一次：只播一遍，保持到状态结束" />
             </Grid>
         </DataTemplate>
     </UserControl.Resources>
@@ -273,21 +319,81 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="60" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="待机动作组（可多选叠加）" Style="{StaticResource FieldLabel}"
+                        <TextBlock Text="静默循环（持续播放，可多选叠加）" Style="{StaticResource FieldLabel}"
                                    VerticalAlignment="Center" />
                         <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
                                 Command="{Binding PreviewIdleMotionCommand}" />
                     </Grid>
-                    <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer MaxHeight="90" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   IsEnabled="{Binding IdleMotion}">
                         <ItemsControl ItemsSource="{Binding IdleMotionMapping.Options}"
-                                      ItemTemplate="{StaticResource MotionGroupOptionRow}" />
+                                      ItemTemplate="{StaticResource MotionGroupSimpleRow}" />
                     </ScrollViewer>
                     <TextBlock Text="{Binding IdleMotionMapping.Summary}" Style="{StaticResource HintText}"
                                Margin="0,6,0,0" TextWrapping="Wrap" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap"
-                               Text="勾选多个时同时叠加播放（各自循环）；一个都不勾 = 自动使用名字含 idle 的动作组。待机层在状态动作与预览之下，切状态时不会被覆盖掉。" />
+                               Text="像 IDLE 这种一直在播的基础动作放这里；一个都不勾 = 自动使用名字含 idle 的动作组。" />
+
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="60" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="待机随机池（隔一段时间随机播一个小动作）" Style="{StaticResource FieldLabel}"
+                                   VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
+                                Command="{Binding PreviewIdlePoolCommand}" />
+                    </Grid>
+                    <Grid Margin="0,6,0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="58" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="58" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="每隔" Style="{StaticResource ValueText}" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="1" Margin="6,0" Height="26" VerticalContentAlignment="Center"
+                                 Text="{Binding IdlePoolMinSeconds, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                 ToolTip="最小间隔（秒，2-600）" />
+                        <TextBlock Grid.Column="2" Text="~" Style="{StaticResource ValueText}" VerticalAlignment="Center" />
+                        <TextBox Grid.Column="3" Margin="6,0" Height="26" VerticalContentAlignment="Center"
+                                 Text="{Binding IdlePoolMaxSeconds, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                 ToolTip="最大间隔（秒，2-3600）" />
+                        <TextBlock Grid.Column="4" Text="秒随机播放一个（播完默认回静默）"
+                                   Style="{StaticResource HintText}" VerticalAlignment="Center" />
+                    </Grid>
+                    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  IsEnabled="{Binding IdleMotion}">
+                        <ItemsControl ItemsSource="{Binding IdlePoolMapping.Options}"
+                                      ItemTemplate="{StaticResource MotionPoolRow}" />
+                    </ScrollViewer>
+                    <TextBlock Text="{Binding IdlePoolMapping.Summary}" Style="{StaticResource HintText}"
+                               Margin="0,6,0,0" TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                               Text="适合转头、伸懒腰这类小动作；权重越大越容易被抽中。默认播完回到静默姿势，需要定住动作的勾「保持末帧」。" />
+
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="60" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="触发动作（点击桌宠 / 模型加载时）" Style="{StaticResource FieldLabel}"
+                                   VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="试播"
+                                Command="{Binding PreviewTriggerCommand}" />
+                    </Grid>
+                    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding TriggerMapping.Options}"
+                                      ItemTemplate="{StaticResource MotionTriggerRow}" />
+                    </ScrollViewer>
+                    <TextBlock Text="{Binding TriggerMapping.Summary}" Style="{StaticResource HintText}"
+                               Margin="0,6,0,0" TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                               Text="点击桌宠需要在设置里关闭「点击穿透」，否则点击会穿到下层窗口；也可以从托盘菜单「互动一下」触发。未配置时点击会尝试播放模型里名字含 tap 的动作组。" />
 
                     <StackPanel Margin="0,12,0,0">
                         <TextBlock Text="兜底形象主题" Style="{StaticResource FieldLabel}" />
@@ -302,7 +408,7 @@
                 <StackPanel>
                     <TextBlock Text="状态动作映射（可选）" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10" TextWrapping="Wrap"
-                               Text="勾选多个动作组时，切到该状态会把它们同时叠加播放（每个动作组占一条并行动作层）；一个都不勾 = 自动使用与状态同名的动作组；勾「不播放」= 该状态不触发动作。最多同时叠加 4 个动作组。动作组来自 model3.json 和 Animation 文件夹，可随时点“预览”在桌宠上试播；预览只播一遍，结束后停 3 秒再恢复默认动作。" />
+                               Text="状态 = 一个特殊的触发源：切到该状态时，每个勾选的动作组各占一条并行动作层。模式选「循环」= 状态期间持续播放；选「进入时播一次」= 只播一遍并保持到状态结束（适合举手/竖手指这类切换动作）。一个都不勾 = 自动使用与状态同名的动作组；勾「不播放」= 该状态不触发动作。最多同时叠加 4 个动作组。预览只播一遍，结束后停 3 秒再恢复待机。" />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />

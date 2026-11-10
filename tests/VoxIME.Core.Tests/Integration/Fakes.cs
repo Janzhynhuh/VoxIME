@@ -227,6 +227,7 @@ internal sealed class FakeLive2DController : ILive2DController
     public List<Live2DState> States { get; } = new();
     public List<string> PreviewedMotions { get; } = new();
     public List<string> PreviewedExpressions { get; } = new();
+    public List<string> TriggeredEvents { get; } = new();
     public Live2DConfig? Config { get; private set; }
     public bool Initialized { get; private set; }
 
@@ -289,6 +290,14 @@ internal sealed class FakeLive2DController : ILive2DController
         foreach (var group in motionGroups)
         {
             PreviewMotion(group);
+        }
+    }
+
+    public void TriggerMotion(string eventName)
+    {
+        if (!string.IsNullOrWhiteSpace(eventName))
+        {
+            TriggeredEvents.Add(eventName);
         }
     }
 

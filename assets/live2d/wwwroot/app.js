@@ -43,6 +43,10 @@
     offsetY: 0.0,
     idleMotionGroup: 'Idle',
     idleMotionGroups: [],
+    idlePool: [],
+    idlePoolMinSeconds: 15,
+    idlePoolMaxSeconds: 45,
+    triggers: [],
     showBubble: true,
     bubbleInPage: isPreview // 嵌入时气泡由 WPF 层渲染，避免重复
   };
@@ -84,6 +88,13 @@
   var idleTokens = [];
   var idleLayerLoops = [];
   var idlePoseSnapshot = null;
+  var idlePoolTimer = null;
+  var idlePoolSignature = '';
+  var gestureTokens = [];
+  var gesturePending = [];
+  var lastGesture = null;
+  var lastTrigger = null;
+  var lastGestureError = '';
   var IDLE_MANAGED_GROUP = '__voxime_idle_managed__';
   var IDLE_DISABLED_GROUP = '__voxime_idle_disabled__';
   var modelBaseline = null;
@@ -100,11 +111,14 @@
   // 层按数组顺序更新：idle 最低、state 覆盖 idle、preview 最高。
   // 眨眼作为程序层在 beforeModelUpdate 最后覆盖眼睛参数。
   var MAX_IDLE_LAYERS = 4;
+  var MAX_GESTURE_LAYERS = 2;
   var MAX_STATE_LAYERS = 4;
   var MAX_PREVIEW_LAYERS = 4;
   var motionLayers = {
     idle: [],
     idleGroups: [],
+    gesture: [],
+    gestureGroups: [],
     state: [],
     stateGroups: [],
     preview: [],
@@ -423,7 +437,7 @@
     return labels.join(', ');
   }
 
-  /** 重建待机层：勾选的每个待机组各占一条层；循环组持续播放，单次组播一次后保持末帧。 */
+  /** 重建静默循环层：勾选的每个待机组各占一条层持续循环；待机随机池/触发动作走 gesture 层。 */
   function setupIdleLayers() {
     if (!model) return [];
     var mm = model.internalModel.motionManager;
@@ -452,7 +466,8 @@
         idleGroup = nextGroups[0].name;
         idleMotionActive = true;
         for (var i = 0; i < nextGroups.length && i < motionLayers.idle.length; i++) {
-          startIdleLayer(i, nextGroups[i].name, nextGroups[i].loop);
+          // 静默层一律循环；单次动作现在归随机池/触发动作。
+          startIdleLayer(i, nextGroups[i].name, true);
         }
       } else {
         mm.groups.idle = IDLE_DISABLED_GROUP;
@@ -467,6 +482,8 @@
     } catch (e) {
       log('待机动作设置失败（模型可能无动作组）', e);
     }
+    stopAllGestureLayers();
+    scheduleIdlePool();
     log('动作组: ' + groups.join(', ') + ' / 待机组: ' + (idleLayerLabel() || '无'));
     return groups;
   }
@@ -522,6 +539,230 @@
       stopIdleLayer(i);
     }
   }
+
+  // ---------------- 手势 / 互动动作（待机随机池 + 触发动作） ----------------
+  function isLayerPlaying(kind, slot) {
+    var manager = (motionLayers[kind] || [])[slot];
+    return !!(manager && manager.playing);
+  }
+
+  function clearIdlePoolTimer() {
+    if (idlePoolTimer) {
+      clearTimeout(idlePoolTimer);
+      idlePoolTimer = null;
+    }
+  }
+
+  /** 排下一次待机随机动作；只在待机状态且开启“待机动作”时生效。 */
+  function scheduleIdlePool(delayMs) {
+    clearIdlePoolTimer();
+    if (!model || !config.idleMotion || live.state !== 'idle') return;
+    if (!(config.idlePool || []).length) return;
+    var min = Math.max(1, config.idlePoolMinSeconds || 15);
+    var max = Math.max(min, config.idlePoolMaxSeconds || 45);
+    var delay = typeof delayMs === 'number'
+      ? Math.max(0, delayMs)
+      : Math.round((min + Math.random() * (max - min)) * 1000);
+    idlePoolTimer = setTimeout(function () {
+      idlePoolTimer = null;
+      playPoolGesture();
+    }, delay);
+  }
+
+  function pickWeighted(entries) {
+    var list = entries || [];
+    var total = 0;
+    for (var i = 0; i < list.length; i++) {
+      total += Math.max(1, list[i].weight || 1);
+    }
+    if (total <= 0) return null;
+    var roll = Math.random() * total;
+    for (var j = 0; j < list.length; j++) {
+      roll -= Math.max(1, list[j].weight || 1);
+      if (roll <= 0) return list[j];
+    }
+    return list[list.length - 1];
+  }
+
+  function findGroupByKeyword(keyword) {
+    var groups = modelGroups && modelGroups.length
+      ? modelGroups
+      : Object.keys((model && model.internalModel && model.internalModel.motionManager
+        ? model.internalModel.motionManager.definitions : {}) || {});
+    for (var i = 0; i < groups.length; i++) {
+      if (groups[i].toLowerCase().indexOf(keyword) >= 0) return groups[i];
+    }
+    return null;
+  }
+
+  /** 结束一条手势层：清理监听/兜底计时器，可选恢复播前姿势。 */
+  function finishGesture(slot, token) {
+    if (token !== gestureTokens[slot]) return;
+    var pending = gesturePending[slot];
+    gesturePending[slot] = null;
+    gestureTokens[slot] = token + 1;
+    var manager = (motionLayers.gesture || [])[slot];
+    if (pending) {
+      if (pending.timer) clearTimeout(pending.timer);
+      if (manager && typeof manager.off === 'function') {
+        try { manager.off('motionFinish', pending.onFinish); } catch (e) { /* ignore */ }
+      }
+    }
+    if (manager) {
+      try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
+    }
+    if (motionLayers.gestureGroups) motionLayers.gestureGroups[slot] = null;
+    if (pending && !pending.hold && pending.snapshot) {
+      applyPoseSnapshot(pending.snapshot);
+    }
+    scheduleIdlePool();
+  }
+
+  function stopGestureLayer(slot) {
+    var pending = gesturePending[slot];
+    gesturePending[slot] = null;
+    gestureTokens[slot] = (gestureTokens[slot] || 0) + 1;
+    var manager = (motionLayers.gesture || [])[slot];
+    if (pending) {
+      if (pending.timer) clearTimeout(pending.timer);
+      if (manager && typeof manager.off === 'function') {
+        try { manager.off('motionFinish', pending.onFinish); } catch (e) { /* ignore */ }
+      }
+    }
+    if (motionLayers.gestureGroups) motionLayers.gestureGroups[slot] = null;
+    if (manager) {
+      try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function stopAllGestureLayers() {
+    var managers = motionLayers.gesture || [];
+    for (var i = 0; i < managers.length; i++) {
+      stopGestureLayer(i);
+    }
+  }
+
+  /**
+   * 在 gesture 层播一个单次动作：hold=false 时先记录姿势快照，播完恢复（回静默/回待机）；
+   * hold=true 时停在最后一帧。返回是否成功启动。
+   */
+  function startGesture(entry, source) {
+    if (!model || !entry) return false;
+    var name = String(entry.group || entry.name || '').trim();
+    if (!name) return false;
+    var managers = motionLayers.gesture || [];
+    if (!managers.length) return false;
+    var slot = -1;
+    for (var i = 0; i < managers.length; i++) {
+      if (!isLayerPlaying('gesture', i)) { slot = i; break; }
+    }
+    if (slot < 0) { slot = 0; stopGestureLayer(0); }
+    var token = (gestureTokens[slot] || 0) + 1;
+    gestureTokens[slot] = token;
+    var hold = entry.hold === true;
+    var snapshot = hold ? null : capturePoseSnapshot();
+    var manager = managers[slot];
+    motionLayers.gestureGroups[slot] = name;
+    lastGesture = { group: name, source: source || 'gesture', hold: hold };
+    lastGestureError = '';
+    clearIdlePoolTimer();
+
+    // 并行 MotionManager.startMotion 的 Promise 只表示“是否成功启动”，不表示播放结束；
+    // 结束要监听 motionFinish，另加 duration 兜底（某些动作没有 finish 事件）。
+    var pending = { token: token, hold: hold, snapshot: snapshot, timer: null, onFinish: null };
+    pending.onFinish = function () { finishGesture(slot, token); };
+    gesturePending[slot] = pending;
+    if (typeof manager.once === 'function') {
+      try { manager.once('motionFinish', pending.onFinish); } catch (e) { /* ignore */ }
+    }
+
+    var started = null;
+    try {
+      manager.stopAllMotions();
+      // 手势层必须用 FORCE：状态层可能是 FORCE，普通优先级会被引擎拒绝或覆盖。
+      started = manager.startMotion(name, 0, 3, { loop: false });
+    } catch (e) {
+      lastGestureError = String((e && e.message) || e);
+      log('手势动作启动失败（忽略）: ' + name, e);
+      stopGestureLayer(slot);
+      scheduleIdlePool();
+      return false;
+    }
+    if (!started) {
+      lastGestureError = 'startMotion 返回空';
+      stopGestureLayer(slot);
+      scheduleIdlePool();
+      return false;
+    }
+
+    if (typeof started.then === 'function') {
+      started.then(function (ok) {
+        if (ok === false) {
+          lastGestureError = '播放返回 false';
+          log('手势动作无法播放，已跳过: ' + name);
+          finishGesture(slot, token);
+        }
+      }).catch(function (err) {
+        lastGestureError = String((err && err.message) || err);
+        log('手势动作启动失败（忽略）: ' + name, err);
+        finishGesture(slot, token);
+      });
+    }
+
+    var durationMs = 5000;
+    try {
+      var definitions = (model.internalModel.motionManager.definitions || {})[name];
+      if (Array.isArray(definitions) && definitions[0] && typeof definitions[0].Duration === 'number') {
+        durationMs = definitions[0].Duration * 1000;
+      }
+    } catch (e) { durationMs = 5000; }
+    pending.timer = setTimeout(function () {
+      finishGesture(slot, token);
+    }, Math.max(1500, durationMs + 800));
+    return true;
+  }
+
+  function playPoolGesture() {
+    if (!model || !config.idleMotion || live.state !== 'idle') return;
+    var entry = pickWeighted(config.idlePool);
+    if (!entry) {
+      scheduleIdlePool();
+      return;
+    }
+    if (!startGesture(entry, 'idlePool')) {
+      scheduleIdlePool();
+      return;
+    }
+    sendHost({
+      type: 'debug',
+      message: '待机随机动作：' + entry.group + (entry.hold ? '（保持）' : '（回待机）')
+    });
+  }
+
+  /** 触发式动作：tap（点击桌宠/托盘「互动一下」）或 start（模型加载后）。 */
+  function triggerMotion(eventName) {
+    if (!model) return false;
+    var name = String(eventName || 'tap').toLowerCase();
+    var candidates = [];
+    var triggers = config.triggers || [];
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].event === name) candidates.push(triggers[i]);
+    }
+    var entry = pickWeighted(candidates);
+    if (!entry && name === 'tap') {
+      // 模型约定回退：名字含 tap 的动作组（Cubism 的 TapBody 惯例）。
+      var fallback = findGroupByKeyword('tap');
+      if (fallback) entry = { group: fallback, weight: 1, hold: false };
+    }
+    if (!entry) {
+      sendHost({ type: 'debug', message: '触发动作（' + name + '）：未配置且无回退组' });
+      return false;
+    }
+    lastTrigger = { event: name, group: entry.group };
+    sendHost({ type: 'debug', message: '触发动作：' + name + ' -> ' + entry.group });
+    return startGesture({ group: entry.group, hold: entry.hold === true, weight: entry.weight || 1 }, 'trigger:' + name);
+  }
+
 
   /** 记录当前参数值与部件透明度，可作为姿势快照（基线 / 离开待机时的姿势）。 */
   function capturePoseSnapshot() {
@@ -638,6 +879,8 @@
   function setupMotionLayers() {
     motionLayers.idle = [];
     motionLayers.idleGroups = [];
+    motionLayers.gesture = [];
+    motionLayers.gestureGroups = [];
     motionLayers.state = [];
     motionLayers.stateGroups = [];
     motionLayers.preview = [];
@@ -645,28 +888,36 @@
     motionLayers.ready = false;
     idleTokens = [];
     idleLayerLoops = [];
+    gestureTokens = [];
+    gesturePending = [];
+    lastGesture = null;
+    lastGestureError = '';
     idleSignature = '';
     idlePoseSnapshot = null;
     if (!model || !model.internalModel) return;
     try {
-      var total = MAX_IDLE_LAYERS + MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS;
+      var total = MAX_IDLE_LAYERS + MAX_GESTURE_LAYERS + MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS;
       if (typeof model.internalModel.extendParallelMotionManager === 'function') {
         // 该 API 的语义是“扩展到 N 条”（源码里 for(; length < n;) push(...)），重复调用不会膨胀。
         model.internalModel.extendParallelMotionManager(total);
       }
       var managers = model.internalModel.parallelMotionManager || [];
+      var stateStart = MAX_IDLE_LAYERS + MAX_GESTURE_LAYERS;
       motionLayers.idle = managers.slice(0, MAX_IDLE_LAYERS);
-      motionLayers.state = managers.slice(MAX_IDLE_LAYERS, MAX_IDLE_LAYERS + MAX_STATE_LAYERS);
+      motionLayers.gesture = managers.slice(MAX_IDLE_LAYERS, stateStart);
+      motionLayers.state = managers.slice(stateStart, stateStart + MAX_STATE_LAYERS);
       motionLayers.preview = managers.slice(
-        MAX_IDLE_LAYERS + MAX_STATE_LAYERS,
-        MAX_IDLE_LAYERS + MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS);
+        stateStart + MAX_STATE_LAYERS,
+        stateStart + MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS);
       motionLayers.idleGroups = new Array(motionLayers.idle.length).fill(null);
+      motionLayers.gestureGroups = new Array(motionLayers.gesture.length).fill(null);
       motionLayers.stateGroups = new Array(motionLayers.state.length).fill(null);
       motionLayers.previewGroups = new Array(motionLayers.preview.length).fill(null);
       idleLayerLoops = new Array(motionLayers.idle.length).fill(false);
+      gestureTokens = new Array(motionLayers.gesture.length).fill(0);
       // 每个并行层都可能在某次动作播完后自动去播 Idle 组；统一改成不存在的 sentinel，
       // 否则单次动作刚播完就会被同层的 Idle 动作盖掉，“保持末帧”失效。
-      var allManagers = motionLayers.idle.concat(motionLayers.state, motionLayers.preview);
+      var allManagers = motionLayers.idle.concat(motionLayers.gesture, motionLayers.state, motionLayers.preview);
       for (var mi = 0; mi < allManagers.length; mi++) {
         try {
           if (allManagers[mi] && allManagers[mi].groups) {
@@ -675,6 +926,7 @@
         } catch (e) { /* ignore */ }
       }
       motionLayers.ready = motionLayers.idle.length > 0
+        && motionLayers.gesture.length > 0
         && motionLayers.state.length > 0
         && motionLayers.preview.length > 0;
     } catch (e) {
@@ -684,6 +936,7 @@
     sendHost({
       type: 'debug',
       message: '动作层：idle=' + motionLayers.idle.length
+        + ', gesture=' + motionLayers.gesture.length
         + ', state=' + motionLayers.state.length + ', preview=' + motionLayers.preview.length
     });
   }
@@ -790,6 +1043,56 @@
       names.push(entries[i].name);
     }
     return names;
+  }
+
+  /** 归一化待机随机池：[{group, weight, hold}]，权重 1..10、去重、最多 8 个。 */
+  function normalizePoolEntries(value) {
+    var list = Object.prototype.toString.call(value) === '[object Array]' ? value : [];
+    var result = [];
+    var seen = {};
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      var group = item && item.group != null ? String(item.group).trim() : '';
+      if (!group) continue;
+      var key = group.toLowerCase();
+      if (seen[key]) continue;
+      seen[key] = true;
+      var weight = parseInt(item.weight, 10);
+      if (isNaN(weight)) weight = 1;
+      result.push({
+        group: group,
+        weight: Math.max(1, Math.min(10, weight)),
+        hold: item.hold === true
+      });
+      if (result.length >= 8) break;
+    }
+    return result;
+  }
+
+  /** 归一化触发动作：[{group, event, weight, hold}]，事件只保留 tap/start。 */
+  function normalizeTriggerEntries(value) {
+    var list = Object.prototype.toString.call(value) === '[object Array]' ? value : [];
+    var result = [];
+    var seen = {};
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      var group = item && item.group != null ? String(item.group).trim() : '';
+      if (!group) continue;
+      var eventName = item.event === 'start' ? 'start' : 'tap';
+      var key = eventName + '|' + group.toLowerCase();
+      if (seen[key]) continue;
+      seen[key] = true;
+      var weight = parseInt(item.weight, 10);
+      if (isNaN(weight)) weight = 1;
+      result.push({
+        group: group,
+        event: eventName,
+        weight: Math.max(1, Math.min(10, weight)),
+        hold: item.hold === true
+      });
+      if (result.length >= 8) break;
+    }
+    return result;
   }
 
   /** 自动模式：找与状态同名的动作组（listening -> Listening/listening）。 */
@@ -1010,6 +1313,11 @@
       var pixiCanvas = getPixiCanvas(); if (pixiCanvas) pixiCanvas.classList.remove('hidden');
 
       applyModelState(live.state, true);
+      scheduleIdlePool();
+      // 模型加载后触发一次 start 事件（如“打招呼”）；延迟一会儿等动作/物理稳定。
+      if ((config.triggers || []).some(function (item) { return item.event === 'start'; })) {
+        setTimeout(function () { triggerMotion('start'); }, 800);
+      }
       setHint('');
       sendHost({
         type: 'modelLoaded',
@@ -1114,8 +1422,16 @@
     idleTokens = [];
     idleLayerLoops = [];
     idlePoseSnapshot = null;
+    clearIdlePoolTimer();
+    gestureTokens = [];
+    gesturePending = [];
+    lastGesture = null;
+    lastTrigger = null;
+    lastGestureError = '';
     motionLayers.idle = [];
     motionLayers.idleGroups = [];
+    motionLayers.gesture = [];
+    motionLayers.gestureGroups = [];
     motionLayers.state = [];
     motionLayers.stateGroups = [];
     motionLayers.preview = [];
@@ -1221,7 +1537,14 @@
       if (state === 'idle') {
         // 回到待机：恢复离开前的姿势（含单次动作保持的末帧），再让待机层继续跑。
         restoreIdlePose();
-      } else if (groups.length > 0) {
+        // 互动动作只在待机状态触发；回到待机后重新排随机池。
+        scheduleIdlePool();
+      } else {
+        // 进入状态：暂停随机池与触发手势，避免与状态动作抢参数。
+        clearIdlePoolTimer();
+        stopAllGestureLayers();
+      }
+      if (state !== 'idle' && groups.length > 0) {
         resetModelParametersToDefault();
         // 清掉上个状态的残留后，把待机时保持的姿势铺回去；状态动作再叠加在上面。
         if (idlePoseSnapshot) applyPoseSnapshot(idlePoseSnapshot);
@@ -1276,6 +1599,9 @@
     if (restoreIdle) {
       restoreIdlePose();
     }
+    if (live.state === 'idle') {
+      scheduleIdlePool();
+    }
   }
 
   /** 3 秒冷却结束：停掉预览层，待机/状态动作自然恢复。 */
@@ -1302,6 +1628,9 @@
 
     stopAllMotionLayers('preview');
     restoreIdlePose();
+    if (live.state === 'idle') {
+      scheduleIdlePool();
+    }
     sendHost({ type: 'debug', message: '预览冷却结束，已恢复待机/状态层' });
   }
 
@@ -1317,6 +1646,9 @@
     var groups = normalizeStateMotionSelection(motionGroups);
     var names = motionSelectionNames(groups);
     if (!names.length || !model) return;
+    // 预览期间暂停随机池与互动手势，避免抢参数。
+    clearIdlePoolTimer();
+    stopAllGestureLayers();
 
     var label = names.join('+');
     cancelMotionPreview(false);
@@ -1469,6 +1801,18 @@
     } else if (msg.idleMotionGroup) {
       config.idleMotionGroups = normalizeStateMotionSelection(msg.idleMotionGroup, MAX_IDLE_LAYERS);
     }
+    if (msg.idlePool !== undefined) config.idlePool = normalizePoolEntries(msg.idlePool);
+    if (typeof msg.idlePoolMinSeconds === 'number' && isFinite(msg.idlePoolMinSeconds)) {
+      config.idlePoolMinSeconds = Math.max(2, Math.min(600, Math.round(msg.idlePoolMinSeconds)));
+    }
+    if (typeof msg.idlePoolMaxSeconds === 'number' && isFinite(msg.idlePoolMaxSeconds)) {
+      config.idlePoolMaxSeconds = Math.max(config.idlePoolMinSeconds, Math.min(3600, Math.round(msg.idlePoolMaxSeconds)));
+    }
+    if (msg.triggers !== undefined) config.triggers = normalizeTriggerEntries(msg.triggers);
+    var poolSignature = JSON.stringify(config.idlePool) + '|' + config.idlePoolMinSeconds
+      + '|' + config.idlePoolMaxSeconds + '|' + (config.idleMotion ? 1 : 0);
+    var poolChanged = poolSignature !== idlePoolSignature;
+    idlePoolSignature = poolSignature;
     if (msg.showBubble !== undefined) config.showBubble = !!msg.showBubble;
     if (msg.expressions && typeof msg.expressions === 'object') {
       Object.keys(stateExpressions).forEach(function (key) {
@@ -1497,9 +1841,22 @@
     }
     if (!config.mouthSync) live.mouth = 0;
     if (model) {
+      sendHost({
+        type: 'debug',
+        message: '动作角色：静默=' + normalizeStateMotionSelection(config.idleMotionGroups, MAX_IDLE_LAYERS).length
+          + '，随机池=' + (config.idlePool || []).length
+          + '，触发=' + (config.triggers || []).length
+          + '，池间隔=' + config.idlePoolMinSeconds + '~' + config.idlePoolMaxSeconds + 's'
+      });
       // 待机开关 / 待机动作组变化时重建待机层；关闭时会停掉正在播放的待机动作，
       // 否则“关闭待机动画”只是不再随机下一个，当前动作会一直循环。
       setupIdleLayers();
+      if (!config.idleMotion) {
+        clearIdlePoolTimer();
+        stopAllGestureLayers();
+      } else if (poolChanged) {
+        scheduleIdlePool();
+      }
       if (motionsChanged) {
         // 设置页保存后立即让当前状态的叠加动作生效（force 不清预览，避免正在预览时被中断）。
         applyModelState(live.state, true);
@@ -1566,6 +1923,9 @@
         break;
       case 'previewExpression':
         previewExpression(data.name);
+        break;
+      case 'triggerMotion':
+        triggerMotion(data.event || 'tap');
         break;
       default:
         log('未知宿主消息类型: ' + data.type);
@@ -2145,6 +2505,7 @@
     setConfig: applyConfig,
     previewMotion: previewMotion,
     previewExpression: previewExpression,
+    triggerMotion: triggerMotion,
     showDemo: showDemo,
     layout: function () {
       var canvas = getPixiCanvas();
@@ -2200,6 +2561,20 @@
         idleGroup: idleGroup,
         idleGroups: (motionLayers.idleGroups || []).filter(Boolean),
         idlePoseSnapshot: !!idlePoseSnapshot,
+        gestureGroups: (motionLayers.gestureGroups || []).filter(Boolean),
+        gestureLayers: (motionLayers.gesture || []).map(function (manager, index) {
+          var group = (motionLayers.gestureGroups || [])[index];
+          if (!group) return null;
+          return { group: group, playing: !!(manager && manager.playing) };
+        }).filter(Boolean),
+        lastGesture: lastGesture,
+        lastTrigger: lastTrigger,
+        lastGestureError: lastGestureError,
+        idlePool: (config.idlePool || []).length,
+        idlePoolMinSeconds: config.idlePoolMinSeconds,
+        idlePoolMaxSeconds: config.idlePoolMaxSeconds,
+        idlePoolScheduled: !!idlePoolTimer,
+        triggers: (config.triggers || []).length,
         idleLayerCount: (motionLayers.idle || []).length,
         idleLayers: (motionLayers.idle || []).map(function (manager, index) {
           var group = (motionLayers.idleGroups || [])[index];

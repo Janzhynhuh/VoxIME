@@ -582,6 +582,29 @@ public sealed class Live2DController : ILive2DController
     }
 
     /// <inheritdoc />
+    public void TriggerMotion(string eventName)
+    {
+        var name = string.IsNullOrWhiteSpace(eventName) ? Live2DTriggerEvents.Tap : eventName.Trim();
+        RunOnUiThread(() =>
+        {
+            if (_disposed || _webHost is null)
+            {
+                return;
+            }
+
+            try
+            {
+                _webHost.SendTriggerMotion(name);
+                _logger.Info($"[Live2D] 触发动作事件：{name}");
+            }
+            catch (Exception ex)
+            {
+                HandleError($"触发动作事件失败：{name}", ex);
+            }
+        }, "TriggerMotion");
+    }
+
+    /// <inheritdoc />
     public void PreviewMotion(string? motionGroup) => PreviewMotions(new[] { motionGroup ?? "" });
 
     /// <inheritdoc />
@@ -774,6 +797,8 @@ public sealed class Live2DController : ILive2DController
         }
 
         _window = new PetWindow();
+        // 非穿透模式下单击（未拖动）桌宠 = 触发一次互动动作；穿透模式收不到鼠标。
+        _window.InteractionRequested += (_, _) => TriggerMotion(Live2DTriggerEvents.Tap);
         _window.PositionChanged += OnWindowPositionChanged;
         _window.DisplayGeometryNeedsRepair += OnWindowDisplayGeometryNeedsRepair;
         _window.Closed += (_, _) => _logger.Debug("[Live2D] 桌宠窗口已关闭。");
@@ -1224,6 +1249,10 @@ public sealed class Live2DController : ILive2DController
             config.ModelOffsetY,
             idleMotionGroup,
             idleMotionGroups,
+            motionMap.IdlePool,
+            motionMap.IdlePoolMinSeconds,
+            motionMap.IdlePoolMaxSeconds,
+            motionMap.Triggers,
             config.ShowBubble,
             expressions,
             motions,

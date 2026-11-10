@@ -167,6 +167,9 @@ internal sealed class PetWindow : Window
     /// <summary>用户拖动窗口结束后触发，供宿主持久化位置。</summary>
     public event EventHandler<Live2DPositionChangedEventArgs>? PositionChanged;
 
+    /// <summary>非穿透模式下单击桌宠（未发生拖动）时触发，用于互动动作。</summary>
+    public event EventHandler? InteractionRequested;
+
     /// <summary>DPI 变化（例如从不同缩放的显示器拖入、远控切回）后触发，宿主应重新校验几何。</summary>
     public event EventHandler? DisplayGeometryNeedsRepair;
 
@@ -887,6 +890,8 @@ internal sealed class PetWindow : Window
             return;
         }
 
+        var startLeft = Left;
+        var startTop = Top;
         IsDragging = true;
         try
         {
@@ -900,6 +905,11 @@ internal sealed class PetWindow : Window
         {
             IsDragging = false;
             PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(Left, Top));
+            // 位移很小视为单击：触发互动动作（拖动不触发）。
+            if (Math.Abs(Left - startLeft) < 1.5 && Math.Abs(Top - startTop) < 1.5)
+            {
+                InteractionRequested?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         e.Handled = true;

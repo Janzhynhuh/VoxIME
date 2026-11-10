@@ -66,6 +66,9 @@ public interface ILive2DController : IDisposable
     /// <summary>在桌宠上同时预览多个动作组（设置页状态动作预览用，可叠加）；空列表忽略。</summary>
     void PreviewMotions(IReadOnlyList<string>? motionGroups);
 
+    /// <summary>触发一个触发式动作事件（tap=点击桌宠 / 托盘「互动一下」，start=模型加载后）。</summary>
+    void TriggerMotion(string eventName);
+
     /// <summary>0..1 张嘴幅度（麦克风音量或 TTS 播放音量）。</summary>
     void SetMouthOpen(double value);
 

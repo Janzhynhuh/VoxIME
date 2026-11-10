@@ -96,6 +96,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private int _eyeFollowFps = 30;
     private bool _eyeFollowInvertY;
     private bool _idleMotion;
+    private int _idlePoolMinSeconds = 15;
+    private int _idlePoolMaxSeconds = 45;
     private bool _mouthSync;
     private bool _showBubble;
     private string _modelDirectory = "";
@@ -239,6 +241,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         HideLive2DCommand = new RelayCommand(() => SetLive2DVisible(false));
         ResetLive2DPositionCommand = new RelayCommand(ResetLive2DPosition);
         PreviewIdleMotionCommand = new RelayCommand(PreviewIdleMotion);
+        PreviewIdlePoolCommand = new RelayCommand(PreviewIdlePool);
+        PreviewTriggerCommand = new RelayCommand(PreviewTrigger);
         PreviewStateMotionCommand = new RelayCommand(param => PreviewStateMotion(param as string));
         PreviewExpressionCommand = new RelayCommand(param => PreviewExpression(param as string));
         AddPushToTalkHotkeyCommand = new RelayCommand(() => AddHotkeyRow(PushToTalkHotkeys));
@@ -1065,8 +1069,28 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _showBubble, value);
     }
 
-    /// <summary>待机动作映射（可多选，各自循环叠加播放；一个都不勾=自动找名字含 idle 的组）。</summary>
+    /// <summary>静默循环动作映射（持续循环，可叠加；一个都不勾=自动找名字含 idle 的组）。</summary>
     public IdleMotionMappingViewModel IdleMotionMapping { get; } = new();
+
+    /// <summary>待机随机池（每隔一段时间按权重随机播一个单次动作）。</summary>
+    public IdlePoolMappingViewModel IdlePoolMapping { get; } = new();
+
+    /// <summary>触发式单次动作（点击桌宠 / 模型加载时）。</summary>
+    public TriggerMappingViewModel TriggerMapping { get; } = new();
+
+    /// <summary>待机随机池最小间隔（秒）。</summary>
+    public int IdlePoolMinSeconds
+    {
+        get => _idlePoolMinSeconds;
+        set => SetProperty(ref _idlePoolMinSeconds, Math.Clamp(value, 2, 600));
+    }
+
+    /// <summary>待机随机池最大间隔（秒）。</summary>
+    public int IdlePoolMaxSeconds
+    {
+        get => _idlePoolMaxSeconds;
+        set => SetProperty(ref _idlePoolMaxSeconds, Math.Clamp(value, 2, 3600));
+    }
 
     /// <summary>聆听状态的动作映射（可多选，同时叠加播放）。</summary>
     public StateMotionMappingViewModel ListeningMotion { get; } = new("Listening");
@@ -1207,6 +1231,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand HideLive2DCommand { get; }
     public RelayCommand ResetLive2DPositionCommand { get; }
     public RelayCommand PreviewIdleMotionCommand { get; }
+    public RelayCommand PreviewIdlePoolCommand { get; }
+    public RelayCommand PreviewTriggerCommand { get; }
     public RelayCommand PreviewStateMotionCommand { get; }
     public RelayCommand PreviewExpressionCommand { get; }
 
@@ -2318,6 +2344,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         IdleMotionMapping.SetGroups(ResolveMotionGroups(
             config.Live2D.IdleMotionGroups,
             Live2DConfig.IsDefaultIdleGroup(config.Live2D.IdleMotionGroup) ? null : config.Live2D.IdleMotionGroup));
+        IdlePoolMapping.SetEntries(config.Live2D.IdlePoolGroups);
+        TriggerMapping.SetEntries(config.Live2D.TriggerActions);
+        IdlePoolMinSeconds = config.Live2D.IdlePoolMinSeconds;
+        IdlePoolMaxSeconds = config.Live2D.IdlePoolMaxSeconds;
         ListeningMotion.SetGroups(ResolveMotionGroups(config.Live2D.ListeningMotionGroups, config.Live2D.ListeningMotionGroup));
         ThinkingMotion.SetGroups(ResolveMotionGroups(config.Live2D.ThinkingMotionGroups, config.Live2D.ThinkingMotionGroup));
         SpeakingMotion.SetGroups(ResolveMotionGroups(config.Live2D.SpeakingMotionGroups, config.Live2D.SpeakingMotionGroup));
@@ -2512,10 +2542,17 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
 
         var idleGroups = ToMotionGroups(IdleMotionMapping);
+        var idlePool = IdlePoolMapping.ToPoolList() ?? new List<Live2DPoolEntry>();
+        var triggers = TriggerMapping.ToTriggerList() ?? new List<Live2DTriggerEntry>();
+        var interval = Live2DConfig.NormalizePoolInterval(IdlePoolMinSeconds, IdlePoolMaxSeconds);
         _working.Live2D.MotionByModel[key] = new Live2DMotionMap
         {
             IdleGroups = idleGroups,
             IdleGroup = idleGroups.FirstOrDefault()?.Group ?? "Idle",
+            IdlePool = idlePool,
+            IdlePoolMinSeconds = interval.Min,
+            IdlePoolMaxSeconds = interval.Max,
+            Triggers = triggers,
             Listening = ToMotionGroups(ListeningMotion),
             Thinking = ToMotionGroups(ThinkingMotion),
             Speaking = ToMotionGroups(SpeakingMotion),
@@ -2531,6 +2568,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             IdleMotionMapping.SetGroups(ResolveMotionGroups(
                 map.IdleGroups,
                 Live2DConfig.IsDefaultIdleGroup(map.IdleGroup) ? null : map.IdleGroup));
+            IdlePoolMapping.SetEntries(map.IdlePool);
+            TriggerMapping.SetEntries(map.Triggers);
+            IdlePoolMinSeconds = map.IdlePoolMinSeconds;
+            IdlePoolMaxSeconds = map.IdlePoolMaxSeconds;
             ListeningMotion.SetGroups(map.Listening);
             ThinkingMotion.SetGroups(map.Thinking);
             SpeakingMotion.SetGroups(map.Speaking);
@@ -2541,6 +2582,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         if (clearWhenMissing)
         {
             IdleMotionMapping.SetGroups(null);
+            IdlePoolMapping.SetEntries(null);
+            TriggerMapping.SetEntries(null);
+            IdlePoolMinSeconds = 15;
+            IdlePoolMaxSeconds = 45;
             ListeningMotion.SetGroups(null);
             ThinkingMotion.SetGroups(null);
             SpeakingMotion.SetGroups(null);
@@ -2604,6 +2649,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private void RebuildMotionMappings()
     {
         IdleMotionMapping.RebuildOptions(AvailableMotionGroups);
+        IdlePoolMapping.RebuildOptions(AvailableMotionGroups);
+        TriggerMapping.RebuildOptions(AvailableMotionGroups);
         ListeningMotion.RebuildOptions(AvailableMotionGroups);
         ThinkingMotion.RebuildOptions(AvailableMotionGroups);
         SpeakingMotion.RebuildOptions(AvailableMotionGroups);
@@ -2628,6 +2675,33 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
 
         PreviewMotions(groups, idlePreview: true);
+    }
+
+    /// <summary>预览随机池里的一个动作（与运行时一致：随机抽一个）。</summary>
+    private void PreviewIdlePool()
+    {
+        var groups = IdlePoolMapping.SelectedGroups.ToList();
+        if (groups.Count == 0)
+        {
+            MotionPreviewStatus = "随机池还没有勾选动作；可先勾选几个小动作并设置间隔。";
+            return;
+        }
+
+        var pick = groups[Random.Shared.Next(groups.Count)];
+        PreviewMotions(new[] { pick });
+    }
+
+    /// <summary>预览一个触发动作（运行时是随机抽一个，这里播当前勾选的第一个）。</summary>
+    private void PreviewTrigger()
+    {
+        var groups = TriggerMapping.SelectedGroups.ToList();
+        if (groups.Count == 0)
+        {
+            MotionPreviewStatus = "触发动作还没有勾选；勾选后点击桌宠或托盘「互动一下」会随机播放。";
+            return;
+        }
+
+        PreviewMotions(new[] { groups[0] }, "触发动作预览：" + groups[0]);
     }
 
     private void PreviewStateMotion(string? state)
@@ -3649,6 +3723,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
 
         var idleMotionGroups = IdleMotionMapping.ToGroupList();
+        var idlePoolGroups = IdlePoolMapping.ToPoolList();
+        var triggerActions = TriggerMapping.ToTriggerList();
+        var poolInterval = Live2DConfig.NormalizePoolInterval(IdlePoolMinSeconds, IdlePoolMaxSeconds);
+        IdlePoolMinSeconds = poolInterval.Min;
+        IdlePoolMaxSeconds = poolInterval.Max;
         var listeningMotionGroups = ListeningMotion.ToGroupList();
         var thinkingMotionGroups = ThinkingMotion.ToGroupList();
         var speakingMotionGroups = SpeakingMotion.ToGroupList();
@@ -3679,6 +3758,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             MouthSensitivity = MouthSensitivity,
             ShowBubble = ShowBubble,
             IdleMotionGroups = idleMotionGroups,
+            IdlePoolGroups = idlePoolGroups,
+            IdlePoolMinSeconds = poolInterval.Min,
+            IdlePoolMaxSeconds = poolInterval.Max,
+            TriggerActions = triggerActions,
             // 旧单数字段同步第一项；空列表回写 "Idle" 维持旧版本默认。
             IdleMotionGroup = idleMotionGroups?.FirstOrDefault()?.Group ?? "Idle",
             ListeningExpression = NullIfEmpty(ListeningExpression),
