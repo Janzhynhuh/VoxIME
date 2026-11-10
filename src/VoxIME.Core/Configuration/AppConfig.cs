@@ -268,8 +268,6 @@ public sealed class AppConfig
         Ui.HudScale = Math.Clamp(Ui.HudScale, 0.7, 1.5);
         Ui.HudCornerRadius = Math.Clamp(Ui.HudCornerRadius, 0, 28);
         Ui.HudCardOpacity = Math.Clamp(Ui.HudCardOpacity, 0.35, 1.0);
-        Ui.HudBorderColor = BackgroundConfig.NormalizeColor(Ui.HudBorderColor);
-        Ui.HudBorderThickness = Math.Clamp(Ui.HudBorderThickness, 0, 4);
         Ui.HudBottomMargin = Math.Clamp(Ui.HudBottomMargin, 0, 300);
         Ui.HudHorizontalOffset = Math.Clamp(Ui.HudHorizontalOffset, -400, 400);
 
@@ -583,12 +581,6 @@ public sealed class UiConfig
 
     /// <summary>录音悬浮窗卡片的整体不透明度（0.35–1.0，默认 1.0）。</summary>
     public double HudCardOpacity { get; set; } = 1.0;
-
-    /// <summary>HUD 描边颜色（#RRGGBB/#AARRGGBB）；空=跟随主题的 HUD 边框色。</summary>
-    public string? HudBorderColor { get; set; }
-
-    /// <summary>HUD 描边粗细（0–4 DIP，0=无描边，默认 1）。</summary>
-    public double HudBorderThickness { get; set; } = 1.0;
 
     /// <summary>HUD 默认位置：距工作区底部距离（0–300 DIP，默认 42）；手动拖动之后以拖动坐标为准。</summary>
     public double HudBottomMargin { get; set; } = 42;

@@ -287,8 +287,7 @@
                             <Grid Width="684" HorizontalAlignment="Center" VerticalAlignment="Center"
                                   LayoutTransform="{Binding HudPreviewTransform}"
                                   Opacity="{Binding HudPreviewCardOpacity}">
-                                <Border Margin="40" BorderBrush="{Binding HudPreviewBorderBrush}"
-                                        BorderThickness="{Binding HudPreviewBorderThickness}"
+                                <Border Margin="40" BorderBrush="{DynamicResource HudBorderBrush}" BorderThickness="1"
                                         CornerRadius="{Binding HudPreviewCornerRadius}"
                                         Effect="{StaticResource HudShadow}">
                                     <Grid>
@@ -516,34 +515,6 @@
                                    Style="{StaticResource MutedText}" HorizontalAlignment="Right"
                                    VerticalAlignment="Center" />
                     </Grid>
-
-                    <TextBlock Text="描边" Style="{StaticResource FieldLabel}" Margin="0,10,0,8" />
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="130" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="描边颜色" Style="{StaticResource ValueText}" />
-                        <TextBox Grid.Column="1" Style="{StaticResource InputTextBoxBase}" MaxWidth="280"
-                                 HorizontalAlignment="Left" Text="{Binding HudBorderColor, Mode=TwoWay}"
-                                 ToolTip="留空则跟随主题的 HUD 边框色；支持 #RRGGBB 或 #AARRGGBB" />
-                    </Grid>
-
-                    <Grid Margin="0,0,0,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="130" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="60" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="描边粗细" Style="{StaticResource ValueText}" />
-                        <Slider Grid.Column="1" Minimum="0" Maximum="4" TickFrequency="0.25"
-                                IsSnapToTickEnabled="True" Value="{Binding HudBorderThickness, Mode=TwoWay}" />
-                        <TextBlock Grid.Column="2" Text="{Binding HudBorderThicknessText}"
-                                   Style="{StaticResource MutedText}" HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" />
-                    </Grid>
-                    <TextBlock Style="{StaticResource HintText}" Margin="0,0,0,8" TextWrapping="Wrap"
-                               Text="{Binding HudBorderStatusText}" />
 
                     <TextBlock Text="默认位置" Style="{StaticResource FieldLabel}" Margin="0,10,0,8" />
                     <Grid Margin="0,0,0,8">

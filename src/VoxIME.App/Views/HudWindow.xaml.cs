@@ -10,7 +10,6 @@ using System.Windows.Threading;
 using VoxIME.App.Infrastructure;
 using VoxIME.App.ViewModels;
 using VoxIME.Core.Abstractions;
-using VoxIME.Core.Appearance;
 using VoxIME.Core.Configuration;
 using VoxIME.Core.Logging;
 
@@ -60,7 +59,6 @@ public partial class HudWindow : Window
         _levelTimer.Tick += OnLevelTimerTick;
         _levelTimer.Start();
 
-        ThemeManager.ThemeChanged += OnThemeManagerChanged;
         _controller.StateChanged += OnControllerStateChanged;
         _controller.MicrophoneLevelChanged += OnMicrophoneLevelChanged;
         _controller.TranscriptionReceived += OnTranscriptionReceived;
@@ -447,10 +445,6 @@ public partial class HudWindow : Window
             CardDim.CornerRadius = innerRadius;
             Card.Opacity = Math.Clamp(ui.HudCardOpacity, 0.35, 1.0);
 
-            // 描边：默认跟随主题的 1px 边框；可在外观页调整颜色/粗细（0=无描边）。
-            Card.BorderThickness = new Thickness(Math.Clamp(ui.HudBorderThickness, 0, 4));
-            Card.BorderBrush = ResolveHudBorderBrush(ui.HudBorderColor);
-
             if (IsVisible)
             {
                 UpdateLayout();
@@ -481,49 +475,7 @@ public partial class HudWindow : Window
         {
             e.Cancel = true;
             HideHud();
-            return;
         }
-
-        ThemeManager.ThemeChanged -= OnThemeManagerChanged;
-    }
-
-    private void OnThemeManagerChanged(object? sender, ResolvedTheme theme)
-    {
-        if (!_allowClose)
-        {
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (!_allowClose)
-                {
-                    ApplyHudAppearance(_configStore.Current);
-                }
-            }));
-        }
-    }
-
-    /// <summary>解析 HUD 描边画刷：空颜色=当前主题的 HudBorderBrush。</summary>
-    private static Brush ResolveHudBorderBrush(string? color)
-    {
-        if (!string.IsNullOrWhiteSpace(color))
-        {
-            try
-            {
-                var parsed = (Color)ColorConverter.ConvertFromString(color.Trim());
-                var custom = new SolidColorBrush(parsed);
-                custom.Freeze();
-                return custom;
-            }
-            catch (FormatException)
-            {
-                // 非法颜色回退主题边框。
-            }
-            catch (NotSupportedException)
-            {
-                // 非法颜色回退主题边框。
-            }
-        }
-
-        return Application.Current?.TryFindResource("HudBorderBrush") as Brush ?? Brushes.Transparent;
     }
 
     /// <summary>

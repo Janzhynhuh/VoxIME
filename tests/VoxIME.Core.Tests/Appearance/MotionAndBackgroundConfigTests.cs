@@ -42,8 +42,6 @@ public sealed class MotionAndBackgroundConfigTests
         Assert.Equal(1.0, config.Ui.HudScale);
         Assert.Equal(18, config.Ui.HudCornerRadius);
         Assert.Equal(1.0, config.Ui.HudCardOpacity);
-        Assert.Null(config.Ui.HudBorderColor);
-        Assert.Equal(1.0, config.Ui.HudBorderThickness);
         Assert.Equal(42, config.Ui.HudBottomMargin);
         Assert.Equal(0, config.Ui.HudHorizontalOffset);
     }
@@ -81,8 +79,6 @@ public sealed class MotionAndBackgroundConfigTests
                 HudScale = 9,
                 HudCornerRadius = -5,
                 HudCardOpacity = 0,
-                HudBorderColor = "red",
-                HudBorderThickness = 9,
                 HudBottomMargin = 999,
                 HudHorizontalOffset = -999
             }
@@ -114,8 +110,6 @@ public sealed class MotionAndBackgroundConfigTests
         Assert.Equal(1.5, config.Ui.HudScale);
         Assert.Equal(0, config.Ui.HudCornerRadius);
         Assert.Equal(0.35, config.Ui.HudCardOpacity);
-        Assert.Null(config.Ui.HudBorderColor);
-        Assert.Equal(4, config.Ui.HudBorderThickness);
         Assert.Equal(300, config.Ui.HudBottomMargin);
         Assert.Equal(-400, config.Ui.HudHorizontalOffset);
     }
@@ -184,8 +178,6 @@ public sealed class MotionAndBackgroundConfigTests
         config.Ui.HudScale = 1.25;
         config.Ui.HudCornerRadius = 6;
         config.Ui.HudCardOpacity = 0.8;
-        config.Ui.HudBorderColor = "#112233";
-        config.Ui.HudBorderThickness = 2;
         config.Ui.HudBottomMargin = 80;
         config.Ui.HudHorizontalOffset = -120;
 
@@ -208,8 +200,6 @@ public sealed class MotionAndBackgroundConfigTests
         Assert.Equal(1.25, loaded.Ui.HudScale);
         Assert.Equal(6, loaded.Ui.HudCornerRadius);
         Assert.Equal(0.8, loaded.Ui.HudCardOpacity);
-        Assert.Equal("#112233", loaded.Ui.HudBorderColor);
-        Assert.Equal(2, loaded.Ui.HudBorderThickness);
         Assert.Equal(80, loaded.Ui.HudBottomMargin);
         Assert.Equal(-120, loaded.Ui.HudHorizontalOffset);
     }
