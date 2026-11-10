@@ -42,6 +42,7 @@
     offsetX: 0.0,
     offsetY: 0.0,
     idleMotionGroup: 'Idle',
+    idleMotionGroups: [],
     showBubble: true,
     bubbleInPage: isPreview // 嵌入时气泡由 WPF 层渲染，避免重复
   };
@@ -79,6 +80,8 @@
   var modelGroups = [];
   var idleGroup = null;
   var idleMotionActive = false;
+  var idleSignature = '';
+  var idleTokens = [];
   var modelBaseline = null;
   var mouthParamIds = ['ParamMouthOpenY'];
   var mouthParamHandles = [];
@@ -88,12 +91,16 @@
   var lastStatusAt = 0;
   var fpsCounter = { frames: 0, since: performance.now(), value: 0 };
   var diag = { modelUpdateTicks: 0, mouthWrites: 0, mouthErrors: 0, lastMouthError: '' };
-  // 动作分层：idle 由主 MotionManager 驱动；state / preview 各用一组并行 MotionManager，
-  // 每个动作组占一条层，所以同一状态可以同时叠加多个动作（Cubism 官方推荐的多 MotionManager 做法）。
+  // 动作分层：idle / state / preview 各用一组并行 MotionManager，每个动作组占一条层，
+  // 所以待机与同一状态都可以同时叠加多个动作（Cubism 官方推荐的多 MotionManager 做法）。
+  // 层按数组顺序更新：idle 最低、state 覆盖 idle、preview 最高。
   // 眨眼作为程序层在 beforeModelUpdate 最后覆盖眼睛参数。
+  var MAX_IDLE_LAYERS = 4;
   var MAX_STATE_LAYERS = 4;
   var MAX_PREVIEW_LAYERS = 4;
   var motionLayers = {
+    idle: [],
+    idleGroups: [],
     state: [],
     stateGroups: [],
     preview: [],
@@ -368,64 +375,129 @@
     return null;
   }
 
-  function setupIdleGroup() {
-    if (!model) return;
-    var mm = model.internalModel.motionManager;
-    var definitions = mm.definitions || {};
+  /** 解析待机动作组：显式勾选优先；未勾选或全部不存在时回退“名字含 idle”的组（兼容旧行为）。 */
+  function resolveIdleGroups() {
+    var definitions = (model && model.internalModel && model.internalModel.motionManager)
+      ? (model.internalModel.motionManager.definitions || {})
+      : {};
     var groups = Object.keys(definitions);
-    var wanted = String(config.idleMotionGroup || 'Idle').toLowerCase();
-    var group = groups.find(function (g) { return g.toLowerCase() === wanted; });
-    var autoMatched = false;
-    // 模型没有原生 Idle 组时，退一步找名字里带 idle 的动作组（例如大肥鱼的
-    // Animation/IDLE）。自动眨眼已由 applyBlinkLayer 补上，不会再被动作抑制。
-    if (!group && config.idleMotion) {
-      group = groups.find(function (g) { return g.toLowerCase().indexOf('idle') >= 0; }) || null;
-      autoMatched = !!group;
+    var configured = normalizeStateMotionSelection(config.idleMotionGroups, MAX_IDLE_LAYERS);
+    var resolved = [];
+    for (var i = 0; i < configured.length && resolved.length < MAX_IDLE_LAYERS; i++) {
+      var name = configured[i];
+      var hit = null;
+      for (var g = 0; g < groups.length; g++) {
+        if (groups[g].toLowerCase() === name.toLowerCase()) { hit = groups[g]; break; }
+      }
+      if (hit && resolved.indexOf(hit) < 0) resolved.push(hit);
     }
-
-    var previousGroup = idleGroup;
-    var previousActive = idleMotionActive;
-    var nextActive = !!(config.idleMotion && group);
-    // MotionManager 的 groups.idle 默认值是 "Idle"；首次加载且关闭待机动作时
-    // previousActive 也是 false，仅比较 previous 状态会误判为“没变化”，
-    // 导致默认的 Idle 动作仍然自动播放。这里同时比较引擎当前的目标组名。
-    var desiredIdleGroup = nextActive ? group : '__voxime_idle_disabled__';
-    var currentIdleGroup = mm.groups ? mm.groups.idle : null;
-    var changed = previousActive !== nextActive
-      || (nextActive && (!previousGroup || previousGroup.toLowerCase() !== group.toLowerCase()))
-      || currentIdleGroup !== desiredIdleGroup;
-
-    if (changed) {
-      try {
-        // 切组前先停掉所有层并重置参数。像“脱捕”这种动作会改很多
-        // 自定义参数，如果不清空，切回 Idle 时这些参数会残留在模型上。
-        if (previewSession.finishHandler || previewSession.motionTimer) cancelMotionPreview(false);
-        stopAllMotionLayers('state');
-        stopAllMotionLayers('preview');
-        mm.stopAllMotions();
-        resetModelParametersToDefault();
-        if (nextActive) {
-          mm.groups.idle = group;
-          idleGroup = group;
-          idleMotionActive = true;
-          model.motion(group);
-        } else {
-          mm.groups.idle = '__voxime_idle_disabled__';
-          idleGroup = null;
-          idleMotionActive = false;
-        }
-        sendHost({
-          type: 'debug',
-          message: '待机动作组切换：' + (previousGroup || '(无)') + ' -> '
-            + (nextActive ? group : '(不播放)') + (autoMatched ? '（自动匹配）' : '') + '，已重置参数'
-        });
-      } catch (e) {
-        log('待机动作设置失败（模型可能无动作组）', e);
+    if (resolved.length === 0) {
+      for (var a = 0; a < groups.length; a++) {
+        if (groups[a].toLowerCase().indexOf('idle') >= 0) { resolved.push(groups[a]); break; }
       }
     }
+    return resolved;
+  }
 
-    log('动作组: ' + groups.join(', ') + ' / 待机组: ' + (idleGroup || '无'));
+  /** 重建待机层：勾选的每个待机动作组各占一条层循环叠加；签名未变时不打断当前循环。 */
+  function setupIdleLayers() {
+    if (!model) return [];
+    var mm = model.internalModel.motionManager;
+    var groups = Object.keys(mm.definitions || {});
+    var nextGroups = config.idleMotion ? resolveIdleGroups() : [];
+    var signature = (config.idleMotion ? '1' : '0') + '|' + nextGroups.join('\n');
+    if (signature === idleSignature) {
+      return groups;
+    }
+    idleSignature = signature;
+    var previousLabel = (motionLayers.idleGroups || []).filter(Boolean).join(', ');
+    try {
+      // 切组前先停掉待机层并重置参数。像“脱捕”这种动作会改很多自定义参数，
+      // 如果不清空，切回待机时这些参数会残留在模型上。
+      if (previewSession.finishHandler || previewSession.motionTimer) cancelMotionPreview(false);
+      stopAllIdleLayers();
+      mm.stopAllMotions();
+      resetModelParametersToDefault();
+      if (config.idleMotion && nextGroups.length > 0) {
+        // 主 MotionManager 不再自动播待机，避免和待机层重复：给一个不存在的组名，
+        // 引擎的 shouldRequestIdleMotion 分支会自行放弃。
+        mm.groups.idle = '__voxime_idle_managed__';
+        idleGroup = nextGroups[0];
+        idleMotionActive = true;
+        for (var i = 0; i < nextGroups.length && i < motionLayers.idle.length; i++) {
+          startIdleLayer(i, nextGroups[i]);
+        }
+      } else {
+        mm.groups.idle = '__voxime_idle_disabled__';
+        idleGroup = null;
+        idleMotionActive = false;
+      }
+      sendHost({
+        type: 'debug',
+        message: '待机动作层：' + (previousLabel || '(无)') + ' -> '
+          + (nextGroups.length ? nextGroups.join(', ') : '(不播放)') + '，已重置参数'
+      });
+    } catch (e) {
+      log('待机动作设置失败（模型可能无动作组）', e);
+    }
+    log('动作组: ' + groups.join(', ') + ' / 待机组: ' + (nextGroups.join(', ') || '无'));
     return groups;
+  }
+
+  /** 一条待机层：播放指定组里的随机动作；非 Loop 动作播完后继续随机下一个。 */
+  function startIdleLayer(slot, group) {
+    var manager = (motionLayers.idle || [])[slot];
+    var name = String(group || '').trim();
+    if (!manager || !name) return;
+    var token = (idleTokens[slot] || 0) + 1;
+    idleTokens[slot] = token;
+    motionLayers.idleGroups[slot] = name;
+    function playNext() {
+      if (token !== idleTokens[slot] || !model) return;
+      var index = 0;
+      try {
+        var list = (model.internalModel.motionManager.definitions || {})[name];
+        if (Array.isArray(list) && list.length > 1) {
+          index = Math.floor(Math.random() * list.length);
+        }
+      } catch (e) { index = 0; }
+      var result = null;
+      try {
+        result = manager.startMotion(name, index, 1, {});
+      } catch (e) {
+        log('待机层启动失败（忽略）: ' + name, e);
+        return;
+      }
+      if (result && typeof result.then === 'function') {
+        result.then(function (ok) {
+          // Loop 标记的动作不会结束；普通动作播完后继续同一组内随机下一个。
+          if (ok === false) {
+            log('待机层动作无法播放，已跳过: ' + name);
+            return;
+          }
+          playNext();
+        }).catch(function (err) {
+          log('待机层播放结束（忽略）: ' + name, err);
+        });
+      }
+    }
+    try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
+    playNext();
+  }
+
+  function stopIdleLayer(slot) {
+    idleTokens[slot] = (idleTokens[slot] || 0) + 1;
+    if (motionLayers.idleGroups) motionLayers.idleGroups[slot] = null;
+    var manager = (motionLayers.idle || [])[slot];
+    if (!manager) return;
+    try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
+  }
+
+  function stopAllIdleLayers() {
+    var managers = motionLayers.idle || [];
+    for (var i = 0; i < managers.length; i++) {
+      stopIdleLayer(i);
+    }
   }
 
   /** 记录模型加载完成时的参数值与部件透明度，作为“默认姿态”基线。 */
@@ -498,33 +570,44 @@
   // 提供额外的并行 MotionManager，这里用两个固定层：
   //   state   = 听写/思考/朗读等状态动作（覆盖 idle）
   //   preview = 设置页动作预览（最高层，播完即停）
-  // 层按数组顺序更新，后更新的层覆盖先更新的参数；idle 仍在主 MotionManager。
+  // 层按数组顺序更新，后更新的层覆盖先更新的参数：idle → state → preview。
   function setupMotionLayers() {
+    motionLayers.idle = [];
+    motionLayers.idleGroups = [];
     motionLayers.state = [];
     motionLayers.stateGroups = [];
     motionLayers.preview = [];
     motionLayers.previewGroups = [];
     motionLayers.ready = false;
+    idleTokens = [];
+    idleSignature = '';
     if (!model || !model.internalModel) return;
     try {
-      var total = MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS;
+      var total = MAX_IDLE_LAYERS + MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS;
       if (typeof model.internalModel.extendParallelMotionManager === 'function') {
         // 该 API 的语义是“扩展到 N 条”（源码里 for(; length < n;) push(...)），重复调用不会膨胀。
         model.internalModel.extendParallelMotionManager(total);
       }
       var managers = model.internalModel.parallelMotionManager || [];
-      motionLayers.state = managers.slice(0, MAX_STATE_LAYERS);
-      motionLayers.preview = managers.slice(MAX_STATE_LAYERS, MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS);
+      motionLayers.idle = managers.slice(0, MAX_IDLE_LAYERS);
+      motionLayers.state = managers.slice(MAX_IDLE_LAYERS, MAX_IDLE_LAYERS + MAX_STATE_LAYERS);
+      motionLayers.preview = managers.slice(
+        MAX_IDLE_LAYERS + MAX_STATE_LAYERS,
+        MAX_IDLE_LAYERS + MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS);
+      motionLayers.idleGroups = new Array(motionLayers.idle.length).fill(null);
       motionLayers.stateGroups = new Array(motionLayers.state.length).fill(null);
       motionLayers.previewGroups = new Array(motionLayers.preview.length).fill(null);
-      motionLayers.ready = motionLayers.state.length > 0 && motionLayers.preview.length > 0;
+      motionLayers.ready = motionLayers.idle.length > 0
+        && motionLayers.state.length > 0
+        && motionLayers.preview.length > 0;
     } catch (e) {
       log('初始化动作层失败（忽略）', e);
     }
     setupBlinkLayer();
     sendHost({
       type: 'debug',
-      message: '动作层：state=' + motionLayers.state.length + ', preview=' + motionLayers.preview.length
+      message: '动作层：idle=' + motionLayers.idle.length
+        + ', state=' + motionLayers.state.length + ', preview=' + motionLayers.preview.length
     });
   }
 
@@ -585,8 +668,9 @@
     return false;
   }
 
-  /** 归一化配置里的动作组：兼容旧版单个字符串，去空、去重、最多 MAX_STATE_LAYERS 个。 */
-  function normalizeStateMotionSelection(value) {
+  /** 归一化配置里的动作组：兼容旧版单个字符串，去空、去重、最多 limit 个。 */
+  function normalizeStateMotionSelection(value, limit) {
+    var maxCount = limit || MAX_STATE_LAYERS;
     var list = [];
     if (typeof value === 'string') {
       list.push(value);
@@ -602,7 +686,7 @@
       if (seen[key]) continue;
       seen[key] = true;
       result.push(name);
-      if (result.length >= MAX_STATE_LAYERS) break;
+      if (result.length >= maxCount) break;
     }
     return result;
   }
@@ -655,7 +739,8 @@
     // 其它状态（listening/thinking/speaking）继续补眨眼。
     if (previewSession.finishHandler || live.state === 'error') return;
     var manager = model.internalModel && model.internalModel.motionManager;
-    if (!manager || !manager.playing) return; // 没有动作时自动眨眼正常，不叠加
+    // 待机动作现在跑在并行层上（主管理器不再 playing）；只看主管理器会完全不眨眼。
+    if (!manager || (!manager.playing && !hasMotionLayerGroup('idle'))) return;
     var core = model.internalModel.coreModel;
     var now = performance.now() / 1000;
     if (!blinkLayer.nextAt) {
@@ -814,7 +899,7 @@
       applyModelAssets(pendingModelAssets);
       setupMotionLayers();
       captureModelBaseline();
-      modelGroups = setupIdleGroup() || [];
+      modelGroups = setupIdleLayers() || [];
       // 初始化时应用缩放与对应的后备分辨率（模型自带尺寸可能很大）。
       resizePixi();
 
@@ -924,6 +1009,10 @@
     idleMotionActive = false;
     modelGroups = [];
     idleGroup = null;
+    idleSignature = '';
+    idleTokens = [];
+    motionLayers.idle = [];
+    motionLayers.idleGroups = [];
     motionLayers.state = [];
     motionLayers.stateGroups = [];
     motionLayers.preview = [];
@@ -1245,7 +1334,6 @@
 
   function applyConfig(msg) {
     if (!msg || typeof msg !== 'object') return;
-    var idleMotionChanged = msg.idleMotion !== undefined && !!msg.idleMotion !== config.idleMotion;
     var scaleChanged = typeof msg.scale === 'number' && isFinite(msg.scale)
       && Math.abs(Math.min(3, Math.max(0.2, msg.scale)) - config.scale) > 0.0001;
     if (msg.eyeFollow !== undefined) config.eyeFollow = !!msg.eyeFollow;
@@ -1255,6 +1343,12 @@
     if (typeof msg.offsetX === 'number' && isFinite(msg.offsetX)) config.offsetX = Math.min(1, Math.max(-1, msg.offsetX));
     if (typeof msg.offsetY === 'number' && isFinite(msg.offsetY)) config.offsetY = Math.min(1, Math.max(-1, msg.offsetY));
     if (msg.idleMotionGroup) config.idleMotionGroup = String(msg.idleMotionGroup);
+    // 待机动作组支持多选：新页面收数组，旧消息只带单个字符串时当单元素列表处理。
+    if (msg.idleMotionGroups !== undefined) {
+      config.idleMotionGroups = normalizeStateMotionSelection(msg.idleMotionGroups, MAX_IDLE_LAYERS);
+    } else if (msg.idleMotionGroup) {
+      config.idleMotionGroups = normalizeStateMotionSelection(msg.idleMotionGroup, MAX_IDLE_LAYERS);
+    }
     if (msg.showBubble !== undefined) config.showBubble = !!msg.showBubble;
     if (msg.expressions && typeof msg.expressions === 'object') {
       Object.keys(stateExpressions).forEach(function (key) {
@@ -1283,16 +1377,9 @@
     }
     if (!config.mouthSync) live.mouth = 0;
     if (model) {
-      // 待机动画开关切换时：关闭要立即停掉正在播放的动作，否则“关闭待机动画”只是不再随机下一个，
-      // 当前动作会一直循环，导致眼动/表情被动作覆盖、看起来像没有生效。
-      if (idleMotionChanged && !config.idleMotion) {
-        try {
-          model.internalModel.motionManager.stopAllMotions();
-        } catch (e) {
-          log('停止待机动作失败（忽略）', e);
-        }
-      }
-      setupIdleGroup();
+      // 待机开关 / 待机动作组变化时重建待机层；关闭时会停掉正在播放的待机动作，
+      // 否则“关闭待机动画”只是不再随机下一个，当前动作会一直循环。
+      setupIdleLayers();
       if (motionsChanged) {
         // 设置页保存后立即让当前状态的叠加动作生效（force 不清预览，避免正在预览时被中断）。
         applyModelState(live.state, true);
@@ -1991,6 +2078,8 @@
         targetGazeY: live.targetGazeY,
         groups: modelGroups,
         idleGroup: idleGroup,
+        idleGroups: (motionLayers.idleGroups || []).filter(Boolean),
+        idleLayerCount: (motionLayers.idle || []).length,
         stateGroups: (motionLayers.stateGroups || []).filter(Boolean),
         previewGroups: (motionLayers.previewGroups || []).filter(Boolean),
         stateLayerCount: (motionLayers.state || []).length,

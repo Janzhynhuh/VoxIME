@@ -361,6 +361,66 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void IdleMotionLists_DeserializeLegacySingleGroup()
+    {
+        const string json = """
+        {
+          "live2D": {
+            "idleMotionGroup": "Animation/IDLE",
+            "motionByModel": {
+              "E:\\models\\a": { "idleGroup": "a-idle" }
+            }
+          }
+        }
+        """;
+
+        var config = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
+        Assert.NotNull(config);
+        config!.Normalize();
+
+        Assert.Equal(new[] { "Animation/IDLE" }, config.Live2D.IdleMotionGroups);
+        Assert.Equal("Animation/IDLE", config.Live2D.IdleMotionGroup);
+        Assert.Equal(new[] { "a-idle" }, config.Live2D.MotionByModel["E:\\models\\a"].IdleGroups);
+        Assert.Equal("a-idle", config.Live2D.MotionByModel["E:\\models\\a"].IdleGroup);
+    }
+
+    [Fact]
+    public void IdleMotionLists_NormalizeDedupeTrimAndCap()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.IdleMotionGroups = new List<string> { " A ", "a", "", "B", "C", "D", "E" };
+        config.Normalize();
+
+        Assert.Equal(new[] { "A", "B", "C", "D" }, config.Live2D.IdleMotionGroups);
+        Assert.Equal("A", config.Live2D.IdleMotionGroup);
+    }
+
+    [Fact]
+    public void IdleMotionLists_DefaultIdleIsAuto()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Normalize();
+
+        Assert.Null(config.Live2D.IdleMotionGroups);
+        Assert.Equal("Idle", config.Live2D.IdleMotionGroup);
+    }
+
+    [Fact]
+    public void ResolveMotionMap_ReturnsIdleGroupsAndLegacyFirst()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.IdleMotionGroups = new List<string> { "Animation/IDLE", "Animation/Swim" };
+
+        var resolved = config.Live2D.ResolveMotionMap(null);
+        Assert.Equal(new[] { "Animation/IDLE", "Animation/Swim" }, resolved.IdleGroups);
+        Assert.Equal("Animation/IDLE", resolved.IdleGroup);
+
+        var defaultResolved = AppConfig.CreateDefault().Live2D.ResolveMotionMap(null);
+        Assert.Empty(defaultResolved.IdleGroups);
+        Assert.Equal("Idle", defaultResolved.IdleGroup);
+    }
+
+    [Fact]
     public void GetActiveProfile_SkipsDisabledProfiles()
     {
         var config = new AppConfig

@@ -109,7 +109,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _modelOffsetY;
     private double _live2DOpacity;
     private double _mouthSensitivity;
-    private string _idleMotionGroup = "Idle";
+
     private string _motionPreviewStatus = "";
     private string _expressionPreviewStatus = "";
     private string _listeningExpression = "";
@@ -1065,23 +1065,20 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _showBubble, value);
     }
 
-    public string IdleMotionGroup
-    {
-        get => _idleMotionGroup;
-        set => SetProperty(ref _idleMotionGroup, value);
-    }
+    /// <summary>待机动作映射（可多选，各自循环叠加播放；一个都不勾=自动找名字含 idle 的组）。</summary>
+    public IdleMotionMappingViewModel IdleMotionMapping { get; } = new();
 
     /// <summary>聆听状态的动作映射（可多选，同时叠加播放）。</summary>
-    public StateMotionMappingViewModel ListeningMotion { get; } = new("聆听", "Listening");
+    public StateMotionMappingViewModel ListeningMotion { get; } = new("Listening");
 
     /// <summary>识别中状态的动作映射（可多选，同时叠加播放）。</summary>
-    public StateMotionMappingViewModel ThinkingMotion { get; } = new("识别中", "Thinking");
+    public StateMotionMappingViewModel ThinkingMotion { get; } = new("Thinking");
 
     /// <summary>朗读状态的动作映射（可多选，同时叠加播放）。</summary>
-    public StateMotionMappingViewModel SpeakingMotion { get; } = new("朗读", "Speaking");
+    public StateMotionMappingViewModel SpeakingMotion { get; } = new("Speaking");
 
     /// <summary>出错状态的动作映射（可多选，同时叠加播放）。</summary>
-    public StateMotionMappingViewModel ErrorMotion { get; } = new("出错", "Error");
+    public StateMotionMappingViewModel ErrorMotion { get; } = new("Error");
 
     /// <summary>当前模型可用的动作组名（来自 model3.json + Animation 文件夹）。</summary>
     public ObservableCollection<string> AvailableMotionGroups { get; } = new();
@@ -2318,7 +2315,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         IdleMotion = config.Live2D.IdleMotion;
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
-        IdleMotionGroup = config.Live2D.IdleMotionGroup;
+        IdleMotionMapping.SetGroups(ResolveMotionGroups(
+            config.Live2D.IdleMotionGroups,
+            Live2DConfig.IsDefaultIdleGroup(config.Live2D.IdleMotionGroup) ? null : config.Live2D.IdleMotionGroup));
         ListeningMotion.SetGroups(ResolveMotionGroups(config.Live2D.ListeningMotionGroups, config.Live2D.ListeningMotionGroup));
         ThinkingMotion.SetGroups(ResolveMotionGroups(config.Live2D.ThinkingMotionGroups, config.Live2D.ThinkingMotionGroup));
         SpeakingMotion.SetGroups(ResolveMotionGroups(config.Live2D.SpeakingMotionGroups, config.Live2D.SpeakingMotionGroup));
@@ -2501,7 +2500,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private static string? EmptyToNull(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static List<string> ToMotionGroups(StateMotionMappingViewModel mapping) =>
+    private static List<string> ToMotionGroups(MotionGroupSelectionViewModel mapping) =>
         mapping.ToGroupList() ?? new List<string>();
 
     private void SaveMotionMapForModel(string? modelDirectory)
@@ -2512,9 +2511,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var idleGroups = ToMotionGroups(IdleMotionMapping);
         _working.Live2D.MotionByModel[key] = new Live2DMotionMap
         {
-            IdleGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(),
+            IdleGroups = idleGroups,
+            IdleGroup = idleGroups.FirstOrDefault() ?? "Idle",
             Listening = ToMotionGroups(ListeningMotion),
             Thinking = ToMotionGroups(ThinkingMotion),
             Speaking = ToMotionGroups(SpeakingMotion),
@@ -2527,7 +2528,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         var key = NormalizeModelDirectory(modelDirectory);
         if (key.Length > 0 && _working.Live2D.MotionByModel.TryGetValue(key, out var map) && map is not null)
         {
-            IdleMotionGroup = string.IsNullOrWhiteSpace(map.IdleGroup) ? "Idle" : map.IdleGroup;
+            IdleMotionMapping.SetGroups(ResolveMotionGroups(
+                map.IdleGroups,
+                Live2DConfig.IsDefaultIdleGroup(map.IdleGroup) ? null : map.IdleGroup));
             ListeningMotion.SetGroups(map.Listening);
             ThinkingMotion.SetGroups(map.Thinking);
             SpeakingMotion.SetGroups(map.Speaking);
@@ -2537,7 +2540,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
         if (clearWhenMissing)
         {
-            IdleMotionGroup = "Idle";
+            IdleMotionMapping.SetGroups(null);
             ListeningMotion.SetGroups(null);
             ThinkingMotion.SetGroups(null);
             SpeakingMotion.SetGroups(null);
@@ -2600,6 +2603,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     /// <summary>按当前模型可用动作组重建四个状态的复选列表（保留已选/自定义值）。</summary>
     private void RebuildMotionMappings()
     {
+        IdleMotionMapping.RebuildOptions(AvailableMotionGroups);
         ListeningMotion.RebuildOptions(AvailableMotionGroups);
         ThinkingMotion.RebuildOptions(AvailableMotionGroups);
         SpeakingMotion.RebuildOptions(AvailableMotionGroups);
@@ -2608,8 +2612,22 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private void PreviewIdleMotion()
     {
-        var group = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim();
-        PreviewMotions(new[] { group });
+        var groups = IdleMotionMapping.SelectedGroups.ToList();
+        if (groups.Count == 0)
+        {
+            // 自动模式：与运行时一致，找名字含 idle 的动作组；没有则提示。
+            var auto = AvailableMotionGroups.FirstOrDefault(group =>
+                group.IndexOf("idle", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (auto is null)
+            {
+                MotionPreviewStatus = "当前模型没有名字含 idle 的待机动作组，请先导入带待机动作的模型。";
+                return;
+            }
+
+            groups = new List<string> { auto };
+        }
+
+        PreviewMotions(groups, idlePreview: true);
     }
 
     private void PreviewStateMotion(string? state)
@@ -2694,7 +2712,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void PreviewMotions(IReadOnlyList<string> groups, string? statusOverride = null)
+    private void PreviewMotions(IReadOnlyList<string> groups, string? statusOverride = null, bool idlePreview = false)
     {
         var list = groups
             .Where(group => !string.IsNullOrWhiteSpace(group))
@@ -2710,11 +2728,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         try
         {
             _controller.Live2D.PreviewMotions(list);
-            var isIdlePreview = list.Count == 1
-                && (string.Equals(list[0], string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(), StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(list[0], "Idle", StringComparison.OrdinalIgnoreCase));
-            MotionPreviewStatus = statusOverride ?? (isIdlePreview
-                ? $"已预览待机动作：{label}（播完停 3 秒后继续待机循环）"
+            MotionPreviewStatus = statusOverride ?? (idlePreview
+                ? list.Count > 1
+                    ? $"已同时预览 {list.Count} 个待机动作组：{label}（播完停 3 秒后继续待机循环）"
+                    : $"已预览待机动作：{label}（播完停 3 秒后继续待机循环）"
                 : list.Count > 1
                     ? $"已同时预览 {list.Count} 个动作：{label}（播完停 3 秒后恢复默认）"
                     : $"已预览：{label}（播完停 3 秒后恢复默认）");
@@ -3631,6 +3648,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             invertMap[currentModelDirectory] = EyeFollowInvertY;
         }
 
+        var idleMotionGroups = IdleMotionMapping.ToGroupList();
         var listeningMotionGroups = ListeningMotion.ToGroupList();
         var thinkingMotionGroups = ThinkingMotion.ToGroupList();
         var speakingMotionGroups = SpeakingMotion.ToGroupList();
@@ -3660,7 +3678,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             MouthSync = MouthSync,
             MouthSensitivity = MouthSensitivity,
             ShowBubble = ShowBubble,
-            IdleMotionGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(),
+            IdleMotionGroups = idleMotionGroups,
+            // 旧单数字段同步第一项；空列表回写 "Idle" 维持旧版本默认。
+            IdleMotionGroup = idleMotionGroups?.FirstOrDefault() ?? "Idle",
             ListeningExpression = NullIfEmpty(ListeningExpression),
             ThinkingExpression = NullIfEmpty(ThinkingExpression),
             SpeakingExpression = NullIfEmpty(SpeakingExpression),

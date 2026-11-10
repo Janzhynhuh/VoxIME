@@ -250,7 +250,12 @@ public sealed class AppConfig
         Live2D.ModelLibraryDirectory = string.IsNullOrWhiteSpace(Live2D.ModelLibraryDirectory)
             ? null
             : Live2D.ModelLibraryDirectory.Trim();
-        Live2D.IdleMotionGroup = string.IsNullOrWhiteSpace(Live2D.IdleMotionGroup) ? "Idle" : Live2D.IdleMotionGroup.Trim();
+        // 待机动作组也支持多选：默认值 "Idle" 不种入列表（空列表 = 自动找名字含 idle 的组，
+        // 兼容模型没有 Idle 组的情况），旧字段回写 "Idle" 供旧版本读取。
+        Live2D.IdleMotionGroups = NormalizeStoredMotionGroups(
+            Live2D.IdleMotionGroups,
+            Live2DConfig.IsDefaultIdleGroup(Live2D.IdleMotionGroup) ? null : Live2D.IdleMotionGroup);
+        Live2D.IdleMotionGroup = Live2D.IdleMotionGroups?.FirstOrDefault() ?? "Idle";
 
         // 状态动作映射从单选升级为多选：新列表字段优先，旧单数字段作为兼容来源；
         // 规范化后回写旧字段的第一项，旧版本仍能读到“一个动作组”。
@@ -270,7 +275,10 @@ public sealed class AppConfig
                 continue;
             }
 
-            map.IdleGroup = string.IsNullOrWhiteSpace(map.IdleGroup) ? "Idle" : map.IdleGroup.Trim();
+            map.IdleGroups = Live2DConfig.NormalizeMotionGroups(
+                map.IdleGroups,
+                Live2DConfig.IsDefaultIdleGroup(map.IdleGroup) ? null : map.IdleGroup);
+            map.IdleGroup = map.IdleGroups.FirstOrDefault() ?? "Idle";
             map.Listening = Live2DConfig.NormalizeMotionGroups(map.Listening);
             map.Thinking = Live2DConfig.NormalizeMotionGroups(map.Thinking);
             map.Speaking = Live2DConfig.NormalizeMotionGroups(map.Speaking);
@@ -494,7 +502,12 @@ public sealed class Live2DConfig
     public bool MouthSync { get; set; } = true;
     public double MouthSensitivity { get; set; } = 1.0;
     public bool ShowBubble { get; set; } = true;
+    /// <summary>旧字段：待机动作组（单个）；仅为兼容旧配置保留，保存时同步为 <see cref="IdleMotionGroups"/> 的第一项。</summary>
     public string IdleMotionGroup { get; set; } = "Idle";
+
+    /// <summary>待机动作组（可多选，各自循环叠加播放；空=自动找名字含 idle 的组）。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string>? IdleMotionGroups { get; set; }
     public string? ListeningExpression { get; set; }
     public string? ThinkingExpression { get; set; }
     public string? SpeakingExpression { get; set; }
@@ -560,9 +573,13 @@ public sealed class Live2DConfig
         var key = (modelDirectory ?? "").Trim();
         if (key.Length > 0 && MotionByModel.TryGetValue(key, out var map) && map is not null)
         {
+            var idleGroups = NormalizeMotionGroups(
+                map.IdleGroups,
+                IsDefaultIdleGroup(map.IdleGroup) ? null : map.IdleGroup);
             return new Live2DMotionMap
             {
-                IdleGroup = string.IsNullOrWhiteSpace(map.IdleGroup) ? "Idle" : map.IdleGroup.Trim(),
+                IdleGroups = idleGroups,
+                IdleGroup = idleGroups.FirstOrDefault() ?? "Idle",
                 Listening = NormalizeMotionGroups(map.Listening),
                 Thinking = NormalizeMotionGroups(map.Thinking),
                 Speaking = NormalizeMotionGroups(map.Speaking),
@@ -570,15 +587,24 @@ public sealed class Live2DConfig
             };
         }
 
+        var globalIdleGroups = NormalizeMotionGroups(
+            IdleMotionGroups,
+            IsDefaultIdleGroup(IdleMotionGroup) ? null : IdleMotionGroup);
         return new Live2DMotionMap
         {
-            IdleGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(),
+            IdleGroups = globalIdleGroups,
+            IdleGroup = globalIdleGroups.FirstOrDefault() ?? "Idle",
             Listening = NormalizeMotionGroups(ListeningMotionGroups, ListeningMotionGroup),
             Thinking = NormalizeMotionGroups(ThinkingMotionGroups, ThinkingMotionGroup),
             Speaking = NormalizeMotionGroups(SpeakingMotionGroups, SpeakingMotionGroup),
             Error = NormalizeMotionGroups(ErrorMotionGroups, ErrorMotionGroup)
         };
     }
+
+    /// <summary>默认值 / 空值 = “自动”，不种入多选列表（模型可能没有名为 Idle 的组）。</summary>
+    public static bool IsDefaultIdleGroup(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+        || string.Equals(value.Trim(), "Idle", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// 规范化一个状态的动作组列表：合并旧单数字段、trim、去空、忽略大小写去重、最多 <see cref="Live2DMotionMap.MaxGroups"/> 个；
@@ -640,7 +666,12 @@ public sealed class Live2DMotionMap
     /// <summary>表示“该状态不播放动作”的保留值。</summary>
     public const string NoneMarker = "__none__";
 
+    /// <summary>旧字段：待机动作组（单个）；仅为兼容旧配置保留。</summary>
     public string? IdleGroup { get; set; }
+
+    /// <summary>待机动作组（可多选，各自循环叠加播放；空=自动找名字含 idle 的组）。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string> IdleGroups { get; set; } = new();
 
     /// <summary>聆听状态叠加的动作组；空=自动同名匹配，<see cref="NoneMarker"/>=不播放。</summary>
     [JsonConverter(typeof(StringListJsonConverter))]

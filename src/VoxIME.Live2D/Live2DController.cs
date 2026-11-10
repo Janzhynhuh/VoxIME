@@ -1203,6 +1203,8 @@ public sealed class Live2DController : ILive2DController
             ["speaking"] = motionMap.Speaking,
             ["error"] = motionMap.Error
         };
+        // 待机动作组同样支持多选：数组用于新页面，单数字段保留给旧页面/旧配置读取。
+        var idleMotionGroups = motionMap.IdleGroups;
         var idleMotionGroup = string.IsNullOrWhiteSpace(motionMap.IdleGroup) ? "Idle" : motionMap.IdleGroup!.Trim();
         // 同步 Exp3/Animation 等未登记进 model3.json 的资源，页面加载模型后注入引擎。
         var modelAssets = Live2DModelAssetCatalog.Load(config.ModelDirectory);
@@ -1221,6 +1223,7 @@ public sealed class Live2DController : ILive2DController
             config.ModelOffsetX,
             config.ModelOffsetY,
             idleMotionGroup,
+            idleMotionGroups,
             config.ShowBubble,
             expressions,
             motions,
