@@ -233,6 +233,8 @@ Hiyori/
 - 眨眼：`model3.json` 声明了 `Groups.EyeBlink.Ids` 时由 Cubism 自动眨眼（Hiyori 为
   `ParamEyeLOpen`/`ParamEyeROpen`）；模型未声明 EyeBlink 组时不会眨眼。待机动作循环期间 Cubism 会跳过自动眨眼，
   网页由 `applyBlinkLayer` 按同一组参数手动补眨眼（见 6.5）；模型没有眼睛参数时跳过。
+  手动眨眼在**物理更新前**写入：很多模型的耳朵/发梢等物理输入里带 `ParamEyeLOpen`/`ParamEyeROpen`
+  （大肥鱼 physics 设置 83/85 的权重为 35），如果写在物理之后，耳朵就不会跟着眨眼动。
 - 呼吸：CubismWebFramework 的 `updateNaturalMovements` 自动驱动（`ParamBreath` 等）。
 
 ### 6.4 气泡
@@ -264,6 +266,11 @@ Hiyori/
 - 程序层 `applyBlinkLayer`：待机/状态动作播放期间 Cubism 的 `updateMotions()` 返回 true，会跳过自动
   EyeBlink；网页按 `model3.json` 的 `Groups.EyeBlink.Ids`（没有时回退
   `ParamEyeLOpen`/`ParamEyeROpen`）在程序层手动眨眼。模型没有可用眼睛参数时整层跳过。
+  **写入时机**：包了一层 `internalModel.updateNaturalMovements`，在引擎的
+  `updateMotions → 表情 → EyeBlink → 焦点 → 呼吸 → 物理` 顺序里、物理之前写眼睛参数；
+  `beforeModelUpdate` 里再写一次兜底（同一帧值相同）。否则依赖眼睛参数的物理输出
+  （如兽耳 LEar/REar）看不到闭眼，表现为“眨眼时耳朵不动”。
+  `debug().diag.readback` 会回读更新帧内的 `eyeLOpen`/`eyeROpen`/`earL1`/`earR1`，便于验证这类联动。
 - 模型缺少某个动作组/表情时对应层静默不启动，不影响其它层。
 ## 7. C# ↔ JS 消息协议
 

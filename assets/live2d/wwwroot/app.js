@@ -109,7 +109,7 @@
   // 动作分层：idle / state / preview 各用一组并行 MotionManager，每个动作组占一条层，
   // 所以待机与同一状态都可以同时叠加多个动作（Cubism 官方推荐的多 MotionManager 做法）。
   // 层按数组顺序更新：idle 最低、state 覆盖 idle、preview 最高。
-  // 眨眼作为程序层在 beforeModelUpdate 最后覆盖眼睛参数。
+  // 眨眼作为程序层在物理更新前写入（beforeModelUpdate 再兜底一次），让耳朵等物理联动能看到眨眼。
   var MAX_IDLE_LAYERS = 4;
   var MAX_GESTURE_LAYERS = 2;
   var MAX_STATE_LAYERS = 4;
@@ -1133,10 +1133,35 @@
       type: 'debug',
       message: '眨眼层：' + (blinkLayer.ids.length ? blinkLayer.ids.join(', ') : '(模型无眼睛参数，跳过)')
     });
+    hookBlinkBeforePhysics();
+  }
+
+  /**
+   * 把眨眼提前到物理更新之前。引擎每帧顺序是：
+   * updateMotions → saveParameters → 表情 → EyeBlink → 焦点 → 呼吸 → 物理 → beforeModelUpdate。
+   * 有些模型（如大肥鱼）的耳朵是物理输出，输入里带 ParamEyeLOpen/ROpen（权重 35），
+   * 如果在 beforeModelUpdate 才写眼睛参数，物理永远看不到闭眼，耳朵就不会跟着眨眼动。
+   */
+  function hookBlinkBeforePhysics() {
+    var internal = model && model.internalModel;
+    if (!internal || internal.__voximeBlinkHooked) return;
+    if (typeof internal.updateNaturalMovements !== 'function') return;
+    internal.__voximeBlinkHooked = true;
+    var original = internal.updateNaturalMovements;
+    internal.updateNaturalMovements = function () {
+      try {
+        applyBlinkLayer();
+      } catch (e) {
+        log('眨眼层（物理前）失败（忽略）', e);
+      }
+      return original.apply(this, arguments);
+    };
+    sendHost({ type: 'debug', message: '眨眼层：已在物理更新前写入眼睛参数' });
   }
 
   // 手动眨眼只在“待机动作播放中”生效：引擎有动作时 updateMotions 返回 true，
-  // 会跳过自动 EyeBlink；这一层在物理/表情更新之后直接写回眼睛参数。
+  // 会跳过自动 EyeBlink。写入点有两个：物理更新前（让耳朵等物理联动看到眨眼）和
+  // beforeModelUpdate 兜底（渲染前再写一次，值相同，幂等）。
   function applyBlinkLayer() {
     if (!model || !blinkLayer.handles.length) return;
     // 预览期间由预览动作自己控制表情；error 表情本身可能是闭眼/哭脸，避免强行睁眼。
@@ -1235,7 +1260,12 @@
           angleX: core.getParameterValueById(getCubismId('ParamAngleX')),
           angleY: core.getParameterValueById(getCubismId('ParamAngleY')),
           eyeBallX: core.getParameterValueById(getCubismId('ParamEyeBallX')),
-          eyeBallY: core.getParameterValueById(getCubismId('ParamEyeBallY'))
+          eyeBallY: core.getParameterValueById(getCubismId('ParamEyeBallY')),
+          // 眼睛开合与耳朵物理输出：用于验证“眨眼带动耳朵”的联动（模型可能没有耳朵参数，读不到时为 0）。
+          eyeLOpen: core.getParameterValueById(getCubismId('ParamEyeLOpen')),
+          eyeROpen: core.getParameterValueById(getCubismId('ParamEyeROpen')),
+          earL1: core.getParameterValueById(getCubismId('LEar1')),
+          earR1: core.getParameterValueById(getCubismId('REar1'))
         };
       } catch (e) { /* 读参失败不影响渲染 */ }
     } catch (e) {
@@ -1297,8 +1327,9 @@
       modelUrl = resolved;
       modelName = deriveModelName(resolved);
       app.stage.addChild(model);
-      model.internalModel.on('beforeModelUpdate', applyMouthOverride);
+      // 顺序有意义：先跑分层覆盖（含眨眼），再由口型层读取“更新帧内实际值”做 diag 回读。
       model.internalModel.on('beforeModelUpdate', applyLayeredOverrides);
+      model.internalModel.on('beforeModelUpdate', applyMouthOverride);
       setupMouthParameters();
       applyModelAssets(pendingModelAssets);
       setupMotionLayers();
