@@ -75,22 +75,23 @@ public sealed class AppConfigTests
     {
         var config = AppConfig.CreateDefault();
         config.Live2D.IdleMotionGroup = "Idle";
-        config.Live2D.ListeningMotionGroup = "global-listening";
+        config.Live2D.ListeningMotionGroups = new List<string> { "global-listening" };
         config.Live2D.MotionByModel["E:\\models\\a"] = new Live2DMotionMap
         {
             IdleGroup = "a-idle",
-            Listening = "a-listening",
-            Error = "__none__"
+            Listening = new List<string> { "a-listening", "a-listening-2" },
+            Error = new List<string> { "__none__" }
         };
 
         var a = config.Live2D.ResolveMotionMap("E:\\models\\a");
         Assert.Equal("a-idle", a.IdleGroup);
-        Assert.Equal("a-listening", a.Listening);
-        Assert.Equal("__none__", a.Error);
+        Assert.Equal(new[] { "a-listening", "a-listening-2" }, a.Listening);
+        Assert.Equal(new[] { "__none__" }, a.Error);
 
         var b = config.Live2D.ResolveMotionMap("E:\\models\\b");
         Assert.Equal("Idle", b.IdleGroup);
-        Assert.Equal("global-listening", b.Listening);
+        Assert.Equal(new[] { "global-listening" }, b.Listening);
+        Assert.Empty(b.Thinking);
     }
 
     [Fact]
@@ -254,6 +255,109 @@ public sealed class AppConfigTests
 
         Assert.NotEqual("F9", config.Hotkeys.PushToTalk);
         Assert.NotEqual("changed", config.ProviderProfiles[0].Name);
+    }
+
+    [Fact]
+    public void MotionLists_DeserializeLegacyStringValues()
+    {
+        const string json = """
+        {
+          "live2D": {
+            "listeningMotionGroup": "TapBody",
+            "thinkingMotionGroups": [ "Think", "Breath" ],
+            "motionByModel": {
+              "E:\\models\\a": { "idleGroup": "Idle", "speaking": "Speak" }
+            }
+          }
+        }
+        """;
+
+        var config = JsonSerializer.Deserialize<AppConfig>(json, ConfigJson.Options);
+        Assert.NotNull(config);
+        Assert.Equal("TapBody", config!.Live2D.ListeningMotionGroup);
+        Assert.Equal(new[] { "Think", "Breath" }, config.Live2D.ThinkingMotionGroups);
+        Assert.Equal(new[] { "Speak" }, config.Live2D.MotionByModel["E:\\models\\a"].Speaking);
+    }
+
+    [Fact]
+    public void MotionLists_NormalizeDedupeTrimAndCap()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.SpeakingMotionGroups = new List<string> { " A ", "a", "", "B", "C", "D", "E" };
+        config.Normalize();
+
+        Assert.Equal(new[] { "A", "B", "C", "D" }, config.Live2D.SpeakingMotionGroups);
+        Assert.Equal("A", config.Live2D.SpeakingMotionGroup);
+    }
+
+    [Fact]
+    public void MotionLists_NoneMarkerWins()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.ErrorMotionGroups = new List<string> { "Shock", "__none__", "Sad" };
+        config.Normalize();
+
+        Assert.Equal(new[] { "__none__" }, config.Live2D.ErrorMotionGroups);
+        Assert.Equal("__none__", config.Live2D.ErrorMotionGroup);
+    }
+
+    [Fact]
+    public void MotionLists_LegacySingleFieldBecomesList()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.ThinkingMotionGroup = "Think";
+        config.Normalize();
+
+        Assert.Equal(new[] { "Think" }, config.Live2D.ThinkingMotionGroups);
+        Assert.Equal("Think", config.Live2D.ThinkingMotionGroup);
+    }
+
+    [Fact]
+    public void MotionLists_SerializeAsArrayAndClonePreserves()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.ListeningMotionGroups = new List<string> { "Idle", "TapBody" };
+        config.Normalize();
+
+        var json = JsonSerializer.Serialize(config, ConfigJson.Options);
+        Assert.Contains("\"listeningMotionGroups\": [", json);
+        Assert.Contains("\"Idle\"", json);
+        Assert.Contains("\"TapBody\"", json);
+
+        var clone = config.Clone();
+        Assert.Equal(new[] { "Idle", "TapBody" }, clone.Live2D.ListeningMotionGroups);
+    }
+
+    [Fact]
+    public void ResolveMotionMap_FallsBackToGlobalListsAndLegacyField()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.ListeningMotionGroups = new List<string> { "GlobalA", "GlobalB" };
+        config.Live2D.ThinkingMotionGroup = "LegacyThink";
+
+        var resolved = config.Live2D.ResolveMotionMap("E:\\models\\none");
+
+        Assert.Equal(new[] { "GlobalA", "GlobalB" }, resolved.Listening);
+        Assert.Equal(new[] { "LegacyThink" }, resolved.Thinking);
+        Assert.Empty(resolved.Speaking);
+    }
+
+    [Fact]
+    public void Normalize_ClampsPerModelMotionMapLists()
+    {
+        var config = AppConfig.CreateDefault();
+        config.Live2D.MotionByModel["E:\\models\\a"] = new Live2DMotionMap
+        {
+            IdleGroup = "  Idle  ",
+            Listening = new List<string> { "A", "A", "B", "C", "D", "E" },
+            Speaking = new List<string> { "" }
+        };
+        config.Normalize();
+
+        var map = config.Live2D.MotionByModel["E:\\models\\a"];
+        Assert.Equal("Idle", map.IdleGroup);
+        Assert.Equal(new[] { "A", "B", "C", "D" }, map.Listening);
+        Assert.Empty(map.Speaking);
     }
 
     [Fact]

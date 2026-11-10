@@ -57,8 +57,8 @@
   };
 
   var stateExpressions = { listening: null, thinking: null, speaking: null, error: null };
-  // 状态动作映射：null/空 = 自动找同名动作组；'__none__' = 不播放；其它 = 指定动作组。
-  var stateMotions = { listening: null, thinking: null, speaking: null, error: null };
+  // 状态动作映射：空数组 = 自动找同名动作组；['__none__'] = 不播放；其它 = 同时叠加的动作组（最多 4 个）。
+  var stateMotions = { listening: [], thinking: [], speaking: [], error: [] };
   // C# 扫描到的 Exp3/Animation 资源（可能未登记在 model3.json 中），模型加载后注入引擎。
   var pendingModelAssets = null;
   // 预览冷却：动作播完 / 表情应用后停 3 秒，再恢复默认。
@@ -88,9 +88,18 @@
   var lastStatusAt = 0;
   var fpsCounter = { frames: 0, since: performance.now(), value: 0 };
   var diag = { modelUpdateTicks: 0, mouthWrites: 0, mouthErrors: 0, lastMouthError: '' };
-  // 动作分层：idle 由主 MotionManager 驱动，state / preview 使用并行 MotionManager，
-  // 可以同时更新；眨眼作为程序层在 beforeModelUpdate 最后覆盖眼睛参数。
-  var motionLayers = { state: null, preview: null, stateGroup: null, previewGroup: null, ready: false };
+  // 动作分层：idle 由主 MotionManager 驱动；state / preview 各用一组并行 MotionManager，
+  // 每个动作组占一条层，所以同一状态可以同时叠加多个动作（Cubism 官方推荐的多 MotionManager 做法）。
+  // 眨眼作为程序层在 beforeModelUpdate 最后覆盖眼睛参数。
+  var MAX_STATE_LAYERS = 4;
+  var MAX_PREVIEW_LAYERS = 4;
+  var motionLayers = {
+    state: [],
+    stateGroups: [],
+    preview: [],
+    previewGroups: [],
+    ready: false
+  };
   var blinkLayer = { ids: [], handles: [], nextAt: 0, startedAt: -1, lastLog: 0 };
 
   // ---------------- 基础工具 ----------------
@@ -391,8 +400,8 @@
         // 切组前先停掉所有层并重置参数。像“脱捕”这种动作会改很多
         // 自定义参数，如果不清空，切回 Idle 时这些参数会残留在模型上。
         if (previewSession.finishHandler || previewSession.motionTimer) cancelMotionPreview(false);
-        stopMotionLayer('state');
-        stopMotionLayer('preview');
+        stopAllMotionLayers('state');
+        stopAllMotionLayers('preview');
         mm.stopAllMotions();
         resetModelParametersToDefault();
         if (nextActive) {
@@ -491,35 +500,40 @@
   //   preview = 设置页动作预览（最高层，播完即停）
   // 层按数组顺序更新，后更新的层覆盖先更新的参数；idle 仍在主 MotionManager。
   function setupMotionLayers() {
-    motionLayers.state = null;
-    motionLayers.preview = null;
-    motionLayers.stateGroup = null;
-    motionLayers.previewGroup = null;
+    motionLayers.state = [];
+    motionLayers.stateGroups = [];
+    motionLayers.preview = [];
+    motionLayers.previewGroups = [];
     motionLayers.ready = false;
     if (!model || !model.internalModel) return;
     try {
+      var total = MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS;
       if (typeof model.internalModel.extendParallelMotionManager === 'function') {
-        model.internalModel.extendParallelMotionManager(2);
+        // 该 API 的语义是“扩展到 N 条”（源码里 for(; length < n;) push(...)），重复调用不会膨胀。
+        model.internalModel.extendParallelMotionManager(total);
       }
       var managers = model.internalModel.parallelMotionManager || [];
-      motionLayers.state = managers[0] || null;
-      motionLayers.preview = managers[1] || null;
-      motionLayers.ready = !!(motionLayers.state && motionLayers.preview);
+      motionLayers.state = managers.slice(0, MAX_STATE_LAYERS);
+      motionLayers.preview = managers.slice(MAX_STATE_LAYERS, MAX_STATE_LAYERS + MAX_PREVIEW_LAYERS);
+      motionLayers.stateGroups = new Array(motionLayers.state.length).fill(null);
+      motionLayers.previewGroups = new Array(motionLayers.preview.length).fill(null);
+      motionLayers.ready = motionLayers.state.length > 0 && motionLayers.preview.length > 0;
     } catch (e) {
       log('初始化动作层失败（忽略）', e);
     }
     setupBlinkLayer();
     sendHost({
       type: 'debug',
-      message: '动作层：state=' + !!motionLayers.state + ', preview=' + !!motionLayers.preview
+      message: '动作层：state=' + motionLayers.state.length + ', preview=' + motionLayers.preview.length
     });
   }
 
-  function startMotionLayer(kind, group, priority, options) {
-    var manager = motionLayers[kind];
+  function startMotionLayer(kind, slot, group, priority, options) {
+    var managers = motionLayers[kind] || [];
+    var manager = managers[slot];
     var name = String(group || '').trim();
     if (!manager || !name) return null;
-    var key = kind + 'Group';
+    var groupsKey = kind + 'Groups';
     try {
       manager.stopAllMotions();
       var loop = options && typeof options.loop === 'boolean' ? options.loop : undefined;
@@ -534,24 +548,79 @@
         }
       } catch (e) { index = 0; }
       var promise = manager.startMotion(name, index, priority || 3, { loop: loop });
-      motionLayers[key] = name;
+      motionLayers[groupsKey][slot] = name;
       if (promise && typeof promise.catch === 'function') {
         promise.catch(function (err) {
-          log('动作层启动失败（忽略）: ' + kind + ' / ' + name, err);
+          log('动作层启动失败（忽略）: ' + kind + '[' + slot + '] / ' + name, err);
         });
       }
       return promise;
     } catch (e) {
-      log('动作层启动异常（忽略）: ' + kind + ' / ' + name, e);
+      log('动作层启动异常（忽略）: ' + kind + '[' + slot + '] / ' + name, e);
       return null;
     }
   }
 
-  function stopMotionLayer(kind) {
-    var manager = motionLayers[kind];
-    motionLayers[kind + 'Group'] = null;
+  function stopMotionLayer(kind, slot) {
+    var managers = motionLayers[kind] || [];
+    var groupsKey = kind + 'Groups';
+    if (motionLayers[groupsKey]) motionLayers[groupsKey][slot] = null;
+    var manager = managers[slot];
     if (!manager) return;
     try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
+  }
+
+  function stopAllMotionLayers(kind) {
+    var managers = motionLayers[kind] || [];
+    for (var i = 0; i < managers.length; i++) {
+      stopMotionLayer(kind, i);
+    }
+  }
+
+  function hasMotionLayerGroup(kind) {
+    var groups = motionLayers[kind + 'Groups'] || [];
+    for (var i = 0; i < groups.length; i++) {
+      if (groups[i]) return true;
+    }
+    return false;
+  }
+
+  /** 归一化配置里的动作组：兼容旧版单个字符串，去空、去重、最多 MAX_STATE_LAYERS 个。 */
+  function normalizeStateMotionSelection(value) {
+    var list = [];
+    if (typeof value === 'string') {
+      list.push(value);
+    } else if (Object.prototype.toString.call(value) === '[object Array]') {
+      list = value.slice();
+    }
+    var result = [];
+    var seen = {};
+    for (var i = 0; i < list.length; i++) {
+      var name = String(list[i] == null ? '' : list[i]).trim();
+      if (!name) continue;
+      var key = name.toLowerCase();
+      if (seen[key]) continue;
+      seen[key] = true;
+      result.push(name);
+      if (result.length >= MAX_STATE_LAYERS) break;
+    }
+    return result;
+  }
+
+  /** 自动模式：找与状态同名的动作组（listening -> Listening/listening）。 */
+  function findStateMotionGroup(state) {
+    try {
+      var manager = model && model.internalModel ? model.internalModel.motionManager : null;
+      var definitions = manager ? (manager.definitions || {}) : {};
+      var groups = Object.keys(definitions);
+      var candidates = [state, state.charAt(0).toUpperCase() + state.slice(1)];
+      for (var c = 0; c < candidates.length; c++) {
+        for (var g = 0; g < groups.length; g++) {
+          if (groups[g].toLowerCase() === candidates[c].toLowerCase()) return groups[g];
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return null;
   }
 
   function setupBlinkLayer() {
@@ -855,10 +924,10 @@
     idleMotionActive = false;
     modelGroups = [];
     idleGroup = null;
-    motionLayers.state = null;
-    motionLayers.preview = null;
-    motionLayers.stateGroup = null;
-    motionLayers.previewGroup = null;
+    motionLayers.state = [];
+    motionLayers.stateGroups = [];
+    motionLayers.preview = [];
+    motionLayers.previewGroups = [];
     motionLayers.ready = false;
     blinkLayer.ids = [];
     blinkLayer.handles = [];
@@ -900,7 +969,7 @@
     // 正常状态切换优先于预览：清掉预览冷却，避免 3 秒计时器覆盖真实状态。
     if (!force) {
       cancelExpressionPreview();
-      if (previewSession.finishHandler || previewSession.motionTimer || motionLayers.previewGroup) {
+      if (previewSession.finishHandler || previewSession.motionTimer || hasMotionLayerGroup('preview')) {
         cancelMotionPreview(true);
       }
     }
@@ -928,45 +997,44 @@
     }
 
     // 2) 动作：状态动作走并行层，待机层继续播放，实现同时动作。
-    //    priority=3（FORCE）让状态动作覆盖同为循环的待机曲线；不同层各自更新。
+    //    每个动作组占一条 state 层，所以同一状态可以叠加多个组；priority=3（FORCE）让状态动作
+    //    覆盖同为循环的待机曲线；不同层各自更新，同名参数以后更新的层为准。
     try {
-      var mm = model.internalModel.motionManager;
-      var definitions = mm.definitions || {};
-      var groups = Object.keys(definitions);
-      var selection = state === 'idle' ? null : stateMotions[state];
-      var group = null;
+      var selection = state === 'idle' ? [] : normalizeStateMotionSelection(stateMotions[state]);
+      var groups = [];
       if (state !== 'idle') {
-        if (selection === '__none__') {
-          group = null;
-        } else if (selection) {
-          group = String(selection);
+        if (selection.indexOf('__none__') >= 0) {
+          groups = [];
+        } else if (selection.length > 0) {
+          groups = selection;
         } else {
-          var candidates = [state, state.charAt(0).toUpperCase() + state.slice(1)];
-          for (var c = 0; c < candidates.length && !group; c++) {
-            for (var g = 0; g < groups.length; g++) {
-              if (groups[g].toLowerCase() === candidates[c].toLowerCase()) { group = groups[g]; break; }
-            }
-          }
+          var autoGroup = findStateMotionGroup(state);
+          if (autoGroup) groups = [autoGroup];
         }
       }
+
+      stopAllMotionLayers('state');
       if (state === 'idle') {
-        stopMotionLayer('state');
         // 清掉状态动作残留的自定义参数；下一帧待机层会重新写回待机曲线。
         resetModelParametersToDefault();
-      } else if (group) {
-        stopMotionLayer('state');
+      } else if (groups.length > 0) {
         resetModelParametersToDefault();
-        if (motionLayers.state) {
-          startMotionLayer('state', group, 3);
-        } else {
+        var started = [];
+        for (var i = 0; i < groups.length && i < motionLayers.state.length; i++) {
+          startMotionLayer('state', i, groups[i], 3);
+          started.push(groups[i]);
+        }
+        if (started.length === 0) {
           // 并行层不可用时退回单动作模式，至少不影响状态动作。
-          model.motion(group, undefined, 3);
+          model.motion(groups[0], undefined, 3);
+        } else if (selection.length > 0) {
+          sendHost({
+            type: 'debug',
+            message: '状态动作（叠加 ' + started.length + ' 层）：' + state + ' -> ' + started.join(', ')
+          });
+        } else {
+          sendHost({ type: 'debug', message: '状态动作（自动）：' + state + ' -> ' + started.join(', ') });
         }
-        if (selection && selection !== '__none__') {
-          sendHost({ type: 'debug', message: '状态动作（叠加层）：' + state + ' -> ' + group });
-        }
-      } else {
-        stopMotionLayer('state');
       }
     } catch (e) {
       log('状态动作应用失败（忽略）: ' + state, e);
@@ -986,12 +1054,16 @@
     }
     session.token++;
 
-    var manager = motionLayers.preview;
-    if (session.finishHandler && manager && typeof manager.off === 'function') {
-      try { manager.off('motionFinish', session.finishHandler); } catch (e) { /* ignore */ }
+    var managers = motionLayers.preview || [];
+    if (session.finishHandler) {
+      for (var i = 0; i < managers.length; i++) {
+        if (managers[i] && typeof managers[i].off === 'function') {
+          try { managers[i].off('motionFinish', session.finishHandler); } catch (e) { /* ignore */ }
+        }
+      }
     }
     session.finishHandler = null;
-    stopMotionLayer('preview');
+    stopAllMotionLayers('preview');
 
     if (restoreIdle) {
       resetModelParametersToDefault();
@@ -1009,14 +1081,18 @@
     previewSession.motionTimer = null;
     previewSession.motionFallbackTimer = null;
 
-    var manager = motionLayers.preview;
-    if (previewSession.finishHandler && manager && typeof manager.off === 'function') {
-      try { manager.off('motionFinish', previewSession.finishHandler); } catch (e) { /* ignore */ }
+    var managers = motionLayers.preview || [];
+    if (previewSession.finishHandler) {
+      for (var i = 0; i < managers.length; i++) {
+        if (managers[i] && typeof managers[i].off === 'function') {
+          try { managers[i].off('motionFinish', previewSession.finishHandler); } catch (e) { /* ignore */ }
+        }
+      }
     }
     previewSession.finishHandler = null;
     previewSession.token++;
 
-    stopMotionLayer('preview');
+    stopAllMotionLayers('preview');
     resetModelParametersToDefault();
     sendHost({ type: 'debug', message: '预览冷却结束，已恢复待机/状态层' });
   }
@@ -1028,31 +1104,35 @@
     }
   }
 
-  /** 设置页“动作预览”：叠加在待机/状态层之上播放一次，播完后保持 3 秒。 */
-  function previewMotion(motionGroup) {
-    var group = String(motionGroup || '').trim();
-    if (!group || !model) return;
+  /** 设置页“动作预览”：可同时预览多个动作组（各占一条预览层），播完后保持 3 秒。 */
+  function previewMotion(motionGroups) {
+    var groups = normalizeStateMotionSelection(motionGroups);
+    if (!groups.length || !model) return;
 
+    var label = groups.join('+');
     cancelMotionPreview(false);
     var session = previewSession;
     var token = ++session.token;
-    var manager = motionLayers.preview;
-    if (!manager) {
-      sendHost({ type: 'motionPreviewResult', group: group, ok: false, message: '当前模型没有可用的预览动作层' });
+    var managers = motionLayers.preview || [];
+    if (!managers.length) {
+      sendHost({ type: 'motionPreviewResult', group: label, ok: false, message: '当前模型没有可用的预览动作层' });
       return;
     }
 
     var finishHandler = function () {
       if (token !== session.token) return;
       session.finishHandler = null;
-      sendHost({ type: 'debug', message: '预览结束：' + group + '，3 秒后恢复默认' });
+      sendHost({ type: 'debug', message: '预览结束：' + groups.join(', ') + '，3 秒后恢复默认' });
       session.motionTimer = setTimeout(function () {
         finishMotionPreview(token);
       }, 3000);
     };
     session.finishHandler = finishHandler;
-    if (typeof manager.once === 'function') {
-      manager.once('motionFinish', finishHandler);
+    var watched = Math.min(groups.length, managers.length);
+    for (var w = 0; w < watched; w++) {
+      if (managers[w] && typeof managers[w].once === 'function') {
+        managers[w].once('motionFinish', finishHandler);
+      }
     }
 
     // 某些动作没有 finish 事件时兜底（大肥鱼动作最长 13.15s）。
@@ -1062,27 +1142,31 @@
 
     try {
       resetModelParametersToDefault();
-      var result = startMotionLayer('preview', group, 3, { loop: false });
-      if (result && typeof result.then === 'function') {
-        result.then(function (ok) {
-          sendHost({ type: 'motionPreviewResult', group: group, ok: ok !== false });
+      var lastResult = null;
+      for (var i = 0; i < groups.length && i < managers.length; i++) {
+        var started = startMotionLayer('preview', i, groups[i], 3, { loop: false });
+        if (started) lastResult = started;
+      }
+      if (lastResult && typeof lastResult.then === 'function') {
+        lastResult.then(function (ok) {
+          sendHost({ type: 'motionPreviewResult', group: label, ok: ok !== false });
           if (!ok && token === session.token) {
             finishMotionPreview(token);
           }
         }).catch(function (err) {
           sendHost({
-            type: 'motionPreviewResult', group: group, ok: false,
+            type: 'motionPreviewResult', group: label, ok: false,
             message: String((err && err.message) || err)
           });
           if (token === session.token) finishMotionPreview(token);
         });
       } else {
-        sendHost({ type: 'motionPreviewResult', group: group, ok: true });
+        sendHost({ type: 'motionPreviewResult', group: label, ok: true });
       }
     } catch (e) {
-      log('预览动作失败（忽略）: ' + group, e);
+      log('预览动作失败（忽略）: ' + label, e);
       sendHost({
-        type: 'motionPreviewResult', group: group, ok: false,
+        type: 'motionPreviewResult', group: label, ok: false,
         message: String((e && e.message) || e)
       });
       finishMotionPreview(token);
@@ -1180,11 +1264,16 @@
         }
       });
     }
+    var motionsChanged = false;
     if (msg.motions && typeof msg.motions === 'object') {
       Object.keys(stateMotions).forEach(function (key) {
         if (Object.prototype.hasOwnProperty.call(msg.motions, key)) {
-          var value = msg.motions[key];
-          stateMotions[key] = value ? String(value) : null;
+          var next = normalizeStateMotionSelection(msg.motions[key]);
+          var current = stateMotions[key] || [];
+          if (next.join('\n') !== current.join('\n')) {
+            motionsChanged = true;
+          }
+          stateMotions[key] = next;
         }
       });
     }
@@ -1204,6 +1293,10 @@
         }
       }
       setupIdleGroup();
+      if (motionsChanged) {
+        // 设置页保存后立即让当前状态的叠加动作生效（force 不清预览，避免正在预览时被中断）。
+        applyModelState(live.state, true);
+      }
       if (scaleChanged) {
         resizePixi();
       } else {
@@ -1262,7 +1355,7 @@
         applyConfig(data);
         break;
       case 'previewMotion':
-        previewMotion(data.group);
+        previewMotion(data.groups || data.group);
         break;
       case 'previewExpression':
         previewExpression(data.name);
@@ -1898,6 +1991,11 @@
         targetGazeY: live.targetGazeY,
         groups: modelGroups,
         idleGroup: idleGroup,
+        stateGroups: (motionLayers.stateGroups || []).filter(Boolean),
+        previewGroups: (motionLayers.previewGroups || []).filter(Boolean),
+        stateLayerCount: (motionLayers.state || []).length,
+        previewLayerCount: (motionLayers.preview || []).length,
+        stateMotions: stateMotions,
         demoActive: demoActive,
         fps: fpsCounter.value,
         mouthSync: config.mouthSync,

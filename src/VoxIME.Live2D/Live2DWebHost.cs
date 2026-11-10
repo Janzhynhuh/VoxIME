@@ -258,6 +258,10 @@ internal sealed class Live2DWebHost : IDisposable
     public void SendPreviewMotion(string motionGroup) =>
         Send(new { type = "previewMotion", group = motionGroup });
 
+    /// <summary>同时预览多个动作组（每个动作组占一条并行层）。</summary>
+    public void SendPreviewMotions(IReadOnlyList<string> motionGroups) =>
+        Send(new { type = "previewMotion", groups = motionGroups });
+
     public void SendPreviewExpression(string expression) =>
         Send(new { type = "previewExpression", name = expression });
 
@@ -277,7 +281,7 @@ internal sealed class Live2DWebHost : IDisposable
         string idleMotionGroup,
         bool showBubble,
         IReadOnlyDictionary<string, string?> expressions,
-        IReadOnlyDictionary<string, string?> motions,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> motions,
         Live2DModelAssetCatalog? modelAssets)
     {
         Send(new

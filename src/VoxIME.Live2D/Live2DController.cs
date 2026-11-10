@@ -582,10 +582,17 @@ public sealed class Live2DController : ILive2DController
     }
 
     /// <inheritdoc />
-    public void PreviewMotion(string? motionGroup)
+    public void PreviewMotion(string? motionGroup) => PreviewMotions(new[] { motionGroup ?? "" });
+
+    /// <inheritdoc />
+    public void PreviewMotions(IReadOnlyList<string>? motionGroups)
     {
-        var group = (motionGroup ?? "").Trim();
-        if (group.Length == 0)
+        var groups = (motionGroups ?? Array.Empty<string>())
+            .Where(group => !string.IsNullOrWhiteSpace(group))
+            .Select(group => group.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (groups.Length == 0)
         {
             return;
         }
@@ -604,14 +611,14 @@ public sealed class Live2DController : ILive2DController
                     ShowCore();
                 }
 
-                _webHost.SendPreviewMotion(group);
-                _logger.Info($"[Live2D] 预览动作：{group}");
+                _webHost.SendPreviewMotions(groups);
+                _logger.Info($"[Live2D] 预览动作（{groups.Length} 组）：{string.Join(", ", groups)}");
             }
             catch (Exception ex)
             {
-                HandleError($"预览动作失败：{group}", ex);
+                HandleError($"预览动作失败：{string.Join(", ", groups)}", ex);
             }
-        }, "PreviewMotion");
+        }, "PreviewMotions");
     }
 
     /// <inheritdoc />
@@ -1188,7 +1195,8 @@ public sealed class Live2DController : ILive2DController
             ["error"] = expressionMap.Error
         };
         var motionMap = config.ResolveMotionMap(config.ModelDirectory);
-        var motions = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        // 每个状态可叠加多个动作组：协议从 string 升级为数组（前端同时兼容旧的单个字符串）。
+        var motions = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
             ["listening"] = motionMap.Listening,
             ["thinking"] = motionMap.Thinking,

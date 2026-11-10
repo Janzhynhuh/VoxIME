@@ -110,10 +110,6 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _live2DOpacity;
     private double _mouthSensitivity;
     private string _idleMotionGroup = "Idle";
-    private string _listeningMotionGroup = "";
-    private string _thinkingMotionGroup = "";
-    private string _speakingMotionGroup = "";
-    private string _errorMotionGroup = "";
     private string _motionPreviewStatus = "";
     private string _expressionPreviewStatus = "";
     private string _listeningExpression = "";
@@ -1075,35 +1071,20 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _idleMotionGroup, value);
     }
 
-    public string ListeningMotionGroup
-    {
-        get => _listeningMotionGroup;
-        set => SetProperty(ref _listeningMotionGroup, value);
-    }
+    /// <summary>聆听状态的动作映射（可多选，同时叠加播放）。</summary>
+    public StateMotionMappingViewModel ListeningMotion { get; } = new("聆听", "Listening");
 
-    public string ThinkingMotionGroup
-    {
-        get => _thinkingMotionGroup;
-        set => SetProperty(ref _thinkingMotionGroup, value);
-    }
+    /// <summary>识别中状态的动作映射（可多选，同时叠加播放）。</summary>
+    public StateMotionMappingViewModel ThinkingMotion { get; } = new("识别中", "Thinking");
 
-    public string SpeakingMotionGroup
-    {
-        get => _speakingMotionGroup;
-        set => SetProperty(ref _speakingMotionGroup, value);
-    }
+    /// <summary>朗读状态的动作映射（可多选，同时叠加播放）。</summary>
+    public StateMotionMappingViewModel SpeakingMotion { get; } = new("朗读", "Speaking");
 
-    public string ErrorMotionGroup
-    {
-        get => _errorMotionGroup;
-        set => SetProperty(ref _errorMotionGroup, value);
-    }
+    /// <summary>出错状态的动作映射（可多选，同时叠加播放）。</summary>
+    public StateMotionMappingViewModel ErrorMotion { get; } = new("出错", "Error");
 
     /// <summary>当前模型可用的动作组名（来自 model3.json + Animation 文件夹）。</summary>
     public ObservableCollection<string> AvailableMotionGroups { get; } = new();
-
-    /// <summary>状态动作下拉选项：自动 / 不播放 / 具体动作组。</summary>
-    public ObservableCollection<Choice> StateMotionChoices { get; } = new();
 
     public string MotionPreviewStatus
     {
@@ -2338,10 +2319,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
         IdleMotionGroup = config.Live2D.IdleMotionGroup;
-        ListeningMotionGroup = config.Live2D.ListeningMotionGroup ?? "";
-        ThinkingMotionGroup = config.Live2D.ThinkingMotionGroup ?? "";
-        SpeakingMotionGroup = config.Live2D.SpeakingMotionGroup ?? "";
-        ErrorMotionGroup = config.Live2D.ErrorMotionGroup ?? "";
+        ListeningMotion.SetGroups(ResolveMotionGroups(config.Live2D.ListeningMotionGroups, config.Live2D.ListeningMotionGroup));
+        ThinkingMotion.SetGroups(ResolveMotionGroups(config.Live2D.ThinkingMotionGroups, config.Live2D.ThinkingMotionGroup));
+        SpeakingMotion.SetGroups(ResolveMotionGroups(config.Live2D.SpeakingMotionGroups, config.Live2D.SpeakingMotionGroup));
+        ErrorMotion.SetGroups(ResolveMotionGroups(config.Live2D.ErrorMotionGroups, config.Live2D.ErrorMotionGroup));
         ListeningExpression = config.Live2D.ListeningExpression ?? "";
         ThinkingExpression = config.Live2D.ThinkingExpression ?? "";
         SpeakingExpression = config.Live2D.SpeakingExpression ?? "";
@@ -2468,6 +2449,17 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
 
     private static string NormalizeModelDirectory(string? directory) => (directory ?? "").Trim();
 
+    /// <summary>读配置时的动作组来源：新列表优先，其次旧单数字段。</summary>
+    private static List<string>? ResolveMotionGroups(List<string>? groups, string? legacy)
+    {
+        if (groups is { Count: > 0 })
+        {
+            return groups;
+        }
+
+        return string.IsNullOrWhiteSpace(legacy) ? null : new List<string> { legacy.Trim() };
+    }
+
     private void SaveExpressionMapForModel(string? modelDirectory)
     {
         var key = NormalizeModelDirectory(modelDirectory);
@@ -2509,6 +2501,9 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private static string? EmptyToNull(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static List<string> ToMotionGroups(StateMotionMappingViewModel mapping) =>
+        mapping.ToGroupList() ?? new List<string>();
+
     private void SaveMotionMapForModel(string? modelDirectory)
     {
         var key = NormalizeModelDirectory(modelDirectory);
@@ -2520,10 +2515,10 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _working.Live2D.MotionByModel[key] = new Live2DMotionMap
         {
             IdleGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(),
-            Listening = EmptyToNull(ListeningMotionGroup),
-            Thinking = EmptyToNull(ThinkingMotionGroup),
-            Speaking = EmptyToNull(SpeakingMotionGroup),
-            Error = EmptyToNull(ErrorMotionGroup)
+            Listening = ToMotionGroups(ListeningMotion),
+            Thinking = ToMotionGroups(ThinkingMotion),
+            Speaking = ToMotionGroups(SpeakingMotion),
+            Error = ToMotionGroups(ErrorMotion)
         };
     }
 
@@ -2533,20 +2528,20 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         if (key.Length > 0 && _working.Live2D.MotionByModel.TryGetValue(key, out var map) && map is not null)
         {
             IdleMotionGroup = string.IsNullOrWhiteSpace(map.IdleGroup) ? "Idle" : map.IdleGroup;
-            ListeningMotionGroup = map.Listening ?? "";
-            ThinkingMotionGroup = map.Thinking ?? "";
-            SpeakingMotionGroup = map.Speaking ?? "";
-            ErrorMotionGroup = map.Error ?? "";
+            ListeningMotion.SetGroups(map.Listening);
+            ThinkingMotion.SetGroups(map.Thinking);
+            SpeakingMotion.SetGroups(map.Speaking);
+            ErrorMotion.SetGroups(map.Error);
             return;
         }
 
         if (clearWhenMissing)
         {
             IdleMotionGroup = "Idle";
-            ListeningMotionGroup = "";
-            ThinkingMotionGroup = "";
-            SpeakingMotionGroup = "";
-            ErrorMotionGroup = "";
+            ListeningMotion.SetGroups(null);
+            ThinkingMotion.SetGroups(null);
+            SpeakingMotion.SetGroups(null);
+            ErrorMotion.SetGroups(null);
         }
     }
 
@@ -2565,29 +2560,16 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             }
 
             AvailableMotionGroups.Clear();
-            StateMotionChoices.Clear();
-            StateMotionChoices.Add(new Choice("自动（按状态同名动作组）", ""));
-            StateMotionChoices.Add(new Choice("不播放", "__none__"));
             foreach (var group in catalog.Motions
                          .Select(motion => motion.Group)
                          .Where(group => !string.IsNullOrWhiteSpace(group))
                          .Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 AvailableMotionGroups.Add(group);
-                StateMotionChoices.Add(new Choice(group, group));
             }
 
-            // 旧配置里的自定义组名不在当前模型里时，也放进下拉框，避免保存后显示空白。
-            foreach (var value in new[] { ListeningMotionGroup, ThinkingMotionGroup, SpeakingMotionGroup, ErrorMotionGroup })
-            {
-                if (!string.IsNullOrWhiteSpace(value)
-                    && !string.Equals(value, "__none__", StringComparison.Ordinal)
-                    && !AvailableMotionGroups.Contains(value, StringComparer.OrdinalIgnoreCase)
-                    && !StateMotionChoices.Any(choice => string.Equals(choice.Value, value, StringComparison.OrdinalIgnoreCase)))
-                {
-                    StateMotionChoices.Add(new Choice($"自定义：{value}", value));
-                }
-            }
+            // 旧配置里的自定义组名不在当前模型里时也会作为复选项保留，避免保存后丢失。
+            RebuildMotionMappings();
 
             if (string.IsNullOrWhiteSpace(ModelDirectory))
             {
@@ -2610,49 +2592,54 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             _logger.Warn($"扫描模型表情失败：{ex.Message}");
             AvailableExpressions.Clear();
             AvailableMotionGroups.Clear();
-            StateMotionChoices.Clear();
-            StateMotionChoices.Add(new Choice("自动（按状态同名动作组）", ""));
-            StateMotionChoices.Add(new Choice("不播放", "__none__"));
+            RebuildMotionMappings();
             ExpressionCatalogHint = "读取模型表情失败，可手动输入表情名。";
         }
+    }
+
+    /// <summary>按当前模型可用动作组重建四个状态的复选列表（保留已选/自定义值）。</summary>
+    private void RebuildMotionMappings()
+    {
+        ListeningMotion.RebuildOptions(AvailableMotionGroups);
+        ThinkingMotion.RebuildOptions(AvailableMotionGroups);
+        SpeakingMotion.RebuildOptions(AvailableMotionGroups);
+        ErrorMotion.RebuildOptions(AvailableMotionGroups);
     }
 
     private void PreviewIdleMotion()
     {
         var group = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim();
-        PreviewMotion(group);
+        PreviewMotions(new[] { group });
     }
 
     private void PreviewStateMotion(string? state)
     {
         var normalized = (state ?? "").Trim().ToLowerInvariant();
-        var configured = normalized switch
+        var mapping = normalized switch
         {
-            "listening" => ListeningMotionGroup,
-            "thinking" => ThinkingMotionGroup,
-            "speaking" => SpeakingMotionGroup,
-            "error" => ErrorMotionGroup,
+            "listening" => ListeningMotion,
+            "thinking" => ThinkingMotion,
+            "speaking" => SpeakingMotion,
+            "error" => ErrorMotion,
             _ => null
         };
 
-        if (string.Equals(configured, "__none__", StringComparison.Ordinal))
+        if (mapping is null)
+        {
+            return;
+        }
+
+        if (mapping.Disabled)
         {
             MotionPreviewStatus = "该状态设置为不播放动作。";
             return;
         }
 
-        string group;
+        var groups = mapping.SelectedGroups.ToList();
         var statusOverride = (string?)null;
-        if (string.IsNullOrWhiteSpace(configured))
+        if (groups.Count == 0)
         {
-            var autoName = normalized switch
-            {
-                "listening" => "Listening",
-                "thinking" => "Thinking",
-                "speaking" => "Speaking",
-                "error" => "Error",
-                _ => ""
-            };
+            var autoName = mapping.AutoGroupName;
             var actual = AvailableMotionGroups.FirstOrDefault(item =>
                 string.Equals(item, autoName, StringComparison.OrdinalIgnoreCase));
             if (actual is null)
@@ -2663,25 +2650,17 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
                          ?? AvailableMotionGroups.FirstOrDefault();
                 if (actual is null)
                 {
-                    MotionPreviewStatus = autoName.Length == 0
-                        ? "当前模型没有可预览的动作组。"
-                        : $"自动：当前模型没有名为 {autoName} 的动作组，也没有其它动作组。请先导入带动作的模型。";
+                    MotionPreviewStatus = $"自动：当前模型没有名为 {autoName} 的动作组，也没有其它动作组。请先导入带动作的模型。";
                     return;
                 }
 
-                statusOverride = autoName.Length == 0
-                    ? $"已预览首个动作：{actual}"
-                    : $"自动：没有名为 {autoName} 的动作组，已预览首个动作：{actual}";
+                statusOverride = $"自动：没有名为 {autoName} 的动作组，已预览首个动作：{actual}";
             }
 
-            group = actual;
-        }
-        else
-        {
-            group = configured.Trim();
+            groups = new List<string> { actual };
         }
 
-        PreviewMotion(group, statusOverride);
+        PreviewMotions(groups, statusOverride);
     }
 
     private void PreviewExpression(string? state)
@@ -2715,16 +2694,30 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void PreviewMotion(string group, string? statusOverride = null)
+    private void PreviewMotions(IReadOnlyList<string> groups, string? statusOverride = null)
     {
+        var list = groups
+            .Where(group => !string.IsNullOrWhiteSpace(group))
+            .Select(group => group.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (list.Count == 0)
+        {
+            return;
+        }
+
+        var label = string.Join("、", list);
         try
         {
-            _controller.Live2D.PreviewMotion(group);
-            var isIdlePreview = string.Equals(group, string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(), StringComparison.OrdinalIgnoreCase)
-                || string.Equals(group, "Idle", StringComparison.OrdinalIgnoreCase);
+            _controller.Live2D.PreviewMotions(list);
+            var isIdlePreview = list.Count == 1
+                && (string.Equals(list[0], string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(list[0], "Idle", StringComparison.OrdinalIgnoreCase));
             MotionPreviewStatus = statusOverride ?? (isIdlePreview
-                ? $"已预览待机动作：{group}（播完停 3 秒后继续待机循环）"
-                : $"已预览：{group}（播完停 3 秒后恢复默认）");
+                ? $"已预览待机动作：{label}（播完停 3 秒后继续待机循环）"
+                : list.Count > 1
+                    ? $"已同时预览 {list.Count} 个动作：{label}（播完停 3 秒后恢复默认）"
+                    : $"已预览：{label}（播完停 3 秒后恢复默认）");
         }
         catch (Exception ex)
         {
@@ -3638,6 +3631,11 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             invertMap[currentModelDirectory] = EyeFollowInvertY;
         }
 
+        var listeningMotionGroups = ListeningMotion.ToGroupList();
+        var thinkingMotionGroups = ThinkingMotion.ToGroupList();
+        var speakingMotionGroups = SpeakingMotion.ToGroupList();
+        var errorMotionGroups = ErrorMotion.ToGroupList();
+
         config.Live2D = new Live2DConfig
         {
             Enabled = Live2DEnabled,
@@ -3667,10 +3665,15 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             ThinkingExpression = NullIfEmpty(ThinkingExpression),
             SpeakingExpression = NullIfEmpty(SpeakingExpression),
             ErrorExpression = NullIfEmpty(ErrorExpression),
-            ListeningMotionGroup = NullIfEmpty(ListeningMotionGroup),
-            ThinkingMotionGroup = NullIfEmpty(ThinkingMotionGroup),
-            SpeakingMotionGroup = NullIfEmpty(SpeakingMotionGroup),
-            ErrorMotionGroup = NullIfEmpty(ErrorMotionGroup),
+            ListeningMotionGroups = listeningMotionGroups,
+            ThinkingMotionGroups = thinkingMotionGroups,
+            SpeakingMotionGroups = speakingMotionGroups,
+            ErrorMotionGroups = errorMotionGroups,
+            // 旧单数字段同步第一项，旧版本仍能读到“一个动作组”。
+            ListeningMotionGroup = listeningMotionGroups?.FirstOrDefault(),
+            ThinkingMotionGroup = thinkingMotionGroups?.FirstOrDefault(),
+            SpeakingMotionGroup = speakingMotionGroups?.FirstOrDefault(),
+            ErrorMotionGroup = errorMotionGroups?.FirstOrDefault(),
             ExpressionByModel = ConfigJson.Clone(_working.Live2D.ExpressionByModel),
             MotionByModel = ConfigJson.Clone(_working.Live2D.MotionByModel),
             FallbackAvatarTheme = string.IsNullOrWhiteSpace(FallbackAvatarTheme) ? "violet" : FallbackAvatarTheme.Trim(),

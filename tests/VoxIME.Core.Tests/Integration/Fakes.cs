@@ -279,6 +279,19 @@ internal sealed class FakeLive2DController : ILive2DController
         }
     }
 
+    public void PreviewMotions(IReadOnlyList<string>? motionGroups)
+    {
+        if (motionGroups is null)
+        {
+            return;
+        }
+
+        foreach (var group in motionGroups)
+        {
+            PreviewMotion(group);
+        }
+    }
+
     public void PreviewExpression(string? expression)
     {
         if (!string.IsNullOrWhiteSpace(expression))

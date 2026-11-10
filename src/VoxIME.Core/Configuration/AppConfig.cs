@@ -252,6 +252,31 @@ public sealed class AppConfig
             : Live2D.ModelLibraryDirectory.Trim();
         Live2D.IdleMotionGroup = string.IsNullOrWhiteSpace(Live2D.IdleMotionGroup) ? "Idle" : Live2D.IdleMotionGroup.Trim();
 
+        // 状态动作映射从单选升级为多选：新列表字段优先，旧单数字段作为兼容来源；
+        // 规范化后回写旧字段的第一项，旧版本仍能读到“一个动作组”。
+        Live2D.ListeningMotionGroups = NormalizeStoredMotionGroups(Live2D.ListeningMotionGroups, Live2D.ListeningMotionGroup);
+        Live2D.ListeningMotionGroup = Live2D.ListeningMotionGroups?.FirstOrDefault();
+        Live2D.ThinkingMotionGroups = NormalizeStoredMotionGroups(Live2D.ThinkingMotionGroups, Live2D.ThinkingMotionGroup);
+        Live2D.ThinkingMotionGroup = Live2D.ThinkingMotionGroups?.FirstOrDefault();
+        Live2D.SpeakingMotionGroups = NormalizeStoredMotionGroups(Live2D.SpeakingMotionGroups, Live2D.SpeakingMotionGroup);
+        Live2D.SpeakingMotionGroup = Live2D.SpeakingMotionGroups?.FirstOrDefault();
+        Live2D.ErrorMotionGroups = NormalizeStoredMotionGroups(Live2D.ErrorMotionGroups, Live2D.ErrorMotionGroup);
+        Live2D.ErrorMotionGroup = Live2D.ErrorMotionGroups?.FirstOrDefault();
+
+        foreach (var map in Live2D.MotionByModel.Values)
+        {
+            if (map is null)
+            {
+                continue;
+            }
+
+            map.IdleGroup = string.IsNullOrWhiteSpace(map.IdleGroup) ? "Idle" : map.IdleGroup.Trim();
+            map.Listening = Live2DConfig.NormalizeMotionGroups(map.Listening);
+            map.Thinking = Live2DConfig.NormalizeMotionGroups(map.Thinking);
+            map.Speaking = Live2DConfig.NormalizeMotionGroups(map.Speaking);
+            map.Error = Live2DConfig.NormalizeMotionGroups(map.Error);
+        }
+
         Tts ??= new TtsConfig();
         Tts.Rate = Math.Clamp(Tts.Rate, -10, 10);
         Tts.Volume = Math.Clamp(Tts.Volume, 0, 100);
@@ -323,6 +348,13 @@ public sealed class AppConfig
         }
 
         return result.Take(8).ToList();
+    }
+
+    /// <summary>规范化并落盘用的动作组列表：空列表写成 null，避免配置文件里出现空数组。</summary>
+    private static List<string>? NormalizeStoredMotionGroups(List<string>? values, string? legacy = null)
+    {
+        var normalized = Live2DConfig.NormalizeMotionGroups(values, legacy);
+        return normalized.Count == 0 ? null : normalized;
     }
 }
 
@@ -467,9 +499,33 @@ public sealed class Live2DConfig
     public string? ThinkingExpression { get; set; }
     public string? SpeakingExpression { get; set; }
     public string? ErrorExpression { get; set; }
+
+    /// <summary>聆听状态对应的动作组（可多选，切换状态时同时叠加播放；空=自动同名匹配，<see cref="Live2DMotionMap.NoneMarker"/>=不播放）。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string>? ListeningMotionGroups { get; set; }
+
+    /// <summary>识别中状态对应的动作组（可多选，规则同 <see cref="ListeningMotionGroups"/>）。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string>? ThinkingMotionGroups { get; set; }
+
+    /// <summary>朗读状态对应的动作组（可多选，规则同 <see cref="ListeningMotionGroups"/>）。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string>? SpeakingMotionGroups { get; set; }
+
+    /// <summary>出错状态对应的动作组（可多选，规则同 <see cref="ListeningMotionGroups"/>）。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string>? ErrorMotionGroups { get; set; }
+
+    /// <summary>旧字段：聆听状态的单个动作组；仅为兼容旧配置保留，保存时同步为 <see cref="ListeningMotionGroups"/> 的第一项。</summary>
     public string? ListeningMotionGroup { get; set; }
+
+    /// <summary>旧字段：识别中状态的单个动作组；仅为兼容旧配置保留。</summary>
     public string? ThinkingMotionGroup { get; set; }
+
+    /// <summary>旧字段：朗读状态的单个动作组；仅为兼容旧配置保留。</summary>
     public string? SpeakingMotionGroup { get; set; }
+
+    /// <summary>旧字段：出错状态的单个动作组；仅为兼容旧配置保留。</summary>
     public string? ErrorMotionGroup { get; set; }
 
     /// <summary>按模型目录记住的状态动作映射；旧配置没有此字段时回退到全局字段。</summary>
@@ -504,30 +560,103 @@ public sealed class Live2DConfig
         var key = (modelDirectory ?? "").Trim();
         if (key.Length > 0 && MotionByModel.TryGetValue(key, out var map) && map is not null)
         {
-            return map;
+            return new Live2DMotionMap
+            {
+                IdleGroup = string.IsNullOrWhiteSpace(map.IdleGroup) ? "Idle" : map.IdleGroup.Trim(),
+                Listening = NormalizeMotionGroups(map.Listening),
+                Thinking = NormalizeMotionGroups(map.Thinking),
+                Speaking = NormalizeMotionGroups(map.Speaking),
+                Error = NormalizeMotionGroups(map.Error)
+            };
         }
 
         return new Live2DMotionMap
         {
-            IdleGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup,
-            Listening = ListeningMotionGroup,
-            Thinking = ThinkingMotionGroup,
-            Speaking = SpeakingMotionGroup,
-            Error = ErrorMotionGroup
+            IdleGroup = string.IsNullOrWhiteSpace(IdleMotionGroup) ? "Idle" : IdleMotionGroup.Trim(),
+            Listening = NormalizeMotionGroups(ListeningMotionGroups, ListeningMotionGroup),
+            Thinking = NormalizeMotionGroups(ThinkingMotionGroups, ThinkingMotionGroup),
+            Speaking = NormalizeMotionGroups(SpeakingMotionGroups, SpeakingMotionGroup),
+            Error = NormalizeMotionGroups(ErrorMotionGroups, ErrorMotionGroup)
         };
+    }
+
+    /// <summary>
+    /// 规范化一个状态的动作组列表：合并旧单数字段、trim、去空、忽略大小写去重、最多 <see cref="Live2DMotionMap.MaxGroups"/> 个；
+    /// 一旦出现 <see cref="Live2DMotionMap.NoneMarker"/> 就只保留“不播放”。返回空列表表示“自动同名匹配”。
+    /// </summary>
+    public static List<string> NormalizeMotionGroups(List<string>? values, string? legacy = null)
+    {
+        var candidates = new List<string>();
+        if (values is not null)
+        {
+            candidates.AddRange(values);
+        }
+
+        if (candidates.Count == 0 && !string.IsNullOrWhiteSpace(legacy))
+        {
+            candidates.Add(legacy);
+        }
+
+        var result = new List<string>(Math.Min(candidates.Count, Live2DMotionMap.MaxGroups));
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            var trimmed = candidate.Trim();
+            if (string.Equals(trimmed, Live2DMotionMap.NoneMarker, StringComparison.Ordinal))
+            {
+                return new List<string> { Live2DMotionMap.NoneMarker };
+            }
+
+            if (result.Count >= Live2DMotionMap.MaxGroups)
+            {
+                break;
+            }
+
+            if (!seen.Add(trimmed))
+            {
+                continue;
+            }
+
+            result.Add(trimmed);
+        }
+
+        return result;
     }
 
     public string FallbackAvatarTheme { get; set; } = "violet";
 }
 
-/// <summary>一个模型对应的待机与四个状态动作组。</summary>
+/// <summary>一个模型对应的待机与四个状态动作组（每个状态可同时叠加多个动作组）。</summary>
 public sealed class Live2DMotionMap
 {
+    /// <summary>每个状态最多同时叠加的动作组数量；超出部分在规范化时截断。</summary>
+    public const int MaxGroups = 4;
+
+    /// <summary>表示“该状态不播放动作”的保留值。</summary>
+    public const string NoneMarker = "__none__";
+
     public string? IdleGroup { get; set; }
-    public string? Listening { get; set; }
-    public string? Thinking { get; set; }
-    public string? Speaking { get; set; }
-    public string? Error { get; set; }
+
+    /// <summary>聆听状态叠加的动作组；空=自动同名匹配，<see cref="NoneMarker"/>=不播放。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string> Listening { get; set; } = new();
+
+    /// <summary>识别中状态叠加的动作组；空=自动同名匹配。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string> Thinking { get; set; } = new();
+
+    /// <summary>朗读状态叠加的动作组；空=自动同名匹配。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string> Speaking { get; set; } = new();
+
+    /// <summary>出错状态叠加的动作组；空=自动同名匹配。</summary>
+    [JsonConverter(typeof(StringListJsonConverter))]
+    public List<string> Error { get; set; } = new();
 }
 
 /// <summary>一个模型对应的四个状态表情名。</summary>

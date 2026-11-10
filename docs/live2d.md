@@ -139,7 +139,7 @@ Hiyori/
 - **打开模型库目录**：直接查看/手动放入模型（手动放入后点「刷新列表」）。
 - **删除选中模型**：只删除模型库里的副本（有二次确认），不会影响你原来的文件夹。
 - **状态表情映射**：设置页四个状态改为可编辑下拉框，自动扫描 `model3.json` 的 `Expressions` 以及模型目录下的 `Exp3/*.exp3.json`；`Animation/*.motion3.json` 会注册为 `Animation/<文件名>` 动作组，避免和 model3 原生 Idle 组冲突。当前模型没有登记表情时也能识别 VTube Studio 的文件夹资源；映射按模型目录记忆。
-- **状态动作映射/预览**：四个状态可分别选择「自动（同名动作组）」「不播放」或具体动作组，待机动作组也可从下拉框选；待机动作在主动作层循环，状态动作/预览动作分别由并行动作层叠加（见 6.5），切换时只停止对应层并把模型参数/部件透明度恢复到加载时的基线，避免「脱捕」这类动作修改的自定义参数残留（不依赖具体模型或参数名）；每项旁「预览」按钮会立即在桌宠上试播当前选择，只播一遍，结束后停 3 秒再恢复待机/状态层（避免 VTube Studio 动作的 Loop 标记导致无限重复）。动作映射同样按模型目录记忆。状态表情旁也有「预览」，可立即应用所选表情，3 秒后恢复默认表情。
+- **状态动作映射/预览（多选叠加）**：四个状态各给一个复选列表，可以同时勾选多个动作组；切到该状态时每个动作组各占一条并行动作层同时播放（Cubism 官方多 MotionManager 做法，见 6.5）。一个都不勾 = 自动使用与状态同名的动作组；勾「不播放」= 该状态不触发动作；最多同时叠加 4 个动作组，超出时自动取消较早的勾选。待机动作组仍是单选下拉。切换状态时只停止 state 层并把模型参数/部件透明度恢复到加载时的基线，避免「脱捕」这类动作修改的自定义参数残留（不依赖具体模型或参数名）；「预览」按钮会同时试播当前勾选的所有动作组，只播一遍，结束后停 3 秒再恢复待机/状态层（避免 VTube Studio 动作的 Loop 标记导致无限重复）。动作映射同样按模型目录记忆。状态表情仍是单选，旁边也有「预览」，可立即应用所选表情，3 秒后恢复默认表情。
 - **重置位置**：桌宠状态栏旁的「重置位置」会清除保存的 `Left/Top`，把窗口移回默认位置（开启贴边时回当前屏幕右下角，关闭贴边时当前屏幕居中），下次启动也不会再使用旧位置。
 - **自动找回**：启动时以及检测到显示器工作区/虚拟屏尺寸变化时，如果保存的窗口位置已经不在当前桌面可见区域，会自动把它移回当前屏右下角（关闭贴边时居中），避免远程桌面/切换分辨率后“看不到桌宠”。
 - 模型名优先取 `*.model3.json` 的文件名（如 `Hiyori.model3.json` → Hiyori），重名自动追加 `(2)`、`(3)`。
@@ -157,7 +157,7 @@ Hiyori/
 | `ModelLibraryDirectory` | null | 模型库根目录（导入目标）；null/空 → `%APPDATA%\VoxIME\models`；可改到其它磁盘 |
 | `Width`/`Height` | 380/560 | 桌宠窗口尺寸（DIP，clamp 160..1600） |
 | `ExpressionByModel` | {} | 按模型目录保存四个状态表情映射（旧全局字段作为兼容回退） |
-| `MotionByModel` | {} | 按模型目录保存待机+四个状态动作映射（旧全局字段作为兼容回退） |
+| `MotionByModel` | {} | 按模型目录保存待机 + 四个状态动作映射；每个状态是动作组数组（可叠加多个，最多 4 个；空 = 自动，`["__none__"]` = 不播放） |
 | `AutoFitWindow` | true | 模型加载/缩放/高度变化时保持高度，把窗口宽度收紧到模型显示宽度 + 左右各 5 DIP padding（结果持久化）；开启时设置页宽度滑块置灰 |
 | `SnapToEdge` | true | **只做下边吸附**：拖到窗口所在显示器底部约 100 DIP 内时贴底（按该显示器工作区/完整屏底边，支持多屏）；只改变 Y/高度，不改 X（不会因贴右边缘水平回弹）；向上拖动不强制回弹，左右上方向不吸附。关闭后使用拖动保存的位置，首次无位置则居中 |
 | `KeepAboveTaskbar` | true | 贴边时窗口下边缘保持在任务栏上方（工作区内）；关闭后允许压住任务栏 |
@@ -176,7 +176,8 @@ Hiyori/
 | `ShowBubble` | true | 是否显示气泡（false 时忽略 `SetBubbleText`） |
 | `IdleMotionGroup` | "Idle" | 待机动作组名（大小写不敏感，精确匹配；找不到时若存在名字包含 `idle` 的动作组（如 `Animation/IDLE`）会自动使用，否则不播放待机动作，不会拿第一个动作组） |
 | `ListeningExpression` / `ThinkingExpression` / `SpeakingExpression` / `ErrorExpression` | null | 状态对应的表情名；模型没有该表情时忽略 |
-| `ListeningMotionGroup` / `ThinkingMotionGroup` / `SpeakingMotionGroup` / `ErrorMotionGroup` | null | 状态对应的动作组名；null/空=自动同名匹配，`__none__`=不播放，其它=指定组 |
+| `ListeningMotionGroups` / `ThinkingMotionGroups` / `SpeakingMotionGroups` / `ErrorMotionGroups` | null | 状态对应的动作组数组（可多选叠加，最多 4 个，忽略大小写去重）；null/空=自动同名匹配，`["__none__"]`=不播放，其它=同时播放这些组 |
+| `ListeningMotionGroup` / `ThinkingMotionGroup` / `SpeakingMotionGroup` / `ErrorMotionGroup` | null | **旧字段**：状态对应的单个动作组；仅为兼容旧配置保留，保存时同步为上面数组的第一项（旧配置读取时会自动升级成单元素数组） |
 | `FallbackAvatarTheme` | "violet" | 兜底形象主题（当前仅 violet，保留扩展） |
 
 `ApplyConfig` 为热更新：尺寸/位置/透明度/置顶/点击穿透/缩放立即生效；`ModelDirectory` 变化时
@@ -189,10 +190,10 @@ Hiyori/
 | 状态 | 动作组查找顺序 | 表情 |
 |---|---|---|
 | `Idle` | 待机动作组（`IdleMotionGroup`，默认 `Idle`；精确匹配，找不到时自动匹配名字含 `idle` 的组，如 `Animation/IDLE`） | 重置为默认表情 |
-| `Listening` | 优先 `ListeningMotionGroup`；未配置时找同名组（`Listening`/`Listen`），否则继续待机 | `ListeningExpression`（若模型有） |
-| `Thinking` | 优先 `ThinkingMotionGroup`；未配置时同名组（`Thinking`/`Think`），否则待机 | `ThinkingExpression` |
-| `Speaking` | 优先 `SpeakingMotionGroup`；未配置时同名组（`Speaking`/`Speak`），否则待机；口型由 `SetMouthOpen` 驱动 | `SpeakingExpression` |
-| `Error` | 优先 `ErrorMotionGroup`；未配置时同名组（`Error`），否则待机 | `ErrorExpression` |
+| `Listening` | 勾选的动作组（可多个，各占一条 state 层同时播放，最多 4 个）；一个都不勾时找同名组（`Listening`/`Listen`），否则继续待机；`["__none__"]` = 不播放 | `ListeningExpression`（若模型有） |
+| `Thinking` | 同 `Listening`；自动模式找 `Thinking`/`Think` | `ThinkingExpression` |
+| `Speaking` | 同 `Listening`；自动模式找 `Speaking`/`Speak`；口型由 `SetMouthOpen` 驱动 | `SpeakingExpression` |
+| `Error` | 同 `Listening`；自动模式找 `Error` | `ErrorExpression` |
 
 约定：模型没有对应动作组/表情时**静默保持待机**，不报错、不崩溃（Hiyori 只有 `Idle`/`TapBody`，
 因此所有非 Idle 状态都表现为继续待机动作 + 口型/眼动变化）。状态动作不再停止待机动作，而是叠加在待机层上，见 6.5。
@@ -236,12 +237,13 @@ Hiyori/
 ### 6.5 动作分层与程序层
 
 - 主动作层：`IdleMotionGroup` 由主 `MotionManager` 循环播放，保留 Cubism 的呼吸/物理。
-- 并行动作层：
-  - `state`：分发给 `listening` / `thinking` / `speaking` / `error` 的动作，叠加在待机层上；
-  - `preview`：设置页「预览」的动作，最高层，只播一遍，结束并冷却 3 秒后停止。
+- 并行动作层（每类各 4 条槽位，启动时 `extendParallelMotionManager(8)` 一次分配，幂等）：
+  - `state`：`listening` / `thinking` / `speaking` / `error` 勾选的每个动作组各占一条，叠加在待机层上；
+  - `preview`：设置页「预览」的动作组，最高层，只播一遍，结束并冷却 3 秒后停止。
+- 同一状态勾选 N 个组时，前 N 条 state 层同时 `startMotion`（`priority=3`）；超过 4 个在配置规范化时截断。
 - 更新顺序：主动作 → state 层 → preview 层 → 表情 → 焦点/呼吸/物理 → `beforeModelUpdate`
   程序层 → `coreModel.update()`。后更新的层覆盖先更新的同名参数，因此可以同时看到待机、
-  状态和预览动作。
+  状态和预览动作；不同动作组写不同参数时互不影响，写同一参数时以后层为准（官方语义，不做加性混合）。
 - 程序层 `applyBlinkLayer`：待机动作循环期间 Cubism 的 `updateMotions()` 返回 true，会跳过自动
   EyeBlink；网页按 `model3.json` 的 `Groups.EyeBlink.Ids`（没有时回退
   `ParamEyeLOpen`/`ParamEyeROpen`）在程序层手动眨眼。模型没有可用眼睛参数时整层跳过。
@@ -254,9 +256,9 @@ Hiyori/
 { "type": "setConfig", "eyeFollow": true, "idleMotion": true, "mouthSync": true, "scale": 1.0,
   "idleMotionGroup": "Idle", "showBubble": true,
   "expressions": { "listening": null, "thinking": null, "speaking": null, "error": null },
-  "motions": { "listening": null, "thinking": null, "speaking": null, "error": null },
+  "motions": { "listening": ["Idle", "TapBody"], "thinking": [], "speaking": [], "error": ["__none__"] },
   "modelAssets": { "expressions": [], "motions": [] } }
-{ "type": "previewMotion", "group": "Idle" }
+{ "type": "previewMotion", "groups": ["Idle", "TapBody"] }   // 兼容旧格式 { "group": "Idle" }
 { "type": "previewExpression", "name": "exp_01" }
 { "type": "loadModel", "url": "https://voxime.models/Hiyori.model3.json" }
 { "type": "setState", "state": "idle|listening|thinking|speaking|error" }
@@ -528,8 +530,10 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
    多屏负坐标与逐屏 DPI 切换仍建议真机手工验证；已限制窗口不被拖出虚拟桌面。
 3. **Cubism 2（.model.json）** 不支持（只引入 Modern bundle，覆盖 Cubism 3/4/5；旧模型需转换）。
 4. 状态→动作组默认使用**命名约定**（`Idle`/`Listening`/`Thinking`/`Speaking`/`Error`），
-   若模型动作组命名不同，可在设置页「状态动作映射」中手动指定（也支持「不播放」）；表情通过配置的
+   若模型动作组命名不同，可在设置页「状态动作映射」中勾选指定（可多选叠加，也支持「不播放」）；表情通过配置的
    `*Expression` 名称匹配。待机动作组同样可在下拉框中选择。
+   多动作叠加受 Cubism 原生语义限制：不同动作组写不同参数时各自生效，写同一参数时**后更新的层覆盖**前者
+   （不做加性混合）；同一状态最多 4 个动作组。
 5. 部分模型对 `ParamMouthOpenY` 的口型变形较细微（示例 Hiyori 在 0.9 时为小幅张嘴），
    属模型美术表现，非参数未生效（可用 `preview.html` 状态栏的“更新帧参数”回读确认）。
 6. WebGL/透明合成在不同显卡驱动/远程桌面下可能有差异；远程桌面（RDP）场景建议回退

@@ -284,7 +284,7 @@
                 <StackPanel>
                     <TextBlock Text="状态动作映射（可选）" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10" TextWrapping="Wrap"
-                               Text="自动 = 找与状态同名的动作组（如 Listening）；不播放 = 切状态时不触发动作。动作组来自 model3.json 和 Animation 文件夹，可随时点“预览”在桌宠上试播；预览只播一遍，结束后停 3 秒再恢复默认动作。待机动作本身是循环的，冷却结束后会继续待机循环，所以看起来会比状态动作更连贯。" />
+                               Text="勾选多个动作组时，切到该状态会把它们同时叠加播放（每个动作组占一条并行动作层）；一个都不勾 = 自动使用与状态同名的动作组；勾「不播放」= 该状态不触发动作。最多同时叠加 4 个动作组。动作组来自 model3.json 和 Animation 文件夹，可随时点“预览”在桌宠上试播；预览只播一遍，结束后停 3 秒再恢复默认动作。" />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -292,60 +292,108 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="聆听" Style="{StaticResource FieldLabel}" />
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="60" />
                                 </Grid.ColumnDefinitions>
-                                <ComboBox Grid.Column="0" ItemsSource="{Binding StateMotionChoices}"
-                                          DisplayMemberPath="Label" SelectedValuePath="Value"
-                                          SelectedValue="{Binding ListeningMotionGroup, Mode=TwoWay}" />
+                                <TextBlock Text="聆听" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" />
                                 <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
-                                        Margin="8,0,0,0" Command="{Binding PreviewStateMotionCommand}"
-                                        CommandParameter="listening" />
+                                        Command="{Binding PreviewStateMotionCommand}" CommandParameter="listening" />
                             </Grid>
-                            <TextBlock Text="识别中" Style="{StaticResource FieldLabel}" Margin="0,10,0,5" />
-                            <Grid>
+                            <CheckBox Content="不播放（切到此状态不触发动作）" Margin="0,2,0,6"
+                                      IsChecked="{Binding ListeningMotion.Disabled, Mode=TwoWay}" />
+                            <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          IsEnabled="{Binding ListeningMotion.SelectionEnabled}">
+                                <ItemsControl ItemsSource="{Binding ListeningMotion.Options}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding Group}" Margin="0,1"
+                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Text="{Binding ListeningMotion.Summary}" Style="{StaticResource HintText}"
+                                       Margin="0,6,0,0" TextWrapping="Wrap" />
+                            <Grid Margin="0,14,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="60" />
                                 </Grid.ColumnDefinitions>
-                                <ComboBox Grid.Column="0" ItemsSource="{Binding StateMotionChoices}"
-                                          DisplayMemberPath="Label" SelectedValuePath="Value"
-                                          SelectedValue="{Binding ThinkingMotionGroup, Mode=TwoWay}" />
+                                <TextBlock Text="识别中" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" />
                                 <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
-                                        Margin="8,0,0,0" Command="{Binding PreviewStateMotionCommand}"
-                                        CommandParameter="thinking" />
+                                        Command="{Binding PreviewStateMotionCommand}" CommandParameter="thinking" />
                             </Grid>
+                            <CheckBox Content="不播放（切到此状态不触发动作）" Margin="0,2,0,6"
+                                      IsChecked="{Binding ThinkingMotion.Disabled, Mode=TwoWay}" />
+                            <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          IsEnabled="{Binding ThinkingMotion.SelectionEnabled}">
+                                <ItemsControl ItemsSource="{Binding ThinkingMotion.Options}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding Group}" Margin="0,1"
+                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Text="{Binding ThinkingMotion.Summary}" Style="{StaticResource HintText}"
+                                       Margin="0,6,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
-                            <TextBlock Text="朗读" Style="{StaticResource FieldLabel}" />
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="60" />
                                 </Grid.ColumnDefinitions>
-                                <ComboBox Grid.Column="0" ItemsSource="{Binding StateMotionChoices}"
-                                          DisplayMemberPath="Label" SelectedValuePath="Value"
-                                          SelectedValue="{Binding SpeakingMotionGroup, Mode=TwoWay}" />
+                                <TextBlock Text="朗读" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" />
                                 <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
-                                        Margin="8,0,0,0" Command="{Binding PreviewStateMotionCommand}"
-                                        CommandParameter="speaking" />
+                                        Command="{Binding PreviewStateMotionCommand}" CommandParameter="speaking" />
                             </Grid>
-                            <TextBlock Text="出错" Style="{StaticResource FieldLabel}" Margin="0,10,0,5" />
-                            <Grid>
+                            <CheckBox Content="不播放（切到此状态不触发动作）" Margin="0,2,0,6"
+                                      IsChecked="{Binding SpeakingMotion.Disabled, Mode=TwoWay}" />
+                            <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          IsEnabled="{Binding SpeakingMotion.SelectionEnabled}">
+                                <ItemsControl ItemsSource="{Binding SpeakingMotion.Options}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding Group}" Margin="0,1"
+                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Text="{Binding SpeakingMotion.Summary}" Style="{StaticResource HintText}"
+                                       Margin="0,6,0,0" TextWrapping="Wrap" />
+                            <Grid Margin="0,14,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="60" />
                                 </Grid.ColumnDefinitions>
-                                <ComboBox Grid.Column="0" ItemsSource="{Binding StateMotionChoices}"
-                                          DisplayMemberPath="Label" SelectedValuePath="Value"
-                                          SelectedValue="{Binding ErrorMotionGroup, Mode=TwoWay}" />
+                                <TextBlock Text="出错" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" />
                                 <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="预览"
-                                        Margin="8,0,0,0" Command="{Binding PreviewStateMotionCommand}"
-                                        CommandParameter="error" />
+                                        Command="{Binding PreviewStateMotionCommand}" CommandParameter="error" />
                             </Grid>
+                            <CheckBox Content="不播放（切到此状态不触发动作）" Margin="0,2,0,6"
+                                      IsChecked="{Binding ErrorMotion.Disabled, Mode=TwoWay}" />
+                            <ScrollViewer MaxHeight="104" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          IsEnabled="{Binding ErrorMotion.SelectionEnabled}">
+                                <ItemsControl ItemsSource="{Binding ErrorMotion.Options}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Content="{Binding Group}" Margin="0,1"
+                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Text="{Binding ErrorMotion.Summary}" Style="{StaticResource HintText}"
+                                       Margin="0,6,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                     </Grid>
                     <TextBlock Text="{Binding MotionPreviewStatus}" Style="{StaticResource HintText}"
