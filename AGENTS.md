@@ -99,3 +99,11 @@ feat(core): 支持流式识别会话
 
 验证：dotnet build VoxIME.sln -c Release / dotnet test（402 通过）
 ```
+
+## 10. 多 Agent 协作（2026-11-15）
+
+- 遇到可拆分的多问题任务，root 应**主动**拆分并行执行，不需要用户提醒；如果任务确实适合单 agent，也可以不分。
+- 每个子 agent 必须明确：目标、允许修改的文件/目录（write scope）、验收标准、禁止事项；禁止在未授权时改用户配置、提交 git、更新便携版或创建 Release/tag。
+- 同一文件多个改动必须串行或由 root 统一整合；并行任务尽量使用互不重叠的文件域。
+- 子 agent 默认不运行 `dotnet build/test`（避免并发锁和误判），最终由 root 统一构建、测试、截图、审查 diff、提交和同步桌面版。
+- 子 agent 完成时报告改动文件、关键决策、未验证风险；root 必须复核最终 diff，不能只拼接报告。
