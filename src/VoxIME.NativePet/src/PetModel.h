@@ -10,6 +10,7 @@
 
 #include <d3d11.h>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 #include <wrl/client.h>
@@ -43,6 +44,8 @@ namespace VoxIME::NativePet
         bool IsLoaded() const { return _loaded; }
         const std::wstring& Name() const { return _name; }
 
+        bool ApplyExpression(const std::wstring& name);
+
     private:
         bool LoadTextures(ID3D11Device* device, const std::filesystem::path& basePath, std::string& error);
         void ReleaseTextures();
@@ -53,6 +56,7 @@ namespace VoxIME::NativePet
         float _timeSeconds = 0.0f;
         std::wstring _name;
         Csm::CubismModelSettingJson* _settings = nullptr;
+        std::map<std::string, Csm::ACubismMotion*> _expressions;
         Csm::ACubismMotion* _idleMotion = nullptr;
         std::vector<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>> _textureViews;
     };

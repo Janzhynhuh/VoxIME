@@ -57,6 +57,24 @@ namespace
         return result;
     }
 
+    std::string WideToUtf8(const std::wstring& text)
+    {
+        if (text.empty())
+        {
+            return {};
+        }
+
+        const int length = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), -1, nullptr, 0, nullptr, nullptr);
+        if (length <= 0)
+        {
+            return {};
+        }
+
+        std::string result(static_cast<size_t>(length - 1), '\0');
+        WideCharToMultiByte(CP_UTF8, 0, text.c_str(), -1, result.data(), length, nullptr, nullptr);
+        return result;
+    }
+
     bool ReadAllBytes(const std::filesystem::path& path, std::vector<char>& bytes)
     {
         HANDLE file = CreateFileW(
@@ -212,6 +230,14 @@ namespace VoxIME::NativePet
             ACubismMotion::Delete(_idleMotion);
             _idleMotion = nullptr;
         }
+        for (auto& entry : _expressions)
+        {
+            if (entry.second)
+            {
+                ACubismMotion::Delete(entry.second);
+            }
+        }
+        _expressions.clear();
         ReleaseTextures();
         if (_settings)
         {
@@ -315,6 +341,50 @@ namespace VoxIME::NativePet
             }
         }
 
+        // VoxIME 当前模型把动作/表情放在 Animation/Exp3 下；这里加载全部 exp3，
+        // 后续由 C# 通过 IPC 选择应用哪个。
+        const std::filesystem::path expressionDirectory = basePath / L"Exp3";
+        std::error_code directoryError;
+        if (std::filesystem::is_directory(expressionDirectory, directoryError))
+        {
+            for (const auto& entry : std::filesystem::directory_iterator(expressionDirectory, directoryError))
+            {
+                if (directoryError)
+                {
+                    break;
+                }
+                if (!entry.is_regular_file() || entry.path().extension() != L".json")
+                {
+                    continue;
+                }
+
+                std::vector<char> expressionBytes;
+                if (!ReadAllBytes(entry.path(), expressionBytes) || expressionBytes.empty())
+                {
+                    continue;
+                }
+
+                const std::wstring stem = entry.path().stem().wstring();
+                std::wstring expressionName = stem;
+                const std::wstring suffix = L".exp3";
+                if (expressionName.size() > suffix.size()
+                    && expressionName.compare(expressionName.size() - suffix.size(), suffix.size(), suffix) == 0)
+                {
+                    expressionName.resize(expressionName.size() - suffix.size());
+                }
+
+                const std::string utf8Name = WideToUtf8(expressionName);
+                ACubismMotion* expression = LoadExpression(
+                    reinterpret_cast<const csmByte*>(expressionBytes.data()),
+                    static_cast<csmSizeInt>(expressionBytes.size()),
+                    utf8Name.c_str());
+                if (expression)
+                {
+                    _expressions[utf8Name] = expression;
+                }
+            }
+        }
+
         csmMap<csmString, csmFloat32> layout;
         _settings->GetLayoutMap(layout);
         GetModelMatrix()->SetupFromLayout(layout);
@@ -377,6 +447,19 @@ namespace VoxIME::NativePet
         _textureViews.clear();
     }
 
+    bool PetModel::ApplyExpression(const std::wstring& name)
+    {
+        const auto found = _expressions.find(WideToUtf8(name));
+        if (found == _expressions.end() || !_expressionManager)
+        {
+            return false;
+        }
+
+        _expressionManager->StopAllMotions();
+        _expressionManager->StartMotion(found->second, false);
+        return true;
+    }
+
     void PetModel::Update(float deltaSeconds)
     {
         if (!_loaded || !GetModel())
@@ -390,6 +473,10 @@ namespace VoxIME::NativePet
         if (_motionManager && _idleMotion)
         {
             _motionManager->UpdateMotion(GetModel(), deltaSeconds);
+        }
+        if (_expressionManager)
+        {
+            _expressionManager->UpdateMotion(GetModel(), deltaSeconds);
         }
         if (_eyeBlink)
         {

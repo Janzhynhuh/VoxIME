@@ -58,6 +58,7 @@ namespace
     {
         std::wstring PipeName;
         std::wstring ModelPath;
+        std::wstring Expression;
         DWORD ParentPid = 0;
         int Width = 482;
         int Height = 600;
@@ -786,6 +787,10 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         {
             g_options.ModelPath = argv[++index];
         }
+        else if (arg == L"--expression" && index + 1 < argc)
+        {
+            g_options.Expression = argv[++index];
+        }
         else if (arg == L"--parent-pid" && index + 1 < argc)
         {
             g_options.ParentPid = static_cast<DWORD>(_wtoi(argv[++index]));
@@ -907,6 +912,10 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         }
         else
         {
+            if (!g_options.Expression.empty() && !petModel->ApplyExpression(g_options.Expression))
+            {
+                Log(L"expression not found");
+            }
             Log(L"Cubism model loaded");
         }
     }
