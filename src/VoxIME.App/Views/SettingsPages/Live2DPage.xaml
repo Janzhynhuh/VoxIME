@@ -10,61 +10,52 @@
                       IsChecked="{Binding IsSelected, Mode=TwoWay}" />
         </DataTemplate>
 
-        <!-- 待机随机池：勾选 + 权重 + 是否保持末帧 -->
+        <!-- 待机随机池：动作名独占一行，权重/保持末帧放第二行，避免窄栏截断动作名 -->
         <DataTemplate x:Key="MotionPoolRow">
-            <Grid Margin="0,1">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="46" />
-                    <ColumnDefinition Width="96" />
-                </Grid.ColumnDefinitions>
-                <CheckBox Grid.Column="0" Content="{Binding Group}" VerticalAlignment="Center"
-                          IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                <TextBox Grid.Column="1" Margin="6,0,0,0" Height="24" VerticalContentAlignment="Center"
-                         Text="{Binding Weight, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                         ToolTip="随机权重 1-10，越大越容易被抽中" />
-                <CheckBox Grid.Column="2" Content="保持末帧" VerticalAlignment="Center" Margin="8,0,0,0"
-                          IsChecked="{Binding Hold, Mode=TwoWay}"
-                          ToolTip="勾选：播完停在最后姿势；不勾：播完回到静默循环姿势" />
-            </Grid>
+            <StackPanel Margin="0,3">
+                <CheckBox Content="{Binding Group}" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                          ToolTip="{Binding Group}" />
+                <StackPanel Orientation="Horizontal" Margin="24,2,0,0">
+                    <TextBlock Text="权重" Style="{StaticResource HintText}" VerticalAlignment="Center" />
+                    <TextBox Width="46" Height="24" Margin="6,0,0,0" VerticalContentAlignment="Center"
+                             Text="{Binding Weight, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                             ToolTip="随机权重 1-10，越大越容易被抽中" />
+                    <CheckBox Content="保持末帧" Margin="14,0,0,0"
+                              IsChecked="{Binding Hold, Mode=TwoWay}"
+                              ToolTip="勾选：播完停在最后姿势；不勾：播完回到静默循环姿势" />
+                </StackPanel>
+            </StackPanel>
         </DataTemplate>
 
-        <!-- 触发动作：勾选 + 事件（点击/加载） + 是否保持末帧 -->
+        <!-- 触发动作：动作名独占一行，事件/保持末帧放第二行 -->
         <DataTemplate x:Key="MotionTriggerRow">
-            <Grid Margin="0,1">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="104" />
-                    <ColumnDefinition Width="96" />
-                </Grid.ColumnDefinitions>
-                <CheckBox Grid.Column="0" Content="{Binding Group}" VerticalAlignment="Center"
-                          IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                <ComboBox Grid.Column="1" Margin="6,0,0,0" Height="26"
-                          ItemsSource="{Binding EventChoices}"
-                          SelectedItem="{Binding TriggerEvent, Mode=TwoWay}"
-                          DisplayMemberPath="Label"
-                          ToolTip="点击桌宠（需关闭点击穿透，或从托盘「互动一下」触发）/ 模型加载时" />
-                <CheckBox Grid.Column="2" Content="保持末帧" VerticalAlignment="Center" Margin="8,0,0,0"
-                          IsChecked="{Binding Hold, Mode=TwoWay}"
-                          ToolTip="勾选：播完停在最后姿势；不勾：播完回到待机" />
-            </Grid>
+            <StackPanel Margin="0,3">
+                <CheckBox Content="{Binding Group}" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                          ToolTip="{Binding Group}" />
+                <StackPanel Orientation="Horizontal" Margin="24,2,0,0">
+                    <ComboBox Width="120" Height="26"
+                              ItemsSource="{Binding EventChoices}"
+                              SelectedItem="{Binding TriggerEvent, Mode=TwoWay}"
+                              DisplayMemberPath="Label"
+                              ToolTip="点击桌宠（需关闭点击穿透，或从托盘「互动一下」触发）/ 模型加载时" />
+                    <CheckBox Content="保持末帧" Margin="10,0,0,0"
+                              IsChecked="{Binding Hold, Mode=TwoWay}"
+                              ToolTip="勾选：播完停在最后姿势；不勾：播完回到待机" />
+                </StackPanel>
+            </StackPanel>
         </DataTemplate>
 
-        <!-- 状态动作：勾选 + 模式（循环 / 进入时播一次） -->
+        <!-- 状态动作：动作名独占一行，模式放第二行 -->
         <DataTemplate x:Key="MotionGroupOptionRow">
-            <Grid Margin="0,1">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="96" />
-                </Grid.ColumnDefinitions>
-                <CheckBox Grid.Column="0" Content="{Binding Group}" VerticalAlignment="Center"
-                          IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                <ComboBox Grid.Column="1" Margin="6,0,0,0" Height="26"
+            <StackPanel Margin="0,3">
+                <CheckBox Content="{Binding Group}" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                          ToolTip="{Binding Group}" />
+                <ComboBox Width="130" Height="26" Margin="24,2,0,0"
                           ItemsSource="{Binding ModeChoices}"
                           SelectedItem="{Binding SelectedMode, Mode=TwoWay}"
                           DisplayMemberPath="Label"
                           ToolTip="循环：状态期间持续播放；进入时播一次：只播一遍，保持到状态结束" />
-            </Grid>
+            </StackPanel>
         </DataTemplate>
     </UserControl.Resources>
 
@@ -400,7 +391,7 @@
                         <TextBlock Grid.Column="4" Text="秒随机播放一个（播完默认回静默）"
                                    Style="{StaticResource HintText}" VerticalAlignment="Center" />
                     </Grid>
-                    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   IsEnabled="{Binding IdleMotion}">
                         <ItemsControl ItemsSource="{Binding IdlePoolMapping.Options}"
@@ -421,7 +412,7 @@
                         <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="试播"
                                 Command="{Binding PreviewTriggerCommand}" />
                     </Grid>
-                    <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl ItemsSource="{Binding TriggerMapping.Options}"
                                       ItemTemplate="{StaticResource MotionTriggerRow}" />
@@ -458,7 +449,7 @@
                             </Grid>
                             <CheckBox Content="不播放（切到此状态不触发动作）" Margin="0,2,0,6"
                                       IsChecked="{Binding ListeningMotion.Disabled, Mode=TwoWay}" />
-                            <ScrollViewer MaxHeight="84" VerticalScrollBarVisibility="Auto"
+                            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           IsEnabled="{Binding ListeningMotion.SelectionEnabled}">
                                 <ItemsControl ItemsSource="{Binding ListeningMotion.Options}"
@@ -479,7 +470,7 @@
                             </Grid>
                             <CheckBox Content="不播放（切到此状态不触发动作）" Margin="0,2,0,6"
                                       IsChecked="{Binding ThinkingMotion.Disabled, Mode=TwoWay}" />
-                            <ScrollViewer MaxHeight="84" VerticalScrollBarVisibility="Auto"
+                            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           IsEnabled="{Binding ThinkingMotion.SelectionEnabled}">
                                 <ItemsControl ItemsSource="{Binding ThinkingMotion.Options}"
@@ -500,7 +491,7 @@
                             </Grid>
                             <CheckBox Content="不播放（切到此状态不触发动作）" Margin="0,2,0,6"
                                       IsChecked="{Binding SpeakingMotion.Disabled, Mode=TwoWay}" />
-                            <ScrollViewer MaxHeight="84" VerticalScrollBarVisibility="Auto"
+                            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           IsEnabled="{Binding SpeakingMotion.SelectionEnabled}">
                                 <ItemsControl ItemsSource="{Binding SpeakingMotion.Options}"
@@ -521,7 +512,7 @@
                             </Grid>
                             <CheckBox Content="不播放（切到此状态不触发动作）" Margin="0,2,0,6"
                                       IsChecked="{Binding ErrorMotion.Disabled, Mode=TwoWay}" />
-                            <ScrollViewer MaxHeight="84" VerticalScrollBarVisibility="Auto"
+                            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           IsEnabled="{Binding ErrorMotion.SelectionEnabled}">
                                 <ItemsControl ItemsSource="{Binding ErrorMotion.Options}"
@@ -610,7 +601,7 @@
         </ScrollViewer>
 
         <!-- 模型位置预览：独立 WebView2；固定在右侧，左侧内容保持全高滚动 -->
-        <Border Grid.Column="1" Style="{StaticResource Card}" Width="300" Margin="12,0,0,0"
+        <Border x:Name="PreviewPanel" Grid.Column="1" Style="{StaticResource Card}" Width="300" Margin="12,0,0,0"
                 VerticalAlignment="Stretch">
             <Grid>
                 <Grid.RowDefinitions>
@@ -620,7 +611,15 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0" Text="模型位置预览" Style="{StaticResource SectionTitle}" />
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="模型位置预览" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="收起"
+                            Click="CollapsePreview_Click" ToolTip="收起预览，让设置项占满宽度" />
+                </Grid>
                 <Grid Grid.Row="1" Margin="0,2,0,6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -668,6 +667,20 @@
                             Value="{Binding ModelOffsetY, Mode=TwoWay}" />
                 </StackPanel>
             </Grid>
+        </Border>
+
+        <!-- 预览收起后的窄栏：点击展开，左侧设置项恢复全宽 -->
+        <Border x:Name="PreviewRail" Grid.Column="1" Style="{StaticResource Card}" Width="34" Margin="12,0,0,0"
+                Padding="0" VerticalAlignment="Stretch" Visibility="Collapsed">
+            <Button Click="ExpandPreview_Click" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                    ToolTip="展开模型位置预览">
+                <TextBlock Text="展开预览" Style="{StaticResource HintText}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock.LayoutTransform>
+                        <RotateTransform Angle="90" />
+                    </TextBlock.LayoutTransform>
+                </TextBlock>
+            </Button>
         </Border>
     </Grid>
 </UserControl>

@@ -24,6 +24,7 @@ public partial class Live2DPage : UserControl
     private bool _syncingFromPreview;
     private (double Width, double Height)? _modelSize;
     private bool _ownerHooked;
+    private bool _previewCollapsed;
 
     public Live2DPage()
     {
@@ -140,7 +141,7 @@ public partial class Live2DPage : UserControl
     {
         ShutdownPreview();
 
-        if (_viewModel is null || !IsVisible)
+        if (_previewCollapsed || _viewModel is null || !IsVisible)
         {
             return;
         }
@@ -297,7 +298,7 @@ public partial class Live2DPage : UserControl
 
     private void RefreshPreviewLayout()
     {
-        if (_viewModel is null)
+        if (_viewModel is null || _previewCollapsed)
         {
             return;
         }
@@ -337,6 +338,37 @@ public partial class Live2DPage : UserControl
         }
 
         _previewHost.ApplyGeometry(_viewModel.Live2DScale, _viewModel.ModelOffsetX, _viewModel.ModelOffsetY);
+    }
+
+    private void CollapsePreview_Click(object sender, RoutedEventArgs e) => SetPreviewCollapsed(true);
+
+    private void ExpandPreview_Click(object sender, RoutedEventArgs e) => SetPreviewCollapsed(false);
+
+    /// <summary>
+    /// 收起/展开右侧位置预览。收起后让左侧设置项恢复全宽，并释放预览 WebView2；
+    /// 展开时重新初始化，避免隐藏的预览继续占用内存/GPU。
+    /// </summary>
+    private void SetPreviewCollapsed(bool collapsed)
+    {
+        if (_previewCollapsed == collapsed)
+        {
+            return;
+        }
+
+        _previewCollapsed = collapsed;
+        PreviewPanel.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        PreviewRail.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
+
+        if (collapsed)
+        {
+            ShutdownPreview();
+            return;
+        }
+
+        if (IsLoaded && IsVisible)
+        {
+            RestartPreview();
+        }
     }
 
     private void ShowPlaceholder(string message)
