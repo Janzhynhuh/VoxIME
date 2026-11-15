@@ -279,7 +279,7 @@ internal sealed class Live2DWebHost : IDisposable
     public void SendConfig(
         bool eyeFollow,
         bool idleMotion,
-        bool highQuality,
+        int supersampling,
         bool mouthSync,
         double scale,
         double offsetX,
@@ -301,7 +301,7 @@ internal sealed class Live2DWebHost : IDisposable
             type = "setConfig",
             eyeFollow,
             idleMotion,
-            highQuality,
+            supersampling,
             mouthSync,
             scale,
             offsetX,

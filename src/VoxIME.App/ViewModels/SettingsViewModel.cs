@@ -96,7 +96,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private int _eyeFollowFps = 30;
     private bool _eyeFollowInvertY;
     private bool _idleMotion;
-    private bool _highQualityRendering = true;
+    private Choice? _selectedSupersampling;
     private int _idlePoolMinSeconds = 15;
     private int _idlePoolMaxSeconds = 45;
     private bool _mouthSync;
@@ -1110,12 +1110,36 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _idleMotion, value);
     }
 
-    /// <summary>抗锯齿（高清渲染）：2x 后备分辨率再缩回显示，平滑 Live2D 贴图边缘；低配可关。</summary>
-    public bool HighQualityRendering
+    /// <summary>抗锯齿超采样倍数：1x 关闭 … 8x（最终受 WebGL 尺寸/像素预算自动封顶）。</summary>
+    public IReadOnlyList<Choice> SupersamplingOptions { get; } = new[]
     {
-        get => _highQualityRendering;
-        set => SetProperty(ref _highQualityRendering, value);
+        new Choice("关闭（1x）", "1"),
+        new Choice("2x（推荐）", "2"),
+        new Choice("3x", "3"),
+        new Choice("4x", "4"),
+        new Choice("5x", "5"),
+        new Choice("6x", "6"),
+        new Choice("7x", "7"),
+        new Choice("8x（上限自动封顶）", "8")
+    };
+
+    public Choice? SelectedSupersampling
+    {
+        get => _selectedSupersampling;
+        set => SetProperty(ref _selectedSupersampling, value);
     }
+
+    private void SelectSupersampling(int value)
+    {
+        var normalized = Math.Clamp(value, 1, 8);
+        _selectedSupersampling = SupersamplingOptions.FirstOrDefault(option =>
+            int.TryParse(option.Value, out var candidate) && candidate == normalized)
+            ?? SupersamplingOptions.First(option => option.Value == "2");
+        OnPropertyChanged(nameof(SelectedSupersampling));
+    }
+
+    private int ParseSupersampling() =>
+        int.TryParse(_selectedSupersampling?.Value, out var value) ? Math.Clamp(value, 1, 8) : 2;
 
     public bool TtsMouthSync
     {
@@ -2399,7 +2423,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _eyeFollowInvertY = ResolveEyeFollowInvertYPreference(config.Live2D.ModelDirectory) ?? false;
         OnPropertyChanged(nameof(EyeFollowInvertY));
         IdleMotion = config.Live2D.IdleMotion;
-        HighQualityRendering = config.Live2D.HighQualityRendering;
+        SelectSupersampling(config.Live2D.RenderSupersampling);
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
         SelectTextureQuality(config.Live2D.TextureMaxSize);
@@ -3785,6 +3809,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             invertMap[currentModelDirectory] = EyeFollowInvertY;
         }
 
+        var supersampling = ParseSupersampling();
         var idleMotionGroups = IdleMotionMapping.ToGroupList();
         var idlePoolGroups = IdlePoolMapping.ToPoolList();
         var triggerActions = TriggerMapping.ToTriggerList();
@@ -3817,7 +3842,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             EyeFollowInvertY = EyeFollowInvertY,
             EyeFollowInvertYByModel = invertMap,
             IdleMotion = IdleMotion,
-            HighQualityRendering = HighQualityRendering,
+            RenderSupersampling = supersampling,
+            HighQualityRendering = supersampling > 1,
             MouthSync = MouthSync,
             MouthSensitivity = MouthSensitivity,
             ShowBubble = ShowBubble,

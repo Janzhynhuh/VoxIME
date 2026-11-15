@@ -322,9 +322,17 @@
 
                     <CheckBox Content="待机动画循环" Margin="0,10,0,0"
                               IsChecked="{Binding IdleMotion, Mode=TwoWay}" />
-                    <CheckBox Content="抗锯齿（高清渲染，2x 后备分辨率；低配可关）" Margin="0,10,0,0"
-                              IsChecked="{Binding HighQualityRendering, Mode=TwoWay}"
-                              ToolTip="Live2D 贴图 alpha 边缘的锯齿靠 MSAA 消不掉；开启后按 2 倍分辨率渲染再缩回显示，边缘更平滑，GPU 开销约 4 倍像素量。" />
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="抗锯齿（超采样）" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding SupersamplingOptions}"
+                                  SelectedItem="{Binding SelectedSupersampling, Mode=TwoWay}"
+                                  DisplayMemberPath="Label"
+                                  ToolTip="按倍数提高后备分辨率再缩回显示，平滑 Live2D 贴图 alpha 边缘。倍数越高越平滑，但 GPU 像素量按平方增长；最终分辨率会按 WebGL 尺寸/像素预算自动封顶。" />
+                    </Grid>
                     <CheckBox Content="朗读 / 说话时口型同步" Margin="0,10,0,0"
                               IsChecked="{Binding MouthSync, Mode=TwoWay}" />
                     <CheckBox Content="TTS 播放时驱动桌宠口型" Margin="0,10,0,0"

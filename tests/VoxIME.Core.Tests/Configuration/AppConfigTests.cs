@@ -656,6 +656,30 @@ public sealed class AppConfigTests
         Assert.Equal((600, 3600), Live2DConfig.NormalizePoolInterval(900, 9000));
     }
 
+    [Fact]
+    public void RenderSupersampling_NormalizesAndMigratesLegacy()
+    {
+        Assert.Equal(1, Live2DConfig.NormalizeRenderSupersampling(0, legacyHighQuality: false));
+        Assert.Equal(2, Live2DConfig.NormalizeRenderSupersampling(0, legacyHighQuality: true));
+        Assert.Equal(8, Live2DConfig.NormalizeRenderSupersampling(99, legacyHighQuality: true));
+        // 0/负数视为“自动”：旧开关 true→2x。
+        Assert.Equal(2, Live2DConfig.NormalizeRenderSupersampling(-3, legacyHighQuality: true));
+        Assert.Equal(1, Live2DConfig.NormalizeRenderSupersampling(-3, legacyHighQuality: false));
+        Assert.Equal(4, Live2DConfig.NormalizeRenderSupersampling(4, legacyHighQuality: false));
+
+        var legacyOff = AppConfig.CreateDefault();
+        legacyOff.Live2D.HighQualityRendering = false;
+        legacyOff.Normalize();
+        Assert.Equal(1, legacyOff.Live2D.RenderSupersampling);
+        Assert.False(legacyOff.Live2D.HighQualityRendering);
+
+        var modern = AppConfig.CreateDefault();
+        modern.Live2D.RenderSupersampling = 4;
+        modern.Normalize();
+        Assert.Equal(4, modern.Live2D.RenderSupersampling);
+        Assert.True(modern.Live2D.HighQualityRendering);
+    }
+
     private static string[] Groups(IEnumerable<Live2DMotionEntry>? entries) =>
         entries?.Select(entry => entry.Group).ToArray() ?? Array.Empty<string>();
 

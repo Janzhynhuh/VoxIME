@@ -241,6 +241,10 @@ public sealed class AppConfig
         Live2D.Opacity = Math.Clamp(Live2D.Opacity, 0.2, 1.0);
         Live2D.Scale = Math.Clamp(Live2D.Scale, 0.2, 3.0);
         Live2D.TextureMaxSize = Live2DConfig.NormalizeTextureMaxSize(Live2D.TextureMaxSize);
+        Live2D.RenderSupersampling = Live2DConfig.NormalizeRenderSupersampling(
+            Live2D.RenderSupersampling,
+            Live2D.HighQualityRendering);
+        Live2D.HighQualityRendering = Live2D.RenderSupersampling > 1;
         Live2D.ModelOffsetX = Math.Clamp(Live2D.ModelOffsetX, -1.0, 1.0);
         Live2D.ModelOffsetY = Math.Clamp(Live2D.ModelOffsetY, -1.0, 1.0);
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
@@ -522,9 +526,12 @@ public sealed class Live2DConfig
     public bool IdleMotion { get; set; } = true;
 
     /// <summary>
-    /// 抗锯齿（高清渲染）：以 2x 后备分辨率渲染再缩回显示，平滑 Live2D 贴图 alpha 边缘的锯齿。
-    /// 低配机可关闭以降低 GPU 开销。
+    /// 超采样倍数（0=自动，1..8）：以 N 倍后备分辨率渲染再缩回显示，平滑 Live2D 贴图 alpha 边缘。
+    /// 最终分辨率还受设备像素比、模型缩放、WebGL 尺寸/像素预算约束。
     /// </summary>
+    public int RenderSupersampling { get; set; }
+
+    /// <summary>旧字段：抗锯齿开关；仅兼容旧配置读取（true→2x，false→1x），保存时同步为新字段。</summary>
     public bool HighQualityRendering { get; set; } = true;
 
     public bool MouthSync { get; set; } = true;
@@ -758,6 +765,19 @@ public sealed class Live2DConfig
     }
 
     /// <summary>贴图质量只允许原始 / 1024 / 2048，非法值回退到默认 2048。</summary>
+    /// <summary>
+    /// 超采样倍数：0/负数视为自动（旧开关 true→2x，false→1x），否则 clamp 到 1..8。
+    /// </summary>
+    public static int NormalizeRenderSupersampling(int value, bool legacyHighQuality)
+    {
+        if (value <= 0)
+        {
+            value = legacyHighQuality ? 2 : 1;
+        }
+
+        return Math.Clamp(value, 1, 8);
+    }
+
     public static int NormalizeTextureMaxSize(int value)
     {
         if (value <= 0)
