@@ -246,9 +246,6 @@
       preference: 'webgl'
     });
     pixiApp = app;
-    // 桌宠是常驻置顶窗口：WebView2/Pixi 默认按显示器刷新率渲染（144/240Hz），
-    // 大贴图模型会持续占满一个渲染核心，拖慢设置窗口。限制到 60fps。
-    pixiApp.ticker.maxFPS = 60;
     pixiApp.ticker.add(onTick);
     return pixiApp;
   }
@@ -294,33 +291,9 @@
       ', scale=' + fmt(scale, 3) + ', offset=' + fmt(offsetX, 2) + ',' + fmt(offsetY, 2));
   }
 
-  function updateRenderFps() {
-    if (!pixiApp || !pixiApp.ticker) return;
-    var active = live.state !== 'idle' || !!previewSession.finishHandler || live.targetMouth > 0.01;
-    if (!active) {
-      var gestures = motionLayers.gesture || [];
-      for (var i = 0; i < gestures.length && !active; i++) {
-        active = !!(gestures[i] && gestures[i].playing);
-      }
-    }
-    if (!active) {
-      var states = motionLayers.state || [];
-      for (var j = 0; j < states.length && !active; j++) {
-        active = !!(states[j] && states[j].playing);
-      }
-    }
-    // 待机时 30fps 足够（大贴图模型省 CPU）；状态/手势/口型时用 60fps 保持顺滑。
-    var fps = active ? 60 : 30;
-    if (pixiApp.ticker.maxFPS !== fps) {
-      pixiApp.ticker.maxFPS = fps;
-    }
-  }
-
   function onTick() {
     var now = performance.now();
     var dt = Math.min(0.1, pixiApp.ticker.deltaMS / 1000);
-    updateRenderFps();
-
     fpsCounter.frames++;
     if (now - fpsCounter.since >= 1000) {
       fpsCounter.value = Math.round(fpsCounter.frames * 1000 / (now - fpsCounter.since));
