@@ -14,7 +14,6 @@
 #include <Math/CubismMatrix44.hpp>
 #include <Rendering/D3D11/CubismRenderer_D3D11.hpp>
 #include <Effect/CubismEyeBlink.hpp>
-#include <Id/CubismIdManager.hpp>
 #include <Motion/CubismMotion.hpp>
 #include <Motion/CubismPoseUpdater.hpp>
 #include <Motion/CubismPhysicsUpdater.hpp>
@@ -460,6 +459,54 @@ namespace VoxIME::NativePet
         return true;
     }
 
+    void PetModel::DumpModel(const std::filesystem::path& path)
+    {
+        if (!GetModel())
+        {
+            return;
+        }
+
+        std::ofstream output(path, std::ios::out | std::ios::trunc);
+        if (!output)
+        {
+            return;
+        }
+
+        auto* model = GetModel();
+        const csmInt32* renderOrders = model->GetRenderOrders();
+        const csmInt32* maskCounts = model->GetDrawableMaskCounts();
+
+        output << "drawables=" << model->GetDrawableCount() << "\n";
+        for (csmInt32 index = 0; index < model->GetDrawableCount(); ++index)
+        {
+            const auto* id = model->GetDrawableId(index);
+            const csmInt32 parent = model->GetDrawableParentPartIndex(index);
+            const auto* parentId = parent >= 0 ? model->GetPartId(parent) : nullptr;
+            output
+                << index
+                << "\tname=" << (id ? id->GetString().GetRawString() : "")
+                << "\ttex=" << model->GetDrawableTextureIndex(index)
+                << "\trenderOrder=" << (renderOrders ? renderOrders[index] : -1)
+                << "\topacity=" << model->GetDrawableOpacity(index)
+                << "\tmasks=" << (maskCounts ? maskCounts[index] : 0)
+                << "\tvisible=" << (model->GetDrawableDynamicFlagIsVisible(index) ? 1 : 0)
+                << "\tpart=" << parent
+                << "\tpartName=" << (parentId ? parentId->GetString().GetRawString() : "")
+                << "\n";
+        }
+
+        output << "parts=" << model->GetPartCount() << "\n";
+        for (csmInt32 index = 0; index < model->GetPartCount(); ++index)
+        {
+            const auto* id = model->GetPartId(index);
+            output
+                << index
+                << "\tname=" << (id ? id->GetString().GetRawString() : "")
+                << "\topacity=" << model->GetPartOpacity(index)
+                << "\n";
+        }
+    }
+
     void PetModel::Update(float deltaSeconds)
     {
         if (!_loaded || !GetModel())
@@ -496,8 +543,7 @@ namespace VoxIME::NativePet
             updater.OnLateUpdate(GetModel(), deltaSeconds);
         }
 
-        GetModel()->Update();
-    }
+        GetModel()->Update();    }
 
     void PetModel::Draw(ID3D11RenderTargetView* renderTarget, int width, int height)
     {

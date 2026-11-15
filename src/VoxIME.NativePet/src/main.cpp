@@ -65,6 +65,7 @@ namespace
         int Monitor = 1; // 1-based；1=主屏，2=第二块屏
         bool DebugColor = false;
         bool WarmShaders = false;
+        bool DumpModel = false;
     };
 
     std::atomic<bool> g_clickThrough{true};
@@ -811,6 +812,10 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         {
             g_options.DebugColor = true;
         }
+        else if (arg == L"--dump-model")
+        {
+            g_options.DumpModel = true;
+        }
         else if (arg == L"--warm-shaders")
         {
             g_options.WarmShaders = true;
@@ -917,6 +922,12 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
                 Log(L"expression not found");
             }
             Log(L"Cubism model loaded");
+            if (g_options.DumpModel)
+            {
+                wchar_t tempPath[MAX_PATH]{};
+                GetTempPathW(MAX_PATH, tempPath);
+                petModel->DumpModel(std::filesystem::path(tempPath) / L"VoxIME.NativePet.model-dump.txt");
+            }
         }
     }
 #endif

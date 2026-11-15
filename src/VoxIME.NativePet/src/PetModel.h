@@ -45,6 +45,7 @@ namespace VoxIME::NativePet
         const std::wstring& Name() const { return _name; }
 
         bool ApplyExpression(const std::wstring& name);
+        void DumpModel(const std::filesystem::path& path);
 
     private:
         bool LoadTextures(ID3D11Device* device, const std::filesystem::path& basePath, std::string& error);
