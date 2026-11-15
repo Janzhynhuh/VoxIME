@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using VoxIME.App.Infrastructure;
 using VoxIME.Core.Abstractions;
+using VoxIME.Core.Appearance;
 using VoxIME.Core.Logging;
 
 namespace VoxIME.App.Services;
@@ -14,6 +15,7 @@ public sealed class TrayIconService : IDisposable
 {
     private readonly NotifyIcon _notifyIcon;
     private readonly ContextMenuStrip _menu;
+    private readonly ThemeMenuColorTable _menuColorTable = new();
     private readonly ToolStripMenuItem _live2DItem;
     private readonly ToolStripMenuItem _clickThroughItem;
     private readonly ToolStripMenuItem _pauseItem;
@@ -72,7 +74,7 @@ public sealed class TrayIconService : IDisposable
 
         _menu = new ContextMenuStrip
         {
-            Renderer = new ToolStripProfessionalRenderer(new DarkMenuColorTable()),
+            Renderer = new ThemeMenuRenderer(_menuColorTable),
             ShowImageMargin = false,
             ShowItemToolTips = true,
             Font = new Font("Microsoft YaHei UI", 9F),
@@ -91,6 +93,7 @@ public sealed class TrayIconService : IDisposable
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(exitItem);
         _menu.Opening += OnMenuOpening;
+        ApplyMenuTheme(ThemeManager.Current);
 
         _icon = AppIcons.LoadTrayIcon();
         _notifyIcon = new NotifyIcon
@@ -109,6 +112,7 @@ public sealed class TrayIconService : IDisposable
             }
         };
 
+        ThemeManager.ThemeChanged += OnThemeChanged;
         _controller.StateChanged += OnStateChanged;
         UpdateTooltip();
     }
@@ -150,6 +154,102 @@ public sealed class TrayIconService : IDisposable
         _clickThroughItem.Text = live2D.IsClickThrough ? "关闭桌宠点击穿透" : "开启桌宠点击穿透";
         _pauseItem.Text = _controller.IsPaused ? "恢复热键" : "暂停热键";
         _settingsItem.Enabled = true;
+    }
+
+    /// <summary>主题/配色变化：在 UI 线程重新生成菜单配色并刷新（正在打开的菜单也立即换色）。</summary>
+    private void OnThemeChanged(object? sender, ResolvedTheme theme) => RunOnUi(() =>
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        ApplyMenuTheme(theme);
+        // 颜色表是绘制时读取的，Refresh 让已打开的右键菜单按新配色重绘。
+        _menu.Refresh();
+    });
+
+    /// <summary>把当前主题的语义色应用到托盘右键菜单（背景/文字/悬停/边框）。</summary>
+    private void ApplyMenuTheme(ResolvedTheme theme)
+    {
+        var palette = CreateMenuPalette(theme);
+        _menuColorTable.Apply(palette);
+        _menu.BackColor = palette.Background;
+        _menu.ForeColor = palette.Text;
+        ApplyItemForeColors(_menu.Items, palette.Text);
+    }
+
+    /// <summary>
+    /// 遍历菜单项设置文字颜色；分隔线由渲染器绘制，跳过；子菜单递归处理。
+    /// 菜单项统一存正文色，禁用态的弱化色由 <see cref="ThemeMenuRenderer"/> 绘制时决定，
+    /// 这样菜单项重新启用后不会残留 TextMuted。
+    /// </summary>
+    private static void ApplyItemForeColors(ToolStripItemCollection items, Color textColor)
+    {
+        foreach (ToolStripItem item in items)
+        {
+            if (item is ToolStripSeparator)
+            {
+                continue;
+            }
+
+            item.ForeColor = textColor;
+            if (item is ToolStripDropDownItem dropDownItem)
+            {
+                ApplyItemForeColors(dropDownItem.DropDownItems, textColor);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 按当前主题解析托盘菜单配色：背景取 Popup（弹层语义），悬停/选中取 SurfaceHover，
+    /// 边框/分隔线取 BorderStrong，正文取 Text，禁用文字取 TextMuted。
+    /// </summary>
+    private static MenuPalette CreateMenuPalette(ResolvedTheme theme)
+    {
+        var colors = theme.Colors;
+        // 主题色解析失败时回退到默认配色方案同明暗模式的语义色，保证「浅底深字 / 深底浅字」始终可读。
+        var fallback = ThemeCatalog.Default.For(theme.IsLight) ?? colors;
+
+        return new MenuPalette(
+            Background: ParseColor(colors.Popup, fallback.Popup, SystemColors.Window),
+            Hover: ParseColor(colors.SurfaceHover, fallback.SurfaceHover, SystemColors.Highlight),
+            Border: ParseColor(colors.BorderStrong, fallback.BorderStrong, SystemColors.WindowFrame),
+            Text: ParseColor(colors.Text, fallback.Text, SystemColors.WindowText),
+            TextMuted: ParseColor(colors.TextMuted, fallback.TextMuted, SystemColors.GrayText));
+    }
+
+    /// <summary>解析主题里的 #RRGGBB；非法/异常时回退到默认主题色，仍失败则用系统色兜底。</summary>
+    private static Color ParseColor(string? hex, string fallbackHex, Color systemFallback)
+    {
+        if (TryParseColor(hex, out var color))
+        {
+            return color;
+        }
+
+        System.Diagnostics.Debug.WriteLine($"[TrayIconService] 菜单颜色「{hex}」无效，回退到默认主题色。");
+        return TryParseColor(fallbackHex, out var fallbackColor) ? fallbackColor : systemFallback;
+    }
+
+    private static bool TryParseColor(string? hex, out Color color)
+    {
+        color = Color.Empty;
+        if (string.IsNullOrWhiteSpace(hex))
+        {
+            return false;
+        }
+
+        try
+        {
+            color = ColorTranslator.FromHtml(hex.Trim());
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TrayIconService] 解析菜单颜色「{hex}」失败：{ex.Message}");
+            color = Color.Empty;
+        }
+
+        return !color.IsEmpty;
     }
 
     private void ToggleLive2D()
@@ -237,6 +337,7 @@ public sealed class TrayIconService : IDisposable
         }
 
         _disposed = true;
+        ThemeManager.ThemeChanged -= OnThemeChanged;
         _controller.StateChanged -= OnStateChanged;
         try
         {
@@ -251,25 +352,68 @@ public sealed class TrayIconService : IDisposable
         }
     }
 
-    /// <summary>深色托盘右键菜单配色。</summary>
-    private sealed class DarkMenuColorTable : ProfessionalColorTable
-    {
-        private static readonly Color Background = Color.FromArgb(30, 30, 43);
-        private static readonly Color Hover = Color.FromArgb(42, 36, 74);
-        private static readonly Color Border = Color.FromArgb(58, 58, 82);
+    /// <summary>托盘右键菜单配色（随当前主题变化）。</summary>
+    private readonly record struct MenuPalette(Color Background, Color Hover, Color Border, Color Text, Color TextMuted);
 
-        public override Color ToolStripDropDownBackground => Background;
-        public override Color ImageMarginGradientBegin => Background;
-        public override Color ImageMarginGradientMiddle => Background;
-        public override Color ImageMarginGradientEnd => Background;
-        public override Color MenuBorder => Border;
-        public override Color MenuItemBorder => Hover;
-        public override Color MenuItemSelected => Hover;
-        public override Color MenuItemSelectedGradientBegin => Hover;
-        public override Color MenuItemSelectedGradientEnd => Hover;
-        public override Color MenuItemPressedGradientBegin => Hover;
-        public override Color MenuItemPressedGradientEnd => Hover;
-        public override Color SeparatorDark => Border;
-        public override Color SeparatorLight => Border;
+    /// <summary>
+    /// 托盘右键菜单动态配色表：主题变化时更新字段，渲染器绘制时读取。
+    /// 浅色主题浅底深字，深色主题深底浅字；悬停/选中用 SurfaceHover，边框用 BorderStrong。
+    /// </summary>
+    private sealed class ThemeMenuColorTable : ProfessionalColorTable
+    {
+        private Color _background = Color.FromArgb(0x1D, 0x1D, 0x22);
+        private Color _hover = Color.FromArgb(0x24, 0x24, 0x29);
+        private Color _border = Color.FromArgb(0x3E, 0x3E, 0x47);
+        private Color _disabledText = Color.FromArgb(0x70, 0x70, 0x7C);
+
+        /// <summary>禁用项文字颜色（基类固定用 SystemColors.GrayText，由 ThemeMenuRenderer 改用该色）。</summary>
+        public Color DisabledText => _disabledText;
+
+        public void Apply(MenuPalette palette)
+        {
+            _background = palette.Background;
+            _hover = palette.Hover;
+            _border = palette.Border;
+            _disabledText = palette.TextMuted;
+        }
+
+        public override Color ToolStripDropDownBackground => _background;
+        public override Color ImageMarginGradientBegin => _background;
+        public override Color ImageMarginGradientMiddle => _background;
+        public override Color ImageMarginGradientEnd => _background;
+        public override Color MenuBorder => _border;
+        public override Color MenuItemBorder => _border;
+        public override Color MenuItemSelected => _hover;
+        public override Color MenuItemSelectedGradientBegin => _hover;
+        public override Color MenuItemSelectedGradientEnd => _hover;
+        public override Color MenuItemPressedGradientBegin => _hover;
+        public override Color MenuItemPressedGradientMiddle => _hover;
+        public override Color MenuItemPressedGradientEnd => _hover;
+        public override Color SeparatorDark => _border;
+        public override Color SeparatorLight => _border;
+        public override Color ToolStripBorder => _border;
+    }
+
+    /// <summary>
+    /// 专业渲染器基础上修正禁用项文字颜色：WinForms 基类固定用 <see cref="SystemColors.GrayText"/>，
+    /// 深色菜单上几乎不可读；这里改用当前主题的 TextMuted。
+    /// </summary>
+    private sealed class ThemeMenuRenderer : ToolStripProfessionalRenderer
+    {
+        private readonly ThemeMenuColorTable _colors;
+
+        public ThemeMenuRenderer(ThemeMenuColorTable colors)
+            : base(colors) => _colors = colors;
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            if (e.Item is { Enabled: false } && e.TextDirection == ToolStripTextDirection.Horizontal)
+            {
+                TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont, e.TextRectangle, _colors.DisabledText, e.TextFormat);
+                return;
+            }
+
+            base.OnRenderItemText(e);
+        }
     }
 }
