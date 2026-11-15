@@ -317,7 +317,13 @@ namespace VoxIME::NativePet
         });
 
         SetRenderTargetSize(static_cast<csmUint32>(width), static_cast<csmUint32>(height));
-        CreateRenderer(static_cast<csmUint32>(width), static_cast<csmUint32>(height));
+        // Cubism 5.3 blend-mode models need two mask buffers; the SDK default of 1
+        // causes face/tail layers to be composited without their masks.
+        const csmInt32 maskBufferCount = GetModel()->IsBlendModeEnabled() ? 2 : 1;
+        CreateRenderer(
+            static_cast<csmUint32>(width),
+            static_cast<csmUint32>(height),
+            maskBufferCount);
         if (!GetRenderer<Rendering::CubismRenderer_D3D11>())
         {
             error = Error("CreateRenderer failed");

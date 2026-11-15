@@ -100,6 +100,13 @@ click-through false
 {"type":"pong"}
 ```
 
+## 已知兼容性
+
+- 启用 Cubism 5.3 混合模式（`model->IsBlendModeEnabled()`）的模型需要 **2 个 mask buffer**；
+  SDK 默认 1 个会导致高精度遮罩失效，表现为脸部红斑/图层错误、尾巴蒙皮异常。
+  `PetModel` 现在按 `IsBlendModeEnabled() ? 2 : 1` 创建 renderer。
+- 其他模型（如 Hiyori）仍使用 1 个 mask buffer。
+
 ## 尚未实现
 
 - 动作/表情/物理/多 MotionManager；
