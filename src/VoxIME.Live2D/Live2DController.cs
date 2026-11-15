@@ -361,20 +361,13 @@ public sealed class Live2DController : ILive2DController
             $"[Live2D] 显示变化({source}) visible={visible} needsGeometryRepair={needsRepair}");
 
         var config = GetConfig();
-        if (config.SnapToEdge && (needsRepair || !visible)
-            && _window.SnapToBottomEdgePhysical(
-                config.Width,
-                config.Height,
-                config.KeepAboveTaskbar))
+
+        // 尺寸/DPI 不一致时只修正物理尺寸并保持当前位置；不要因为 needsRepair 就吸附到屏幕底部。
+        // 旧逻辑会在每次几何自检时调用 SnapToBottomEdgePhysical，窗口可能在不同显示器底部之间来回跳。
+        if (needsRepair)
         {
-            _userLeft = _window.Left;
-            _userTop = _window.Top;
-            _logger.Info(
-                $"[Live2D] 显示器/DPI 变化，按物理像素重新吸附到底部：" +
-                $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
-            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
-            SchedulePhysicalSnapRetry();
-            return;
+            RepairWindowPhysicalSize(config, source);
+            visible = _window.IsVisibleOnCurrentDesktop();
         }
 
         if (visible)
@@ -383,6 +376,22 @@ public sealed class Live2DController : ILive2DController
         }
 
         _logger.Info("[Live2D] 显示器布局变化，桌宠窗口已不在可见区域，自动回位。");
+        if (config.SnapToEdge
+            && _window.SnapToBottomEdgePhysical(
+                config.Width,
+                config.Height,
+                config.KeepAboveTaskbar))
+        {
+            _userLeft = _window.Left;
+            _userTop = _window.Top;
+            _logger.Info(
+                $"[Live2D] 窗口不可见，按物理像素回到底部：" +
+                $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
+            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
+            SchedulePhysicalSnapRetry();
+            return;
+        }
+
         ResetWindowToVisiblePosition(config);
     }
 
@@ -442,7 +451,9 @@ public sealed class Live2DController : ILive2DController
                         }
 
                         var config = GetConfig();
-                        if (config.SnapToEdge
+                        // 只有窗口真的不在可见区域时才需要吸附/回位；
+                        // 几何修复只改物理尺寸，保持用户当前坐标，避免多次自检之间来回跳。
+                        if (config.SnapToEdge && !_window.IsVisibleOnCurrentDesktop()
                             && _window.SnapToBottomEdgePhysical(
                                 config.Width,
                                 config.Height,
@@ -451,7 +462,7 @@ public sealed class Live2DController : ILive2DController
                             _userLeft = _window.Left;
                             _userTop = _window.Top;
                             _logger.Info(
-                                $"[Live2D] DPI 稳定后再次吸附到底部：" +
+                                $"[Live2D] DPI 稳定后窗口不可见，重新吸附到底部：" +
                                 $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
                             PositionChanged?.Invoke(
                                 this,
@@ -459,13 +470,7 @@ public sealed class Live2DController : ILive2DController
                             return;
                         }
 
-                        if (_window.NeedsDisplayGeometryRepair())
-                        {
-                            if (!_window.ResizePhysicalKeepingPosition(config.Width, config.Height))
-                            {
-                                ApplyWindowConfiguration();
-                            }
-                        }
+                        RepairWindowPhysicalSize(config, "RetryPhysicalSnap");
                     }, "RetryPhysicalSnap");
                 }
             }
@@ -478,6 +483,38 @@ public sealed class Live2DController : ILive2DController
                 RunOnUiThread(() => _physicalSnapRetryPending = false, "RetryPhysicalSnapDone");
             }
         });
+    }
+
+    /// <summary>
+    /// 修正 DPI/远控切换后 WPF 与物理窗口的尺寸差异；只改尺寸，保持用户当前位置。
+    /// 返回是否执行了修正。
+    /// </summary>
+    private bool RepairWindowPhysicalSize(Live2DConfig config, string source)
+    {
+        if (_window is null || !_window.NeedsDisplayGeometryRepair())
+        {
+            return false;
+        }
+
+        var beforeLeft = _window.Left;
+        var beforeTop = _window.Top;
+        if (!_window.ResizePhysicalKeepingPosition(config.Width, config.Height))
+        {
+            _logger.Warn($"[Live2D] 修正窗口物理尺寸失败（{source}），保持当前位置不动。");
+            return false;
+        }
+
+        _userLeft = _window.Left;
+        _userTop = _window.Top;
+        _logger.Info(
+            $"[Live2D] 修正窗口物理尺寸（{source}，保持位置）：" +
+            $"({_window.Left:0.#},{_window.Top:0.#})，实际={_window.ActualWidth:0.#}x{_window.ActualHeight:0.#}");
+        if (Math.Abs(_window.Left - beforeLeft) > 0.5 || Math.Abs(_window.Top - beforeTop) > 0.5)
+        {
+            PositionChanged?.Invoke(this, new Live2DPositionChangedEventArgs(_window.Left, _window.Top));
+        }
+
+        return true;
     }
 
     /// <summary>把窗口移到当前屏的可见位置，并通知上层持久化新坐标。</summary>
