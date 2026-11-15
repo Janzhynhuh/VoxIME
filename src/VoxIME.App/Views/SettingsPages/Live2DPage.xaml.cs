@@ -32,6 +32,7 @@ public partial class Live2DPage : UserControl
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
         IsVisibleChanged += OnIsVisibleChanged;
+        PreviewBody.SizeChanged += (_, _) => RefreshPreviewLayout();
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -315,9 +316,17 @@ public partial class Live2DPage : UserControl
             height = fitted.Height;
         }
 
-        var (previewWidth, previewHeight) = Live2DPreviewLayout.Fit(width, height, 460, 240);
-        PreviewFrame.Width = Math.Max(160, previewWidth);
-        PreviewFrame.Height = Math.Max(160, previewHeight);
+        // 预览高度按窗口高度映射到右侧面板（800 及以上占满），再按窗口宽高比算宽度：
+        // 这样即使 AutoFitWindow 让宽高比例不变，拖动高度也能明显看到预览变大/变小。
+        PreviewSizeText.Text = $"窗口 {width:0}×{height:0}";
+
+        var maxWidth = PreviewBody.ActualWidth > 8 ? PreviewBody.ActualWidth - 8 : 260;
+        var maxHeight = PreviewBody.ActualHeight > 8 ? PreviewBody.ActualHeight - 8 : 380;
+        var targetHeight = maxHeight * Math.Clamp(height / 800.0, 0.5, 1.0);
+        var (previewWidth, previewHeight) = Live2DPreviewLayout.Fit(width, height, maxWidth, targetHeight);
+
+        PreviewFrame.Width = Math.Max(40, previewWidth);
+        PreviewFrame.Height = Math.Max(40, previewHeight);
     }
 
     private void PushGeometryToPreview()
@@ -336,8 +345,9 @@ public partial class Live2DPage : UserControl
         _previewHost = null;
         _modelSize = null;
         PreviewHostContent.Content = null;
-        PreviewFrame.Width = 320;
-        PreviewFrame.Height = 180;
+        PreviewFrame.Width = 220;
+        PreviewFrame.Height = 140;
+        PreviewSizeText.Text = "窗口尺寸";
         PreviewStatusText.Text = message;
         PreviewStatusText.Visibility = Visibility.Visible;
         PreviewErrorText.Visibility = Visibility.Collapsed;

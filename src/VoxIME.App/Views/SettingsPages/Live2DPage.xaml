@@ -69,76 +69,12 @@
     </UserControl.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
 
-        <!-- 模型位置预览：独立 WebView2，拖拽模型调整 offset；放在 ScrollViewer 外避免滚动裁剪 -->
-        <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,12">
-            <StackPanel>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="模型位置预览" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="{Binding ModelOffsetSummary}" Style="{StaticResource MutedText}"
-                               VerticalAlignment="Center" Margin="0,0,12,0" />
-                    <Button Grid.Column="2" Style="{StaticResource SmallButton}" Content="重置位置"
-                            Command="{Binding ResetModelOffsetCommand}" />
-                </Grid>
-                <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,8" TextWrapping="Wrap"
-                           Text="在下方预览里拖动模型调整位置；窗口宽/高和模型缩放会实时反映在预览中；点击保存后应用到桌宠。" />
-                <Border x:Name="PreviewFrame" HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Background="#151221" CornerRadius="8" ClipToBounds="True"
-                        MinWidth="160" MinHeight="160">
-                    <Grid>
-                        <ContentControl x:Name="PreviewHostContent"
-                                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-                        <TextBlock x:Name="PreviewStatusText" Text="预览加载中…" Foreground="#B9B4D0"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   TextWrapping="Wrap" Padding="16" TextAlignment="Center" />
-                    </Grid>
-                </Border>
-                <TextBlock x:Name="PreviewErrorText" Style="{StaticResource HintText}" Margin="0,6,0,0"
-                           TextWrapping="Wrap" Visibility="Collapsed" />
-                <StackPanel x:Name="OffsetFallbackPanel" Margin="0,10,0,0"
-                            Visibility="{Binding IsPositionFallbackVisible, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Style="{StaticResource HintText}" Margin="0,0,0,8" TextWrapping="Wrap"
-                               Text="位置预览不可用，先用下面的滑块调整偏移。" />
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="74" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="模型水平偏移" Style="{StaticResource ValueText}" />
-                        <Slider Grid.Column="1" Minimum="-1" Maximum="1" TickFrequency="0.01"
-                                IsSnapToTickEnabled="True" Value="{Binding ModelOffsetX, Mode=TwoWay}" />
-                        <TextBlock Grid.Column="2" Text="{Binding ModelOffsetX, StringFormat={}{0:P0}}"
-                                   Style="{StaticResource MutedText}" HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" />
-                    </Grid>
-                    <Grid Margin="0,0,0,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="74" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="模型垂直偏移" Style="{StaticResource ValueText}" />
-                        <Slider Grid.Column="1" Minimum="-1" Maximum="1" TickFrequency="0.01"
-                                IsSnapToTickEnabled="True" Value="{Binding ModelOffsetY, Mode=TwoWay}" />
-                        <TextBlock Grid.Column="2" Text="{Binding ModelOffsetY, StringFormat={}{0:P0}}"
-                                   Style="{StaticResource MutedText}" HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" />
-                    </Grid>
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <ScrollViewer Grid.Row="1" inf:SmoothScroll.IsEnabled="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+        <ScrollViewer Grid.Column="0" inf:SmoothScroll.IsEnabled="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       Padding="0,0,8,0">
             <StackPanel Margin="0,0,0,20">
 
@@ -655,5 +591,66 @@
             </Border>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- 模型位置预览：独立 WebView2；固定在右侧，左侧内容保持全高滚动 -->
+        <Border Grid.Column="1" Style="{StaticResource Card}" Width="300" Margin="12,0,0,0"
+                VerticalAlignment="Stretch">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="模型位置预览" Style="{StaticResource SectionTitle}" />
+                <Grid Grid.Row="1" Margin="0,2,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ModelOffsetSummary}" Style="{StaticResource MutedText}" />
+                        <TextBlock x:Name="PreviewSizeText" Text="窗口尺寸" Style="{StaticResource HintText}"
+                                   Margin="0,2,0,0" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource SmallButton}" Content="重置位置"
+                            Command="{Binding ResetModelOffsetCommand}" />
+                </Grid>
+                <Border Grid.Row="2" x:Name="PreviewBody" Background="#0D0B14" CornerRadius="8"
+                        ClipToBounds="True" MinHeight="140">
+                    <Grid>
+                        <Border x:Name="PreviewFrame" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Background="#151221" BorderBrush="#4B4166" BorderThickness="1"
+                                CornerRadius="6" ClipToBounds="True">
+                            <Grid>
+                                <ContentControl x:Name="PreviewHostContent"
+                                                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                                <TextBlock x:Name="PreviewStatusText" Text="预览加载中…" Foreground="#B9B4D0"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" Padding="12" TextAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+                <StackPanel Grid.Row="3" Margin="0,6,0,0">
+                    <TextBlock x:Name="PreviewErrorText" Style="{StaticResource HintText}" Margin="0,0,0,4"
+                               TextWrapping="Wrap" Visibility="Collapsed" />
+                    <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap"
+                               Text="在预览里拖动模型调整位置；宽/高/缩放会实时反映在预览中；保存后应用到桌宠。" />
+                </StackPanel>
+                <StackPanel Grid.Row="4" x:Name="OffsetFallbackPanel" Margin="0,8,0,0"
+                            Visibility="{Binding IsPositionFallbackVisible, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap"
+                               Text="位置预览不可用，用下面滑块兜底：" />
+                    <TextBlock Text="水平偏移" Style="{StaticResource ValueText}" Margin="0,6,0,0" />
+                    <Slider Minimum="-1" Maximum="1" TickFrequency="0.01" IsSnapToTickEnabled="True"
+                            Value="{Binding ModelOffsetX, Mode=TwoWay}" />
+                    <TextBlock Text="垂直偏移" Style="{StaticResource ValueText}" Margin="0,6,0,0" />
+                    <Slider Minimum="-1" Maximum="1" TickFrequency="0.01" IsSnapToTickEnabled="True"
+                            Value="{Binding ModelOffsetY, Mode=TwoWay}" />
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>
