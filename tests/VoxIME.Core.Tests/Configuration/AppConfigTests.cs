@@ -95,6 +95,18 @@ public sealed class AppConfigTests
         Assert.Empty(b.Thinking);
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(-5, 0)]
+    [InlineData(7, 15)]
+    [InlineData(15, 15)]
+    [InlineData(144, 144)]
+    [InlineData(999, 144)]
+    public void NormalizeAnimationFps_ClampsToSupportedRange(int input, int expected)
+    {
+        Assert.Equal(expected, Live2DConfig.NormalizeAnimationFps(input));
+    }
+
     [Fact]
     public void SmaaEnabled_DefaultsToFalse()
     {

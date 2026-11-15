@@ -53,6 +53,7 @@
     idlePoolMaxSeconds: 45,
     triggers: [],
     supersampling: 2,
+    animationFps: 0, // 0 = 跟随显示器刷新率；15..144 = 限制 Pixi ticker 更新/渲染帧率
     smaa: false,
     showBubble: true,
     textureMaxSize: 2048,
@@ -285,6 +286,51 @@
     return size <= 1024 ? 1024 : 2048;
   }
 
+  // 模型播放帧率：0=跟随显示器；1..14 视为 15，上限 144（与 C# Live2DConfig.NormalizeAnimationFps 一致）。
+  function normalizeAnimationFps(value) {
+    var fps = Number(value);
+    if (!isFinite(fps) || fps <= 0) return 0;
+    return Math.max(15, Math.min(144, Math.round(fps)));
+  }
+
+  // Pixi v8 Ticker.maxFPS：0 表示不限制（跟随显示器刷新率）；非 0 时 ticker.update 会按
+  // _minElapsedMS 跳过间隔不足的 requestAnimationFrame，从而同时限制更新与渲染帧率。
+  var appliedAnimationFps = -1;
+
+  function setTickerMaxFps(ticker, fps) {
+    if (!ticker || typeof ticker.maxFPS !== 'number') return false;
+    ticker.maxFPS = fps;
+    return true;
+  }
+
+  function applyAnimationFps() {
+    if (!pixiApp || !pixiApp.ticker) return;
+    var fps = normalizeAnimationFps(config.animationFps);
+    var supported = false;
+    try {
+      supported = setTickerMaxFps(pixiApp.ticker, fps);
+      // Live2D 模型创建时没有传 ticker，引擎默认把动作/物理更新挂在 PIXI.Ticker.shared 上；
+      // 只限制应用 ticker 会停掉渲染、模型仍按显示器刷新率空转更新，这里同步限制才真正降低更新帧率。
+      if (window.PIXI && PIXI.Ticker && PIXI.Ticker.shared && PIXI.Ticker.shared !== pixiApp.ticker) {
+        setTickerMaxFps(PIXI.Ticker.shared, fps);
+      }
+    } catch (e) {
+      log('设置播放帧率失败（忽略）', e);
+      return;
+    }
+    if (!supported) {
+      if (appliedAnimationFps !== -2) {
+        appliedAnimationFps = -2;
+        log('当前 Pixi ticker 不支持 maxFPS，播放帧率设置未生效');
+      }
+      return;
+    }
+    if (appliedAnimationFps !== fps) {
+      appliedAnimationFps = fps;
+      log('播放帧率: ' + (fps > 0 ? fps + ' FPS' : '跟随显示器'));
+    }
+  }
+
   // 在纹理上传前把大贴图等比缩小。桌宠窗口只有几百像素，4096/8192 贴图没有收益，
   // 但会持续占用大量显存/内存。返回新的 PIXI.Texture，原对象由 Pixi 缓存自然回收。
   function downscaleTextureAsset(texture) {
@@ -366,6 +412,7 @@
     });
     pixiApp = app;
     pixiApp.ticker.add(onTick);
+    applyAnimationFps();
     if (paused) {
       pixiApp.ticker.stop();
     }
@@ -2161,6 +2208,9 @@
       config.supersampling = supersampling;
       supersamplingChanged = true;
     }
+    if (typeof msg.animationFps === 'number' && isFinite(msg.animationFps)) {
+      config.animationFps = normalizeAnimationFps(msg.animationFps);
+    }
     if (msg.smaa !== undefined) setSmaaEnabled(!!msg.smaa);
     if (msg.mouthSync !== undefined) config.mouthSync = !!msg.mouthSync;
     if (msg.textureMaxSize !== undefined) config.textureMaxSize = normalizeTextureMaxSize(msg.textureMaxSize);
@@ -2243,6 +2293,7 @@
         layoutModel();
       }
     }
+    applyAnimationFps();
     syncConfigCheckboxes();
     if (isPreview) updateDebugStatus();
   }
@@ -2975,6 +3026,8 @@
             }
           : null,
         supersampling: config.supersampling,
+        animationFps: config.animationFps,
+        tickerMaxFPS: pixiApp && pixiApp.ticker ? pixiApp.ticker.maxFPS : null,
         smaa: config.smaa,
         smaaFilterAttached: !!(model && model.filters && model.filters.length),
         model: model

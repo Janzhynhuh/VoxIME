@@ -16,7 +16,7 @@ namespace VoxIME.Live2D;
 ///
 /// 行为概要：
 /// - 在 WPF Dispatcher 上创建透明、无边框、置顶、不占任务栏的桌宠窗口；
-/// - 通过 WebView2CompositionControl 渲染 Cubism 3/4 模型（真正透明合成）；
+/// - 通过 WebView2CompositionControl 渲染 Cubism 3/4/5 模型（真正透明合成）；
 /// - 无模型 / 无 WebView2 Runtime / 模型加载失败 / 握手超时 → 自动降级为 WPF 矢量兜底形象，
 ///   并通过 <see cref="ErrorOccurred"/> 与 <see cref="LastError"/> 报告原因；
 /// - 任意线程调用安全：状态/口型写入字段后由 UI 线程 30Hz 合并下发；眼动由独立后台线程按
@@ -1317,6 +1317,7 @@ public sealed class Live2DController : ILive2DController
             config.EyeFollow,
             config.IdleMotion,
             config.RenderSupersampling,
+            config.AnimationFps,
             config.SmaaEnabled,
             config.MouthSync,
             config.Scale,

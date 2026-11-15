@@ -94,6 +94,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private bool _alwaysOnTop;
     private bool _eyeFollow;
     private int _eyeFollowFps = 30;
+    private int _animationFps;
     private bool _eyeFollowInvertY;
     private bool _idleMotion;
     private bool _smaaEnabled;
@@ -1108,6 +1109,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         get => _eyeFollowFps;
         set => SetProperty(ref _eyeFollowFps, Math.Clamp(value, 5, 300));
+    }
+
+    /// <summary>模型播放帧率（0=跟随显示器刷新率，1–144；1–14 保存时按 15 处理）。</summary>
+    public int AnimationFps
+    {
+        get => _animationFps;
+        set => SetProperty(ref _animationFps, Math.Clamp(value, 0, 144));
     }
 
     /// <summary>眼动上下反转（按当前模型记忆；部分模型骨骼绑定方向相反）。</summary>
@@ -2453,6 +2461,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         AlwaysOnTop = config.Live2D.AlwaysOnTop;
         EyeFollow = config.Live2D.EyeFollow;
         EyeFollowFps = config.Live2D.EyeFollowFps;
+        AnimationFps = Live2DConfig.NormalizeAnimationFps(config.Live2D.AnimationFps);
         _eyeFollowInvertY = ResolveEyeFollowInvertYPreference(config.Live2D.ModelDirectory) ?? false;
         OnPropertyChanged(nameof(EyeFollowInvertY));
         IdleMotion = config.Live2D.IdleMotion;
@@ -3880,6 +3889,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             AlwaysOnTop = AlwaysOnTop,
             EyeFollow = EyeFollow,
             EyeFollowFps = EyeFollowFps,
+            AnimationFps = AnimationFps,
             EyeFollowInvertY = EyeFollowInvertY,
             EyeFollowInvertYByModel = invertMap,
             IdleMotion = IdleMotion,

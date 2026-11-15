@@ -249,6 +249,7 @@ public sealed class AppConfig
         Live2D.ModelOffsetY = Math.Clamp(Live2D.ModelOffsetY, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset);
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
         Live2D.EyeFollowFps = Math.Clamp(Live2D.EyeFollowFps, 5, 300);
+        Live2D.AnimationFps = Live2DConfig.NormalizeAnimationFps(Live2D.AnimationFps);
         Live2D.EyeFollowInvertYByModel ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         Live2D.ExpressionByModel ??= new Dictionary<string, Live2DExpressionMap>(StringComparer.OrdinalIgnoreCase);
         Live2D.MotionByModel ??= new Dictionary<string, Live2DMotionMap>(StringComparer.OrdinalIgnoreCase);
@@ -525,6 +526,11 @@ public sealed class Live2DConfig
     public bool EyeFollow { get; set; } = true;
     /// <summary>眼动跟随的采样帧率（Hz，5–300，默认 30）；采样在后台线程完成，实际渲染上限为显示器刷新率。</summary>
     public int EyeFollowFps { get; set; } = 30;
+    /// <summary>
+    /// 模型播放/更新帧率（FPS）：0=跟随显示器刷新率（默认），1–14 按 15 处理，上限 144。
+    /// 页面把它写进 Pixi ticker 的 maxFPS，限制模型更新/渲染频率；调低更省 GPU。
+    /// </summary>
+    public int AnimationFps { get; set; }
     /// <summary>眼动上下反转（当前生效值，保存时由 <see cref="EyeFollowInvertYByModel"/> 按当前模型解析）。</summary>
     public bool EyeFollowInvertY { get; set; }
     /// <summary>按模型目录记住的“眼动上下反转”偏好（不同模型的骨骼绑定可能相反）。</summary>
@@ -795,6 +801,17 @@ public sealed class Live2DConfig
         }
 
         return value <= 1024 ? 1024 : 2048;
+    }
+
+    /// <summary>模型播放帧率：0=跟随显示器；1..14 按 15 处理，超过 144 夹到 144。</summary>
+    public static int NormalizeAnimationFps(int value)
+    {
+        if (value <= 0)
+        {
+            return 0;
+        }
+
+        return value < 15 ? 15 : Math.Min(value, 144);
     }
 
     /// <summary>规范化随机池间隔：min 2..600 秒，max 不小于 min 且不超过 3600 秒；0 视为默认 15/45。</summary>
