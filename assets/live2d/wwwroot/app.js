@@ -24,6 +24,8 @@
   var page = (document.body && document.body.dataset && document.body.dataset.page) || 'pet';
   var isPreview = page === 'preview';
   var embedded = page === 'pet' && params.get('embedded') === '1';
+  // 设置页内嵌位置预览：隐藏调试面板，拖拽模型直接改 offset 并上报 WPF。
+  var embedPreview = params.get('embed') === '1';
   var forceDemo = params.get('demo') === '1';
   var showDebug = isPreview || params.get('status') === '1';
 
@@ -2669,6 +2671,64 @@
     if (select) select.value = name || 'checker';
   }
 
+  /** 设置页内嵌预览：拖动模型改 offset，60fps 更新并节流上报宿主。 */
+  function setupEmbedPreviewUi() {
+    var drag = null;
+    var postPending = false;
+
+    function postOffset() {
+      if (postPending) return;
+      postPending = true;
+      requestAnimationFrame(function () {
+        postPending = false;
+        sendHost({
+          type: 'previewOffset',
+          offsetX: config.offsetX || 0,
+          offsetY: config.offsetY || 0
+        });
+      });
+    }
+
+    stageEl.addEventListener('pointerdown', function (event) {
+      if (event.button !== 0) return;
+      drag = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        offsetX: config.offsetX || 0,
+        offsetY: config.offsetY || 0
+      };
+      try { stageEl.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+      document.body.classList.add('dragging');
+      event.preventDefault();
+    });
+
+    stageEl.addEventListener('pointermove', function (event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      var rect = stageEl.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      config.offsetX = Math.max(-1, Math.min(1, drag.offsetX + (event.clientX - drag.x) / rect.width));
+      config.offsetY = Math.max(-1, Math.min(1, drag.offsetY + (event.clientY - drag.y) / rect.height));
+      layoutModel();
+      postOffset();
+      event.preventDefault();
+    });
+
+    function endDrag(event) {
+      if (!drag || (event && event.pointerId !== drag.id)) return;
+      drag = null;
+      document.body.classList.remove('dragging');
+      try { stageEl.releasePointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+    }
+
+    stageEl.addEventListener('pointerup', endDrag);
+    stageEl.addEventListener('pointercancel', endDrag);
+    stageEl.addEventListener('lostpointercapture', function () {
+      drag = null;
+      document.body.classList.remove('dragging');
+    });
+  }
+
   function wirePreviewUi() {
     if (!isPreview) return;
     var modelInput = document.getElementById('model-input');
@@ -2758,7 +2818,12 @@
     log('页面启动 v' + VERSION + ' page=' + page + ' embedded=' + embedded);
 
     readUrlParams();
-    wirePreviewUi();
+    if (embedPreview) {
+      document.body.classList.add('embed-preview');
+      setupEmbedPreviewUi();
+    } else {
+      wirePreviewUi();
+    }
     syncConfigCheckboxes();
     updateStateButtons(live.state);
     updateDebugStatus();

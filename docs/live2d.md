@@ -138,6 +138,7 @@ Hiyori/
 - 导入后出现在下拉框中，选择不同模型即可在多个模型间切换（点击「保存」后应用到桌宠）。
 - **打开模型库目录**：直接查看/手动放入模型（手动放入后点「刷新列表」）。
 - **删除选中模型**：只删除模型库里的副本（有二次确认），不会影响你原来的文件夹。
+- **模型位置预览**：设置页顶部有独立的预览卡片（第二个 WebView2，60fps），直接在预览里拖动模型即可调整窗口内位置，右上角百分比实时更新；窗口宽度/高度/模型缩放会实时反映在预览画幅里。预览只改设置草稿，点「保存」后才应用到桌面桌宠；离开桌宠设置页或关闭设置会立即释放预览渲染器。原来的「模型水平/垂直偏移」滑块只在预览不可用（无模型、WebView2 初始化失败）时作为兜底显示。
 - **状态表情映射**：设置页四个状态改为可编辑下拉框，自动扫描 `model3.json` 的 `Expressions` 以及模型目录下的 `Exp3/*.exp3.json`；`Animation/*.motion3.json` 会注册为 `Animation/<文件名>` 动作组，避免和 model3 原生 Idle 组冲突。当前模型没有登记表情时也能识别 VTube Studio 的文件夹资源；映射按模型目录记忆。
 - **动作按“角色”组织（对齐 VTube Studio / Live2DViewerEX 的常见做法）**：
   1. **静默循环**：一直在播的基础动作（如 `Animation/IDLE`），可多选叠加；一个都不勾 = 自动找名字含 `idle` 的组。
@@ -589,3 +590,6 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 8. **Cubism 5 支持说明（2026-11-01 升级）**：旧版 `pixi-live2d-display 0.4.0`（Cubism 4 时代框架）遇到 MOC3 v5 模型会出现遮罩/局部贴图渲染错误（典型：鼻子/脸部小遮罩变黑块）；
    现改为 PixiJS 8.22.0 + `untitled-pixi-live2d-engine 1.4.0`，并关闭大贴图 mipmap LOD（`textureOptions.lod=false`），已在用户 Cubism 5 模型（MOC3 v5、4096/8192 贴图、49 组遮罩）与 Hiyori（Cubism 3）上验证。
    注意：PixiJS 8.13.1 的 `TextureSource` 内部没有引擎依赖的 `_gpuData` 字段，纹理上传会报 `Failed to upload Live2D texture`；必须使用 **8.22.0**（已本地化到 `vendor/pixi.min.js`）。
+9. **位置预览**会在设置页额外加载一个 WebView2 与一份模型实例，内存/显存占用增加；离开桌宠设置页即释放。
+   预览只修改设置草稿，保存后才应用到桌宠；AutoFitWindow 的预览宽度按预览模型尺寸估算，保存后以实际窗口为准。
+   预览初始化失败时自动显示原偏移滑块兜底，不影响桌宠。

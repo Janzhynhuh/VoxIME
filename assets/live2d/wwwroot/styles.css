@@ -317,3 +317,28 @@ body.preview-page #bubble {
 body.preview-page #demo-canvas {
   background: transparent;
 }
+
+/* ============================================================
+   设置页内嵌位置预览（preview.html?embed=1）
+   ============================================================ */
+body.embed-preview {
+  overflow: hidden;
+  background: #14121f;
+}
+
+body.embed-preview #preview-panel,
+body.embed-preview #status,
+body.embed-preview #bubble,
+body.embed-preview #hint {
+  display: none !important;
+}
+
+body.embed-preview #stage {
+  inset: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+body.embed-preview.dragging #stage {
+  cursor: grabbing;
+}

@@ -96,6 +96,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private int _eyeFollowFps = 30;
     private bool _eyeFollowInvertY;
     private bool _idleMotion;
+    private bool _isPositionFallbackVisible;
     private Choice? _selectedSupersampling;
     private int _idlePoolMinSeconds = 15;
     private int _idlePoolMaxSeconds = 45;
@@ -243,6 +244,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         ShowLive2DCommand = new RelayCommand(() => SetLive2DVisible(true));
         HideLive2DCommand = new RelayCommand(() => SetLive2DVisible(false));
         ResetLive2DPositionCommand = new RelayCommand(ResetLive2DPosition);
+        ResetModelOffsetCommand = new RelayCommand(ResetModelOffset);
         PreviewIdleMotionCommand = new RelayCommand(PreviewIdleMotion);
         PreviewIdlePoolCommand = new RelayCommand(PreviewIdlePool);
         PreviewTriggerCommand = new RelayCommand(PreviewTrigger);
@@ -981,14 +983,36 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public double ModelOffsetX
     {
         get => _modelOffsetX;
-        set => SetProperty(ref _modelOffsetX, Math.Clamp(value, -1.0, 1.0));
+        set
+        {
+            if (SetProperty(ref _modelOffsetX, Math.Clamp(value, -1.0, 1.0)))
+            {
+                OnPropertyChanged(nameof(ModelOffsetSummary));
+            }
+        }
     }
 
     /// <summary>模型垂直偏移（-1..1，按窗口高度比例；正=向下）。</summary>
     public double ModelOffsetY
     {
         get => _modelOffsetY;
-        set => SetProperty(ref _modelOffsetY, Math.Clamp(value, -1.0, 1.0));
+        set
+        {
+            if (SetProperty(ref _modelOffsetY, Math.Clamp(value, -1.0, 1.0)))
+            {
+                OnPropertyChanged(nameof(ModelOffsetSummary));
+            }
+        }
+    }
+
+    /// <summary>当前模型偏移的可读摘要（预览卡片右上角显示）。</summary>
+    public string ModelOffsetSummary => $"水平 {ModelOffsetX:P0} · 垂直 {ModelOffsetY:P0}";
+
+    /// <summary>位置预览不可用时是否显示原偏移滑块兜底。</summary>
+    public bool IsPositionFallbackVisible
+    {
+        get => _isPositionFallbackVisible;
+        set => SetProperty(ref _isPositionFallbackVisible, value);
     }
 
     public double Live2DOpacity
@@ -1314,6 +1338,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     public RelayCommand ShowLive2DCommand { get; }
     public RelayCommand HideLive2DCommand { get; }
     public RelayCommand ResetLive2DPositionCommand { get; }
+    public RelayCommand ResetModelOffsetCommand { get; }
     public RelayCommand PreviewIdleMotionCommand { get; }
     public RelayCommand PreviewIdlePoolCommand { get; }
     public RelayCommand PreviewTriggerCommand { get; }
@@ -3592,6 +3617,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             _logger.Warn($"重置桌宠位置失败：{ex.Message}");
             Ui.Error("重置桌宠位置失败：" + ex.Message);
         }
+    }
+
+    private void ResetModelOffset()
+    {
+        ModelOffsetX = 0;
+        ModelOffsetY = 0;
+        ShowSaveStatus("模型偏移已重置，保存后生效");
     }
 
     private void RefreshLive2DStatus()

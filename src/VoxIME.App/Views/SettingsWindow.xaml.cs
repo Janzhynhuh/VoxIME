@@ -29,6 +29,9 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>退出流程中允许真正关闭。</summary>
+    /// <summary>供设置页内的 Live2D 位置预览等子功能写日志。</summary>
+    public IAppLogger Logger => _logger;
+
     public bool AllowClose { get; set; }
 
     /// <summary>托盘菜单切换点击穿透后，同步设置页草稿与界面，避免之后“保存”把托盘切换改回去。</summary>
