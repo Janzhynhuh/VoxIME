@@ -30,7 +30,6 @@ logs/
 # （官方示例模型有独立许可，不随仓库/发布包分发；用 scripts/fetch-sample-model.ps1 获取）
 assets/live2d/models/
 assets/runtime/
-third_party/cubism-native/
 
 # NuGet
 *.nupkg
