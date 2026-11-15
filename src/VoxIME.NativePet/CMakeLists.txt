@@ -71,8 +71,9 @@ if(CUBISM_SDK_DIR AND EXISTS "${CUBISM_SDK_DIR}/Core" AND EXISTS "${CUBISM_SDK_D
   add_subdirectory("${CUBISM_SDK_DIR}/Framework" "${CMAKE_BINARY_DIR}/CubismFramework")
   target_link_libraries(Framework PRIVATE Live2DCubismCore d3d11 d3dcompiler)
 
-  target_sources(VoxIME.NativePet PRIVATE src/PetModel.cpp)
+  target_sources(VoxIME.NativePet PRIVATE src/PetModel.cpp src/ShaderCacheOverride.cpp)
   target_compile_definitions(VoxIME.NativePet PRIVATE VOXIME_NATIVE_PET_CUBISM=1)
+  target_compile_options(Framework PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/src/ShaderCacheOverride.h")
   target_include_directories(VoxIME.NativePet PRIVATE
     "${CUBISM_SDK_DIR}/Framework/src"
     "${CUBISM_CORE_INCLUDE}"

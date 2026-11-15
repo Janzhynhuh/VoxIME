@@ -16,7 +16,9 @@ param(
 
     [string]$Generator = 'Visual Studio 18 2026',
 
-    [string]$CubismSdk = $env:VOXIME_CUBISM_SDK
+    [string]$CubismSdk = $env:VOXIME_CUBISM_SDK,
+
+    [switch]$SkipShaderPrewarm
 )
 
 $ErrorActionPreference = 'Stop'
@@ -83,6 +85,41 @@ if ($LASTEXITCODE -ne 0) {
 $exe = Join-Path $BuildDir "$Configuration\VoxIME.NativePet.exe"
 if (-not (Test-Path $exe)) {
     throw "未找到构建产物：$exe"
+}
+
+if ($CubismSdk -and -not $SkipShaderPrewarm) {
+    $warmModel = Join-Path $CubismSdk 'Samples\Resources\Hiyori\Hiyori.model3.json'
+    if (-not (Test-Path $warmModel)) {
+        Write-Warning "未找到 Hiyori 示例模型，跳过 shader 预热：$warmModel"
+    }
+    else {
+        $cacheDir = Join-Path $BuildDir "$Configuration\ShaderCache"
+        if (Test-Path $cacheDir) {
+            Remove-Item $cacheDir -Recurse -Force
+        }
+
+        Write-Host '==> 预热 Cubism shader 缓存（约 10-20 秒）'
+        $previousCache = $env:VOXIME_SHADER_CACHE_DIR
+        $env:VOXIME_SHADER_CACHE_DIR = $cacheDir
+        try {
+            $warm = Start-Process -FilePath $exe -ArgumentList @('--warm-shaders', '--model', "`"$warmModel`"") -Wait -PassThru
+            $cacheFiles = @(Get-ChildItem $cacheDir -Filter '*.cso' -ErrorAction SilentlyContinue)
+            if ($cacheFiles.Count -eq 0) {
+                Write-Warning "shader 预热未生成缓存（exit $($warm.ExitCode)）"
+            }
+            else {
+                Write-Host "==> shader 缓存：$($cacheFiles.Count) 个文件 -> $cacheDir"
+            }
+        }
+        finally {
+            if ($null -eq $previousCache) {
+                Remove-Item Env:VOXIME_SHADER_CACHE_DIR -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:VOXIME_SHADER_CACHE_DIR = $previousCache
+            }
+        }
+    }
 }
 
 Write-Host "==> 完成：$exe"

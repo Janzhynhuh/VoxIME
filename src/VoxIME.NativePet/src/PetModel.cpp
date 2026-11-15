@@ -23,6 +23,12 @@ using namespace Live2D::Cubism::Framework;
 
 namespace
 {
+    // CubismMoc keeps a reference to the MOC bytes until the model is deleted.
+    // PetModel derives from CubismUserModel, whose destructor runs after all
+    // derived members are destroyed, so the buffer must outlive PetModel.
+    // Keep it process-lifetime; the pet only loads one model per process.
+    std::vector<std::vector<char>> g_retainedMocBuffers;
+
     std::string Error(const std::string& message)
     {
         return message;
@@ -193,6 +199,9 @@ namespace VoxIME::NativePet
 
     PetModel::~PetModel()
     {
+        // Renderer 必须在 model/textures 之前释放；CubismUserModel 基类析构
+        // 的顺序相反，显式 DeleteRenderer() 可避免 SDK 内部清理顺序问题。
+        DeleteRenderer();
         ReleaseTextures();
         if (_settings)
         {
@@ -236,7 +245,11 @@ namespace VoxIME::NativePet
             error = Error("cannot read moc3: " + mocPath.string());
             return false;
         }
-        LoadModel(reinterpret_cast<const csmByte*>(moc.data()), static_cast<csmSizeInt>(moc.size()));
+
+        g_retainedMocBuffers.push_back(std::move(moc));
+        LoadModel(
+            reinterpret_cast<const csmByte*>(g_retainedMocBuffers.back().data()),
+            static_cast<csmSizeInt>(g_retainedMocBuffers.back().size()));
         if (!GetModel())
         {
             error = Error("CubismUserModel::LoadModel failed");

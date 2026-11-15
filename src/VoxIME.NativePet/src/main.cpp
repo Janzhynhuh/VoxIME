@@ -33,6 +33,7 @@
 #include <CubismFramework.hpp>
 #include <ICubismAllocator.hpp>
 #include <Rendering/D3D11/CubismRenderer_D3D11.hpp>
+#include <Rendering/D3D11/CubismShader_D3D11.hpp>
 #endif
 
 #pragma comment(lib, "d3d11.lib")
@@ -62,6 +63,7 @@ namespace
         int Height = 600;
         int Monitor = 1; // 1-based；1=主屏，2=第二块屏
         bool DebugColor = false;
+        bool WarmShaders = false;
     };
 
     std::atomic<bool> g_clickThrough{true};
@@ -166,6 +168,93 @@ namespace
         OutputDebugStringW(message);
         OutputDebugStringW(L"\n");
     }
+
+#if VOXIME_NATIVE_PET_CUBISM
+    int WarmShaderCache(const std::wstring& modelPath)
+    {
+        if (modelPath.empty())
+        {
+            Log(L"warm-shaders: --model is required");
+            return 4;
+        }
+
+        ID3D11Device* device = nullptr;
+        ID3D11DeviceContext* context = nullptr;
+        D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0 };
+        D3D_FEATURE_LEVEL got = D3D_FEATURE_LEVEL_11_0;
+
+        HRESULT hr = D3D11CreateDevice(
+            nullptr,
+            D3D_DRIVER_TYPE_HARDWARE,
+            nullptr,
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            levels,
+            ARRAYSIZE(levels),
+            D3D11_SDK_VERSION,
+            &device,
+            &got,
+            &context);
+        if (FAILED(hr))
+        {
+            hr = D3D11CreateDevice(
+                nullptr,
+                D3D_DRIVER_TYPE_WARP,
+                nullptr,
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                levels,
+                ARRAYSIZE(levels),
+                D3D11_SDK_VERSION,
+                &device,
+                &got,
+                &context);
+        }
+        if (FAILED(hr) || !device || !context)
+        {
+            Log(L"warm-shaders: D3D11CreateDevice failed");
+            return 5;
+        }
+
+        VoxPetAllocator allocator;
+        Live2D::Cubism::Framework::CubismFramework::Option option{};
+        option.LoadFileFunction = &LoadFrameworkFile;
+        option.ReleaseBytesFunction = &ReleaseFrameworkBytes;
+        option.LogFunction = &LogCubism;
+        if (!Live2D::Cubism::Framework::CubismFramework::StartUp(&allocator, &option))
+        {
+            context->Release();
+            device->Release();
+            return 6;
+        }
+
+        Live2D::Cubism::Framework::CubismFramework::Initialize();
+        Live2D::Cubism::Framework::Rendering::CubismRenderer_D3D11::SetConstantSettings(1, device);
+
+        int result = 0;
+        {
+            PetModel model;
+            std::string error;
+            if (!model.Load(device, context, modelPath, 482, 600, error))
+            {
+                OutputDebugStringA(error.c_str());
+                OutputDebugStringA("\n");
+                Log(L"warm-shaders: model load failed");
+                result = 8;
+            }
+        }
+    Live2D::Cubism::Framework::CubismFramework::Dispose();
+    Live2D::Cubism::Framework::CubismFramework::CleanUp();
+        context->Release();
+        device->Release();
+
+        if (result == 0)
+        {
+            Log(L"warm-shaders: done");
+        }
+        // Cubism SDK 的静态销毁在进程退出阶段会触发访问冲突；显式释放完成后直接退出，
+        // 避免带着已释放的 D3D/Cubism 静态对象走 CRT 退出流程。
+        ExitProcess(static_cast<UINT>(result));
+    }
+#endif
 
     void LogHr(const wchar_t* what, HRESULT hr)
     {
@@ -586,6 +675,17 @@ namespace
                 SwapChain->Present(1, 0);
             }
         }
+
+        void Shutdown()
+        {
+            Visual.Reset();
+            CompositionTarget.Reset();
+            Composition.Reset();
+            RenderTarget.Reset();
+            SwapChain.Reset();
+            Context.Reset();
+            Device.Reset();
+        }
     };
 
     LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -667,8 +767,25 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         {
             g_options.DebugColor = true;
         }
+        else if (arg == L"--warm-shaders")
+        {
+            g_options.WarmShaders = true;
+        }
     }
     LocalFree(argv);
+
+#if VOXIME_NATIVE_PET_CUBISM
+    if (g_options.WarmShaders)
+    {
+        return WarmShaderCache(g_options.ModelPath);
+    }
+#else
+    if (g_options.WarmShaders)
+    {
+        Log(L"warm-shaders requires a Cubism-enabled build");
+        return 7;
+    }
+#endif
 
     const HINSTANCE module = instance;
     WNDCLASSEXW windowClass{};
@@ -747,7 +864,7 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
             Log(L"Cubism model load failed");
             OutputDebugStringA(error.c_str());
             OutputDebugStringA("\n");
-            petModel.reset();
+    petModel.reset();
         }
         else
         {
@@ -826,7 +943,9 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
     Live2D::Cubism::Framework::CubismFramework::Dispose();
     Live2D::Cubism::Framework::CubismFramework::CleanUp();
 #endif
+    graphics.Shutdown();
 
     Log(L"exited");
-    return 0;
+    // Cubism SDK 的静态销毁在进程退出阶段会触发访问冲突；显式释放完成后直接退出。
+    ExitProcess(0);
 }

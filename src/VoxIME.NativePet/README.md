@@ -10,7 +10,8 @@
 - 命名管道控制通道；
 - 父进程看门狗（主程序退出/崩溃时桌宠自动退出）；
 - 多显示器选择（`--monitor 2`）；
-- 可选 Cubism：加载 `model3.json`/`moc3`/贴图并绘制默认姿势。
+- 可选 Cubism：加载 `model3.json`/`moc3`/贴图并绘制默认姿势；
+- Cubism shader 磁盘缓存 + 构建时预热，避免每次启动重新编译。
 
 尚未接入动作/表情/物理/多 MotionManager，也还没接主程序 IPC 命令。
 
@@ -31,10 +32,25 @@ $env:VOXIME_CUBISM_SDK = 'E:\path\to\CubismSdkForNative-5-r.5'
 
 ```text
 artifacts\native-pet\Release\VoxIME.NativePet.exe
+artifacts\native-pet\Release\ShaderCache\*.cso
 ```
 
-启用 Cubism 时，构建脚本会把 `Live2DCubismCore.dll` 与 `FrameworkShaders/` 复制到输出目录。
+启用 Cubism 时，构建脚本会把 `Live2DCubismCore.dll` 与 `FrameworkShaders/` 复制到输出目录，
+并用 SDK 自带的 Hiyori 模型执行一次 `--warm-shaders`，生成设备无关的 DXBC 缓存。
+不需要预热时加 `-SkipShaderPrewarm`。
 SDK 路径也可以通过参数传入：`-CubismSdk 'E:\...'`。
+
+## Shader 缓存
+
+运行时查找顺序：
+
+1. `VOXIME_SHADER_CACHE_DIR`（构建/调试用）
+2. exe 目录 `ShaderCache/`（安装包内置，只读）
+3. `%LOCALAPPDATA%\VoxIME\native-shader-cache`（运行时写入）
+
+缓存 key 由 shader 源、entry point、profile、编译 flags 组成；未命中时回退到
+`D3DCompile` 并写入本地缓存。DXBC 与具体 GPU 无关，可随安装包分发；驱动仍会在
+首次创建 shader 时把 DXBC 转成 GPU 指令，但通常远快于编译 FX 源。
 
 ## 运行参数
 
@@ -49,6 +65,7 @@ VoxIME.NativePet.exe --monitor 2 --width 482 --height 600 --model "E:\models\Hiy
 | `--pipe <name>` | 命名管道名，例如 `\\.\pipe\VoxIME.Pet.xxx` |
 | `--parent-pid` | 父进程 PID；父进程退出时桌宠退出 |
 | `--model <model3.json>` | 模型路径；启用 Cubism 构建时生效 |
+| `--warm-shaders` | 用 `--model` 初始化一次 renderer，只生成 shader 缓存后退出 |
 | `--debug-color` | 用半透明蓝色清屏，便于验证 DComp 合成；正式运行不要加 |
 
 ## IPC 帧格式
