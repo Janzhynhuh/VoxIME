@@ -863,8 +863,7 @@ public sealed class VoiceInputController : IVoiceInputController
                 currentWidth,
                 currentHeight,
                 e.Width,
-                e.Height,
-                config.Live2D.Scale);
+                e.Height);
             if (width == currentWidth && height == currentHeight)
             {
                 return;
@@ -882,7 +881,7 @@ public sealed class VoiceInputController : IVoiceInputController
         }
     }
 
-    /// <summary>配置变化（高度/缩放/开关）时，按上次模型尺寸重新收紧窗口宽度。</summary>
+    /// <summary>配置变化（高度/开关）时，按上次模型尺寸重新收紧窗口宽度；缩放不参与。</summary>
     private void ApplyAutoFitWidth(AppConfig config)
     {
         if (!config.Live2D.AutoFitWindow || _lastModelWidth <= 0 || _lastModelHeight <= 0)
@@ -898,8 +897,7 @@ public sealed class VoiceInputController : IVoiceInputController
                 currentWidth,
                 currentHeight,
                 _lastModelWidth,
-                _lastModelHeight,
-                config.Live2D.Scale);
+                _lastModelHeight);
             if (width == currentWidth && height == currentHeight)
             {
                 return;

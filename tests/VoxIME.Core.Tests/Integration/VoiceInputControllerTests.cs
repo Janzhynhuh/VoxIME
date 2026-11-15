@@ -69,7 +69,7 @@ public sealed class VoiceInputControllerTests
     }
 
     [Fact]
-    public void ApplyConfig_RecomputesWidth_WhenScaleChanges()
+    public void ApplyConfig_KeepsWidth_WhenScaleChanges()
     {
         _controller.Initialize();
         _configStore.Current.Live2D.Width = 380;
@@ -81,9 +81,29 @@ public sealed class VoiceInputControllerTests
         _configStore.Current.Live2D.Scale = 1.5;
         _controller.ApplyConfig(_configStore.Current);
 
-        Assert.Equal(409, _configStore.Current.Live2D.Width); // 1000 * (560/2000 * 0.95 * 1.5) + 10
+        // 缩放只放大/裁剪模型，不应把自动适配的窗口宽度一起改掉。
+        Assert.Equal(276, _configStore.Current.Live2D.Width);
         Assert.Equal(560, _configStore.Current.Live2D.Height);
-        Assert.Equal(409, _live2d.Config!.Width);
+        Assert.Equal(276, _live2d.Config!.Width);
+        Assert.Equal(1.5, _live2d.Config.Scale);
+    }
+
+    [Fact]
+    public void ApplyConfig_RecomputesWidth_WhenHeightChanges()
+    {
+        _controller.Initialize();
+        _configStore.Current.Live2D.Width = 380;
+        _configStore.Current.Live2D.Height = 560;
+        _configStore.Current.Live2D.AutoFitWindow = true;
+        _live2d.RaiseModelSize("tall-model", 1000, 2000);
+        Assert.Equal(276, _configStore.Current.Live2D.Width);
+
+        _configStore.Current.Live2D.Height = 800;
+        _controller.ApplyConfig(_configStore.Current);
+
+        Assert.Equal(390, _configStore.Current.Live2D.Width); // 1000 * (800/2000 * 0.95) + 10
+        Assert.Equal(800, _configStore.Current.Live2D.Height);
+        Assert.Equal(390, _live2d.Config!.Width);
     }
 
     [Fact]

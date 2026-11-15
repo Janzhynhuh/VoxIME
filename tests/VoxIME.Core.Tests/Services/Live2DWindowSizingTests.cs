@@ -14,16 +14,6 @@ public sealed class Live2DWindowSizingTests
     }
 
     [Fact]
-    public void FitToModel_AppliesRenderScaleToWidth()
-    {
-        var (width, height) = Live2DWindowSizing.FitToModel(
-            380, 560, modelWidth: 1000, modelHeight: 2000, scale: 1.5);
-
-        Assert.Equal(560, height);
-        Assert.Equal(409, width); // 1000 * (560/2000 * 0.95 * 1.5) + 10
-    }
-
-    [Fact]
     public void FitToModel_WideModel_GrowsWidthWithinLimit()
     {
         var (width, height) = Live2DWindowSizing.FitToModel(380, 560, modelWidth: 2000, modelHeight: 1000);

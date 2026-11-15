@@ -18,25 +18,24 @@ public static class Live2DWindowSizing
 
     /// <summary>
     /// 计算紧贴模型宽度的窗口尺寸；高度沿用当前配置高度。
+    /// 只按模型原始宽高比和窗口高度计算，<b>不包含模型缩放</b>：缩放只改变模型在窗口内的
+    /// 显示大小（放大时裁剪），不会在调缩放时把窗口一起改大/改小。
     /// 模型尺寸非法时返回当前尺寸（钳制后）。
     /// </summary>
     /// <param name="currentWidth">当前配置宽度（模型非法时作为兜底）。</param>
     /// <param name="currentHeight">当前配置高度（最终窗口高度）。</param>
     /// <param name="modelWidth">Live2D 模型原始宽度（像素/canvas 单位）。</param>
     /// <param name="modelHeight">Live2D 模型原始高度。</param>
-    /// <param name="scale">模型渲染缩放（Live2DConfig.Scale）。</param>
     /// <param name="padding">窗口左右各留的 padding（DIP）。</param>
     public static (int Width, int Height) FitToModel(
         int currentWidth,
         int currentHeight,
         double modelWidth,
         double modelHeight,
-        double scale = 1.0,
         int padding = DefaultPadding)
     {
         var safeWidth = Math.Clamp(currentWidth, MinSize, MaxSize);
         var safeHeight = Math.Clamp(currentHeight, MinSize, MaxSize);
-        var safeScale = double.IsFinite(scale) ? Math.Clamp(scale, 0.2, 3.0) : 1.0;
         var safePadding = Math.Clamp(padding, 0, 100);
 
         if (!double.IsFinite(modelWidth) || !double.IsFinite(modelHeight) || modelWidth <= 0 || modelHeight <= 0)
@@ -45,8 +44,8 @@ public static class Live2DWindowSizing
         }
 
         // app.js: fitScale = min(windowWidth / modelWidth, windowHeight / modelHeight) * 0.95 * scale。
-        // 宽度按此反推后，height 约束仍是较小值，因此模型实际显示宽度 = modelWidth * heightRatio。
-        var heightRatio = safeHeight / modelHeight * FillRatio * safeScale;
+        // 自动宽度只取 scale=1 时的模型显示宽度，避免调整缩放时窗口跟着跳动。
+        var heightRatio = safeHeight / modelHeight * FillRatio;
         var modelDisplayWidth = modelWidth * heightRatio;
         var width = Math.Clamp(modelDisplayWidth + safePadding * 2.0, MinSize, MaxSize);
 
