@@ -23,9 +23,17 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
+
+#if VOXIME_NATIVE_PET_CUBISM
+#include "PetModel.h"
+#include <CubismFramework.hpp>
+#include <ICubismAllocator.hpp>
+#include <Rendering/D3D11/CubismRenderer_D3D11.hpp>
+#endif
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -34,6 +42,10 @@
 #pragma comment(lib, "shell32.lib")
 
 using Microsoft::WRL::ComPtr;
+
+#if VOXIME_NATIVE_PET_CUBISM
+using VoxIME::NativePet::PetModel;
+#endif
 
 namespace
 {
@@ -44,6 +56,7 @@ namespace
     struct Options
     {
         std::wstring PipeName;
+        std::wstring ModelPath;
         DWORD ParentPid = 0;
         int Width = 482;
         int Height = 600;
@@ -55,6 +68,97 @@ namespace
     std::atomic<bool> g_quit{false};
     Options g_options;
     HWND g_hwnd = nullptr;
+
+#if VOXIME_NATIVE_PET_CUBISM
+    Live2D::Cubism::Framework::csmByte* LoadFrameworkFile(
+        const std::string filePath,
+        Live2D::Cubism::Framework::csmSizeInt* outSize)
+    {
+        if (!outSize)
+        {
+            return nullptr;
+        }
+        *outSize = 0;
+
+        wchar_t modulePath[MAX_PATH]{};
+        GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+        const std::filesystem::path fullPath =
+            std::filesystem::path(modulePath).parent_path() / std::filesystem::path(filePath);
+
+        HANDLE file = CreateFileW(
+            fullPath.c_str(),
+            GENERIC_READ,
+            FILE_SHARE_READ,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            return nullptr;
+        }
+
+        LARGE_INTEGER size{};
+        if (!GetFileSizeEx(file, &size) || size.QuadPart <= 0 || size.QuadPart > 64LL * 1024 * 1024)
+        {
+            CloseHandle(file);
+            return nullptr;
+        }
+
+        auto* bytes = new Live2D::Cubism::Framework::csmByte[static_cast<size_t>(size.QuadPart)];
+        DWORD offset = 0;
+        while (offset < static_cast<DWORD>(size.QuadPart))
+        {
+            DWORD read = 0;
+            if (!ReadFile(file, bytes + offset, static_cast<DWORD>(size.QuadPart) - offset, &read, nullptr) || read == 0)
+            {
+                delete[] bytes;
+                CloseHandle(file);
+                return nullptr;
+            }
+            offset += read;
+        }
+
+        CloseHandle(file);
+        *outSize = static_cast<Live2D::Cubism::Framework::csmSizeInt>(size.QuadPart);
+        return bytes;
+    }
+
+    void ReleaseFrameworkBytes(Live2D::Cubism::Framework::csmByte* bytes)
+    {
+        delete[] bytes;
+    }
+
+    void LogCubism(const Live2D::Cubism::Framework::csmChar* message)
+    {
+        OutputDebugStringA(message);
+        OutputDebugStringA("\n");
+    }
+
+    class VoxPetAllocator final : public Live2D::Cubism::Framework::ICubismAllocator
+    {
+    public:
+        void* Allocate(const Live2D::Cubism::Framework::csmSizeType size) override
+        {
+            return malloc(size);
+        }
+
+        void Deallocate(void* memory) override
+        {
+            free(memory);
+        }
+
+        void* AllocateAligned(const Live2D::Cubism::Framework::csmSizeType size, const Live2D::Cubism::Framework::csmUint32 alignment) override
+        {
+            return _aligned_malloc(size, alignment);
+        }
+
+        void DeallocateAligned(void* memory) override
+        {
+            _aligned_free(memory);
+        }
+    };
+#endif
 
     void Log(const wchar_t* message)
     {
@@ -442,9 +546,24 @@ namespace
             return true;
         }
 
-        void Render(bool debugColor)
+        ID3D11Device* GetDevice() const
         {
-            if (!Context || !RenderTarget || !SwapChain)
+            return Device.Get();
+        }
+
+        ID3D11DeviceContext* GetContext() const
+        {
+            return Context.Get();
+        }
+
+        ID3D11RenderTargetView* GetRenderTargetView() const
+        {
+            return RenderTarget.Get();
+        }
+
+        void Clear(bool debugColor)
+        {
+            if (!Context || !RenderTarget)
             {
                 return;
             }
@@ -458,7 +577,14 @@ namespace
                 clear[3] = 0.35f;
             }
             Context->ClearRenderTargetView(RenderTarget.Get(), clear);
-            SwapChain->Present(1, 0);
+        }
+
+        void Present()
+        {
+            if (SwapChain)
+            {
+                SwapChain->Present(1, 0);
+            }
         }
     };
 
@@ -516,6 +642,10 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         if (arg == L"--pipe" && index + 1 < argc)
         {
             g_options.PipeName = argv[++index];
+        }
+        else if (arg == L"--model" && index + 1 < argc)
+        {
+            g_options.ModelPath = argv[++index];
         }
         else if (arg == L"--parent-pid" && index + 1 < argc)
         {
@@ -585,13 +715,46 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         return 3;
     }
     g_hwnd = hwnd;
-
     Graphics graphics;
     if (!graphics.Initialize(hwnd, width, height))
     {
         DestroyWindow(hwnd);
         return 4;
     }
+
+#if VOXIME_NATIVE_PET_CUBISM
+    VoxPetAllocator allocator;
+    Live2D::Cubism::Framework::CubismFramework::Option option{};
+    option.LoadFileFunction = &LoadFrameworkFile;
+    option.ReleaseBytesFunction = &ReleaseFrameworkBytes;
+    option.LogFunction = &LogCubism;
+    if (!Live2D::Cubism::Framework::CubismFramework::StartUp(&allocator, &option))
+    {
+        Log(L"CubismFramework::StartUp failed");
+        DestroyWindow(hwnd);
+        return 5;
+    }
+    Live2D::Cubism::Framework::CubismFramework::Initialize();
+    Live2D::Cubism::Framework::Rendering::CubismRenderer_D3D11::SetConstantSettings(1, graphics.GetDevice());
+
+    std::unique_ptr<PetModel> petModel;
+    if (!g_options.ModelPath.empty())
+    {
+        petModel = std::make_unique<PetModel>();
+        std::string error;
+        if (!petModel->Load(graphics.GetDevice(), graphics.GetContext(), g_options.ModelPath, width, height, error))
+        {
+            Log(L"Cubism model load failed");
+            OutputDebugStringA(error.c_str());
+            OutputDebugStringA("\n");
+            petModel.reset();
+        }
+        else
+        {
+            Log(L"Cubism model loaded");
+        }
+    }
+#endif
 
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     UpdateWindow(hwnd);
@@ -628,7 +791,17 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
             break;
         }
 
-        graphics.Render(g_options.DebugColor);
+        graphics.Clear(g_options.DebugColor);
+
+#if VOXIME_NATIVE_PET_CUBISM
+        if (petModel && petModel->IsLoaded())
+        {
+            petModel->Update(1.0f / 60.0f);
+            petModel->Draw(graphics.GetRenderTargetView(), width, height);
+        }
+#endif
+
+        graphics.Present();
 
         nextFrame += frameInterval;
         const auto now = std::chrono::steady_clock::now();
@@ -647,6 +820,12 @@ int wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int)
         DestroyWindow(g_hwnd);
         g_hwnd = nullptr;
     }
+
+#if VOXIME_NATIVE_PET_CUBISM
+    petModel.reset();
+    Live2D::Cubism::Framework::CubismFramework::Dispose();
+    Live2D::Cubism::Framework::CubismFramework::CleanUp();
+#endif
 
     Log(L"exited");
     return 0;

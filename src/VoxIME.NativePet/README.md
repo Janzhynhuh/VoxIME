@@ -2,20 +2,28 @@
 
 原生桌宠进程（Phase 1 骨架）。
 
-当前阶段只实现桌宠进程的基础设施，**还没有接入 Live2D 模型**：
+当前阶段实现桌宠进程的基础设施，以及**一个最小 Cubism 模型渲染路径**：
 
 - Win32 无边框、置顶、不抢焦点窗口；
 - D3D11 flip swapchain + DirectComposition 逐像素透明合成；
 - 点击穿透开关；
 - 命名管道控制通道；
 - 父进程看门狗（主程序退出/崩溃时桌宠自动退出）；
-- 多显示器选择（`--monitor 2`）。
+- 多显示器选择（`--monitor 2`）；
+- 可选 Cubism：加载 `model3.json`/`moc3`/贴图并绘制默认姿势。
+
+尚未接入动作/表情/物理/多 MotionManager，也还没接主程序 IPC 命令。
 
 ## 构建
 
 需要 Visual Studio 2022/2026 的 C++ 工具链和 CMake：
 
 ```powershell
+# 只构建窗口/D3D/IPC 骨架（不依赖 Cubism SDK）
+.\scripts\build-native-pet.ps1
+
+# 启用 Cubism 模型渲染（SDK 不进入仓库）
+$env:VOXIME_CUBISM_SDK = 'E:\path\to\CubismSdkForNative-5-r.5'
 .\scripts\build-native-pet.ps1
 ```
 
@@ -25,13 +33,13 @@
 artifacts\native-pet\Release\VoxIME.NativePet.exe
 ```
 
-当前不依赖 Cubism SDK。后续接入官方 `LAppModel`/`CubismDirectXRenderer` 时，SDK 路径通过
-`VOXIME_CUBISM_SDK` 传入，SDK 不进入仓库。
+启用 Cubism 时，构建脚本会把 `Live2DCubismCore.dll` 与 `FrameworkShaders/` 复制到输出目录。
+SDK 路径也可以通过参数传入：`-CubismSdk 'E:\...'`。
 
 ## 运行参数
 
 ```text
-VoxIME.NativePet.exe --monitor 2 --width 482 --height 600
+VoxIME.NativePet.exe --monitor 2 --width 482 --height 600 --model "E:\models\Hiyori.model3.json"
 ```
 
 | 参数 | 说明 |
@@ -40,6 +48,7 @@ VoxIME.NativePet.exe --monitor 2 --width 482 --height 600
 | `--width` / `--height` | 窗口物理像素尺寸 |
 | `--pipe <name>` | 命名管道名，例如 `\\.\pipe\VoxIME.Pet.xxx` |
 | `--parent-pid` | 父进程 PID；父进程退出时桌宠退出 |
+| `--model <model3.json>` | 模型路径；启用 Cubism 构建时生效 |
 | `--debug-color` | 用半透明蓝色清屏，便于验证 DComp 合成；正式运行不要加 |
 
 ## IPC 帧格式
@@ -76,7 +85,7 @@ click-through false
 
 ## 尚未实现
 
-- Cubism 模型/动作/表情/物理；
+- 动作/表情/物理/多 MotionManager；
 - C# `NativePetController` 与主程序开关；
 - 模型缩放、窗口拖动、位置持久化；
 - 透明区域的输入命中细节；

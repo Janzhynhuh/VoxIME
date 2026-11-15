@@ -3,8 +3,8 @@
 .SYNOPSIS
     构建 VoxIME.NativePet（原生桌宠进程）。
 .DESCRIPTION
-    当前 NativePet 骨架不依赖 Cubism SDK；后续接入官方 Cubism 渲染时再通过
-    VOXIME_CUBISM_SDK 环境变量传入 SDK 路径。
+    默认构建窗口/D3D/IPC 骨架；传入 CubismSdk 或设置 VOXIME_CUBISM_SDK 后，
+    会链接本地 Cubism Native SDK 并复制 Core DLL/FrameworkShaders。
     默认构建到 artifacts\native-pet（已在 .gitignore 中）。
 #>
 [CmdletBinding()]
@@ -14,7 +14,9 @@ param(
 
     [string]$BuildDir = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts\native-pet'),
 
-    [string]$Generator = 'Visual Studio 18 2026'
+    [string]$Generator = 'Visual Studio 18 2026',
+
+    [string]$CubismSdk = $env:VOXIME_CUBISM_SDK
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,8 +55,21 @@ function Find-CMake {
 
 $cmake = Find-CMake
 Write-Host "==> CMake: $cmake"
+
+$cmakeArguments = @("-DCMAKE_CONFIGURATION_TYPES=$Configuration")
+if ($CubismSdk) {
+    if (-not (Test-Path (Join-Path $CubismSdk 'Core')) -or -not (Test-Path (Join-Path $CubismSdk 'Framework'))) {
+        throw "CubismSdk 路径无效（需要 Core/ 和 Framework/）：$CubismSdk"
+    }
+    Write-Host "==> Cubism SDK: $CubismSdk"
+    $cmakeArguments += "-DCUBISM_SDK_DIR=$CubismSdk"
+}
+else {
+    Write-Host '==> 未设置 CubismSdk，只构建窗口/D3D/IPC 骨架'
+}
+
 Write-Host "==> 配置 NativePet（$Configuration，$Generator）"
-& $cmake -S $sourceDir -B $BuildDir -G $Generator -A x64 "-DCMAKE_CONFIGURATION_TYPES=$Configuration"
+& $cmake -S $sourceDir -B $BuildDir -G $Generator -A x64 @cmakeArguments
 if ($LASTEXITCODE -ne 0) {
     throw "CMake 配置失败（exit $LASTEXITCODE）"
 }
