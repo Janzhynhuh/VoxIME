@@ -78,7 +78,7 @@ public sealed class OpenAiAudioChatProvider : IAsrProvider
         {
             throw new AsrException(
                 "未配置 API Key：请在 设置 → 服务 → 该服务中粘贴 API Key 后重试" +
-                "（Key 会用 Windows DPAPI 加密保存；重置配置后需要重新填写）。",
+                "（Key 会明文保存在本地 config.json，请勿分享配置文件；重置配置后需要重新填写）。",
                 AsrProviderTypeIds.OpenAiAudioChat);
         }
 

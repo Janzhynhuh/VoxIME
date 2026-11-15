@@ -228,7 +228,7 @@
                         <StackPanel>
                             <TextBlock Text="凭据" Style="{StaticResource SectionTitle}" />
                             <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,10"
-                                       Text="凭据仅保存在本机，落盘时使用 Windows DPAPI 加密（当前用户）。" />
+                                       Text="凭据仅保存在本机，并以明文写入本地 config.json（请勿分享配置文件）；旧版 DPAPI 加密配置仅用于启动时迁移。" />
 
                             <StackPanel Visibility="{Binding SelectedProvider.UsesApiKey, Converter={StaticResource BoolToVis}}">
                                 <TextBlock Text="{Binding SelectedProvider.ApiKeyLabel}" Style="{StaticResource FieldLabel}" />

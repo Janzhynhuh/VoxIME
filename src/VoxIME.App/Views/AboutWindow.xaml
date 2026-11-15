@@ -59,8 +59,8 @@
                     <TextBlock Text="技术组件与许可" Style="{StaticResource SectionTitle}" Margin="0,0,0,8" />
                     <TextBlock Style="{StaticResource HintText}" LineHeight="19">
                         <Run Text="NAudio（MIT License） · Microsoft.Web.WebView2（Microsoft 许可）" /><LineBreak />
-                        <Run Text="System.Speech / Windows DPAPI（.NET 平台组件）" /><LineBreak />
-                        <Run Text="Live2D Cubism Core、pixi.js、pixi-live2d-display（各自版权与许可）" />
+                        <Run Text="System.Speech（.NET 平台组件） · Windows DPAPI（仅旧版配置迁移）" /><LineBreak />
+                        <Run Text="PixiJS、untitled-pixi-live2d-engine、Live2D Cubism Core（各自版权与许可）" />
                     </TextBlock>
                     <TextBlock Style="{StaticResource HintText}" Margin="0,8,0,0"
                                Text="Live2D 示例模型版权归 Live2D Inc. 所有，仅用于开发与测试，正式分发请遵守官方条款。" />
@@ -78,7 +78,7 @@
                     <StackPanel>
                         <TextBlock Text="数据与隐私" Style="{StaticResource CardTitle}" FontWeight="SemiBold" />
                         <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0"
-                                   Text="配置与历史仅保存在本机 %APPDATA%\VoxIME，API Key 使用 Windows DPAPI 加密。" />
+                                   Text="配置与历史仅保存在本机 %APPDATA%\VoxIME；API Key 明文保存在本地 config.json，请勿分享配置文件。" />
                     </StackPanel>
                 </Grid>
             </Border>

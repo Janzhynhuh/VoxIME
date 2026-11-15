@@ -2,7 +2,7 @@
 
 > 本文档覆盖 `src/VoxIME.Live2D`、`assets/live2d/**`、`scripts/fetch-sample-model.ps1` 的
 > 实现说明、模型格式要求、参数映射、许可合规、预览/截图方法与排错。
-> 最后更新：2026-11-01（VoxIME 0.1.0 开发期）。
+> 最后更新：2026-11-15（VoxIME 0.4.5；初版 2026-11-01，VoxIME 0.1.0 开发期）。
 
 ## 1. 总体架构
 
@@ -96,7 +96,7 @@ src/VoxIME.Live2D/devtools/      # 开发期验证工具（不参与库/解决�
 
 ## 4. 支持的模型格式与目录要求
 
-**支持 Cubism 3 / Cubism 4** 的 `.model3.json` 模型（Cubism 2 的 `.model.json` 不支持）。
+**支持 Cubism 3 / 4 / 5** 的 `.model3.json` 模型（含 MOC3 v5；Cubism 2 的 `.model.json` 不支持）。
 
 模型目录要求（示例：`assets/live2d/models/Hiyori/`）：
 
@@ -178,6 +178,7 @@ Hiyori/
 | `EyeFollowInvertYByModel` | {} | 按模型目录记住的上下反转偏好（不同模型骨骼绑定方向可能相反） |
 | `IdleMotion` | true | 待机动作开关（关闭后停止静默循环 + 待机随机池，模型仍保持呼吸/眨眼；触发动作不受影响） |
 | `RenderSupersampling` | 2 | 抗锯齿超采样倍数（1..8）：后备分辨率 = 设备像素比 × 倍数 × 模型缩放，再由浏览器缩回显示；1x=关闭。最终按画布尺寸 ≤8192、像素预算 ≤16MP 自动封顶 |
+| `AnimationFps` | 0 | 模型播放/更新帧率：0=跟随显示器刷新率，15..144=限制 Pixi ticker 的 maxFPS；调低更省 GPU，与超采样独立 |
 | `SmaaEnabled` | false | **实验**：SMAA 1x 后处理边缘抗锯齿。三个全屏 pass（边缘检测/权重/混合），边缘检测包含 alpha、混合在预乘空间，适合透明桌宠；建议超采样选 1x 对比，默认关闭 |
 | `HighQualityRendering` | true | **旧字段**：抗锯齿开关；仅兼容旧配置读取（true→2x，false→1x），保存时以 `RenderSupersampling` 为准 |
 | `MouthSync` | true | 口型同步开关（关闭后嘴巴闭合） |
@@ -524,7 +525,7 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 
 用户自带模型：
 
-- VoxIME 只是渲染器：用户使用自带 Cubism 3/4 模型的**合法性由用户自行负责**；
+- VoxIME 只是渲染器：用户使用自带 Cubism 3/4/5 模型（含 MOC3 v5）的**合法性由用户自行负责**；
 - 不得使用 VoxIME 分发未授权的模型/贴图；
 - 建议在设置页/关于页放置上述第三方许可声明（Lead 已在关于页规划 Live2D/第三方许可声明）。
 
