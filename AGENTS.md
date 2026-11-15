@@ -36,6 +36,7 @@
 ## 5. 发布纪律（2026-11-01 用户明确要求）
 
 - **禁止**未经用户明确要求创建 GitHub Release、上传发布包/资产或打发布 tag。发布动作很容易消耗存储与流量，必须用户点名要求才做。
+- **用户说「发版」= 执行完整发布流程**：更新版本号 → build/test → 构建 portable zip + 安装包 → commit/push → 打 tag → 创建 GitHub Release → 上传安装包/免安装包/SHA256 资产。**不要只提交“准备发版”或只更新版本号就结束**；发完必须回报 tag、Release URL、资产名和 SHA256。
 - 日常改动只需要 `git commit` + `git push` 到 `main`；CI 会自动构建并上传 7 天保留期的 workflow artifact。
 - 如果确实需要给用户下载，先在回复里询问，得到确认后再执行。
 
