@@ -310,7 +310,8 @@ public partial class Live2DPage : UserControl
                 (int)width,
                 (int)height,
                 size.Width,
-                size.Height);
+                size.Height,
+                _viewModel.Live2DScale);
             width = fitted.Width;
             height = fitted.Height;
         }

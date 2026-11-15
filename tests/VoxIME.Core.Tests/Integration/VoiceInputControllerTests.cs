@@ -69,7 +69,7 @@ public sealed class VoiceInputControllerTests
     }
 
     [Fact]
-    public void ApplyConfig_KeepsWidth_WhenScaleChanges()
+    public void ApplyConfig_RecomputesWidth_WhenScaleChanges()
     {
         _controller.Initialize();
         _configStore.Current.Live2D.Width = 380;
@@ -81,10 +81,10 @@ public sealed class VoiceInputControllerTests
         _configStore.Current.Live2D.Scale = 1.5;
         _controller.ApplyConfig(_configStore.Current);
 
-        // 缩放只放大/裁剪模型，不应把自动适配的窗口宽度一起改掉。
-        Assert.Equal(276, _configStore.Current.Live2D.Width);
+        // 自动收紧包含当前缩放：窗口要能完整容纳缩放后的模型。
+        Assert.Equal(409, _configStore.Current.Live2D.Width); // 1000 * (560/2000 * 0.95 * 1.5) + 10
         Assert.Equal(560, _configStore.Current.Live2D.Height);
-        Assert.Equal(276, _live2d.Config!.Width);
+        Assert.Equal(409, _live2d.Config!.Width);
         Assert.Equal(1.5, _live2d.Config.Scale);
     }
 
