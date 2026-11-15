@@ -1664,6 +1664,7 @@
         }
       }
       var startedLabels = [];
+      var poseBeforeState = null;
 
       stopAllMotionLayers('state');
       if (state === 'idle') {
@@ -1677,7 +1678,9 @@
         scheduleIdlePool();
       } else {
         // 进入状态：暂停随机池与触发手势，避免与状态动作抢参数。
+        // 如果手势正在播（长动作播到一半开始说话/聆听），先记姿势，后面淡出到状态动作。
         clearIdlePoolTimer();
+        poseBeforeState = hasMotionLayerGroup('gesture') ? capturePoseSnapshot() : null;
         stopAllGestureLayers();
       }
       if (state !== 'idle' && groups.length > 0) {
@@ -1702,6 +1705,10 @@
             message: '状态动作（自动）：' + state + ' -> ' + startedLabels.join(', ')
           });
         }
+      }
+      if (poseBeforeState) {
+        // 从被中断时的姿势淡出到状态层（或待机层）的实时输出，避免硬切。
+        beginPoseFade(null, GESTURE_FADE_MS, poseBeforeState);
       }
     } catch (e) {
       log('状态动作应用失败（忽略）: ' + state, e);
@@ -1820,7 +1827,7 @@
       }
     }
 
-    // 某些动作没有 finish 事件时兜底（大肥鱼动作最长 13.15s）。
+    // 某些动作没有 finish 事件时兜底；初始 20s，动作加载完成后按真实时长延长。
     session.motionFallbackTimer = setTimeout(function () {
       if (token === session.token) finishMotionPreview(token);
     }, 20000);
@@ -1837,6 +1844,19 @@
           sendHost({ type: 'motionPreviewResult', group: label, ok: ok !== false });
           if (!ok && token === session.token) {
             finishMotionPreview(token);
+            return;
+          }
+          // 预览的兜底上限也按真实时长延长，避免长动作在 20s 被截断。
+          var maxMs = 0;
+          for (var m = 0; m < names.length; m++) {
+            var durationMs = resolveGestureDurationMs(names[m]);
+            if (durationMs > maxMs) maxMs = durationMs;
+          }
+          if (maxMs > 20000 && token === session.token) {
+            clearTimeout(session.motionFallbackTimer);
+            session.motionFallbackTimer = setTimeout(function () {
+              if (token === session.token) finishMotionPreview(token);
+            }, maxMs + 5000);
           }
         }).catch(function (err) {
           sendHost({
