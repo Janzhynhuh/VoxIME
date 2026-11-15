@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using VoxIME.App.Infrastructure;
 using VoxIME.App.ViewModels;
 using VoxIME.App.Views;
 using VoxIME.Core.Services;
@@ -25,6 +26,7 @@ public partial class Live2DPage : UserControl
     private (double Width, double Height)? _modelSize;
     private bool _ownerHooked;
     private bool _previewCollapsed;
+    private bool _previewAnimating;
 
     public Live2DPage()
     {
@@ -350,15 +352,56 @@ public partial class Live2DPage : UserControl
     /// </summary>
     private void SetPreviewCollapsed(bool collapsed)
     {
-        if (_previewCollapsed == collapsed)
+        if (_previewAnimating || _previewCollapsed == collapsed)
         {
             return;
         }
 
         _previewCollapsed = collapsed;
+        if (!Motion.Enabled)
+        {
+            ApplyPreviewCollapsedState(collapsed);
+            return;
+        }
+
+        _previewAnimating = true;
+        if (collapsed)
+        {
+            // 展开态 → 收起：先让面板宽度过渡到 0，再隐藏面板/显示窄栏并释放预览。
+            PreviewRail.Visibility = Visibility.Collapsed;
+            PreviewPanel.Visibility = Visibility.Visible;
+            var fromWidth = PreviewPanel.ActualWidth > 1 ? PreviewPanel.ActualWidth : 300;
+            Motion.PlayWidth(PreviewPanel, fromWidth, 0, TimeSpan.FromMilliseconds(200), () =>
+            {
+                _previewAnimating = false;
+                PreviewPanel.Visibility = Visibility.Collapsed;
+                PreviewPanel.Width = 300;
+                PreviewRail.Visibility = Visibility.Visible;
+                Motion.PlayEnter(PreviewRail, offsetY: 0, fromScale: 1.0,
+                    duration: TimeSpan.FromMilliseconds(140));
+                ShutdownPreview();
+            });
+            return;
+        }
+
+        // 收起态 → 展开：从 0 过渡到 300，完成后才初始化预览，避免 0 宽度下创建 WebView2。
+        PreviewRail.Visibility = Visibility.Collapsed;
+        PreviewPanel.Visibility = Visibility.Visible;
+        Motion.PlayWidth(PreviewPanel, 0, 300, TimeSpan.FromMilliseconds(220), () =>
+        {
+            _previewAnimating = false;
+            if (IsLoaded && IsVisible)
+            {
+                RestartPreview();
+            }
+        });
+    }
+
+    /// <summary>动效关闭档的瞬时收起/展开。</summary>
+    private void ApplyPreviewCollapsedState(bool collapsed)
+    {
         PreviewPanel.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         PreviewRail.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
-
         if (collapsed)
         {
             ShutdownPreview();

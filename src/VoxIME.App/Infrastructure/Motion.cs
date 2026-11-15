@@ -135,6 +135,38 @@ public static class Motion
             new DoubleAnimation(1, toScale, span) { EasingFunction = EaseInEasing });
     }
 
+    /// <summary>
+    /// 宽度过渡：用于侧栏/面板展开收起。只建议用于低频的容器尺寸变化；
+    /// 高频内容不要动画 Width，避免每帧触发布局。
+    /// </summary>
+    public static void PlayWidth(
+        FrameworkElement element,
+        double from,
+        double to,
+        TimeSpan? duration = null,
+        Action? completed = null)
+    {
+        var span = Duration(duration ?? TimeSpan.FromMilliseconds(200));
+        if (Style == MotionStyle.Off || span <= TimeSpan.Zero)
+        {
+            element.BeginAnimation(FrameworkElement.WidthProperty, null);
+            element.Width = to;
+            completed?.Invoke();
+            return;
+        }
+
+        element.BeginAnimation(FrameworkElement.WidthProperty, null);
+        element.Width = from;
+        var animation = new DoubleAnimation(from, to, span) { EasingFunction = EaseOutEasing };
+        animation.Completed += (_, _) =>
+        {
+            element.BeginAnimation(FrameworkElement.WidthProperty, null);
+            element.Width = to;
+            completed?.Invoke();
+        };
+        element.BeginAnimation(FrameworkElement.WidthProperty, animation);
+    }
+
     /// <summary>页面切换：水平滑入 + 淡入。</summary>
     public static void PlaySlideIn(
         FrameworkElement element,

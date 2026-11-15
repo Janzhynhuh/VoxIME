@@ -602,7 +602,7 @@
 
         <!-- 模型位置预览：独立 WebView2；固定在右侧，左侧内容保持全高滚动 -->
         <Border x:Name="PreviewPanel" Grid.Column="1" Style="{StaticResource Card}" Width="300" Margin="12,0,0,0"
-                VerticalAlignment="Stretch">
+                VerticalAlignment="Stretch" ClipToBounds="True">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
