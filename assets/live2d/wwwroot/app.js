@@ -92,6 +92,8 @@
   var idlePoolSignature = '';
   var gestureTokens = [];
   var gesturePending = [];
+  var GESTURE_FADE_MS = 320;
+  var poseFade = null;
   var lastGesture = null;
   var lastTrigger = null;
   var lastGestureError = '';
@@ -595,7 +597,26 @@
     return null;
   }
 
-  /** 结束一条手势层：清理监听/兜底计时器，可选恢复播前姿势。 */
+  /** 读取某个动作组在引擎里加载后的真实时长（秒 → 毫秒）；取不到返回 0。 */
+  function resolveGestureDurationMs(name) {
+    try {
+      var manager = model && model.internalModel ? model.internalModel.motionManager : null;
+      var groups = manager ? manager.motionGroups : null;
+      var list = groups ? groups[name] : null;
+      if (!list) return 0;
+      for (var i = 0; i < list.length; i++) {
+        var motion = list[i];
+        if (!motion) continue;
+        var seconds = 0;
+        if (typeof motion.getLoopDuration === 'function') seconds = motion.getLoopDuration();
+        if ((!seconds || seconds <= 0) && typeof motion.getDuration === 'function') seconds = motion.getDuration();
+        if (seconds > 0) return seconds * 1000;
+      }
+    } catch (e) { /* ignore */ }
+    return 0;
+  }
+
+  /** 结束一条手势层：清理监听/兜底计时器，不保持时淡出回待机。 */
   function finishGesture(slot, token) {
     if (token !== gestureTokens[slot]) return;
     var pending = gesturePending[slot];
@@ -612,8 +633,16 @@
       try { manager.stopAllMotions(); } catch (e) { /* ignore */ }
     }
     if (motionLayers.gestureGroups) motionLayers.gestureGroups[slot] = null;
-    if (pending && !pending.hold && pending.snapshot) {
-      applyPoseSnapshot(pending.snapshot);
+    if (pending) {
+      if (!pending.hold) {
+        // 不硬切：从当前姿势在 ~320ms 内交叉淡出到待机层实时输出；没有待机层时回播前快照。
+        beginPoseFade(pending.snapshot, GESTURE_FADE_MS);
+      }
+      sendHost({
+        type: 'debug',
+        message: '手势动作结束：' + (pending.name || '?')
+          + (pending.hold ? '（保持末帧）' : '（淡出回待机）')
+      });
     }
     scheduleIdlePool();
   }
@@ -669,7 +698,7 @@
 
     // 并行 MotionManager.startMotion 的 Promise 只表示“是否成功启动”，不表示播放结束；
     // 结束要监听 motionFinish，另加 duration 兜底（某些动作没有 finish 事件）。
-    var pending = { token: token, hold: hold, snapshot: snapshot, timer: null, onFinish: null };
+    var pending = { token: token, hold: hold, snapshot: snapshot, timer: null, onFinish: null, name: name };
     pending.onFinish = function () { finishGesture(slot, token); };
     gesturePending[slot] = pending;
     if (typeof manager.once === 'function') {
@@ -701,6 +730,16 @@
           lastGestureError = '播放返回 false';
           log('手势动作无法播放，已跳过: ' + name);
           finishGesture(slot, token);
+          return;
+        }
+        // 动作加载完成后从引擎读真实时长。注入的 Animation 资源在 definitions 里没有 Duration，
+        // 不能用 5 秒兜底去切断 13 秒的长动作。
+        var realMs = resolveGestureDurationMs(name);
+        if (realMs > 0 && gesturePending[slot] === pending) {
+          if (pending.timer) clearTimeout(pending.timer);
+          pending.timer = setTimeout(function () {
+            finishGesture(slot, token);
+          }, realMs + 800);
         }
       }).catch(function (err) {
         lastGestureError = String((err && err.message) || err);
@@ -709,16 +748,10 @@
       });
     }
 
-    var durationMs = 5000;
-    try {
-      var definitions = (model.internalModel.motionManager.definitions || {})[name];
-      if (Array.isArray(definitions) && definitions[0] && typeof definitions[0].Duration === 'number') {
-        durationMs = definitions[0].Duration * 1000;
-      }
-    } catch (e) { durationMs = 5000; }
+    // 初始兜底给足 30 秒；动作加载完成后会替换成真实时长（仅防 motionFinish 不触发的异常情况）。
     pending.timer = setTimeout(function () {
       finishGesture(slot, token);
-    }, Math.max(1500, durationMs + 800));
+    }, 30000);
     return true;
   }
 
@@ -822,6 +855,70 @@
     }
   }
 
+  /**
+   * 从当前姿势交叉淡出：有静默层时目标取每帧待机层的实时输出（无跳变）；
+   * 没有静默层时退化到 targetSnapshot（播前姿势）。duration 后自动停止写入。
+   */
+  function beginPoseFade(targetSnapshot, durationMs, fromSnapshot) {
+    if (!model || !model.internalModel) return;
+    var from = fromSnapshot || capturePoseSnapshot();
+    if (!from || !from.parameters || !from.parameters.length) return;
+    var to = null;
+    if (targetSnapshot && targetSnapshot.parameters
+        && targetSnapshot.parameters.length === from.parameters.length) {
+      to = targetSnapshot.parameters;
+    }
+    poseFade = {
+      from: from.parameters,
+      to: to,
+      partFrom: from.partOpacities && from.partOpacities.length ? from.partOpacities : null,
+      start: performance.now(),
+      durationMs: Math.max(120, durationMs || GESTURE_FADE_MS)
+    };
+  }
+
+  /** 每帧写淡出插值；结束后停止写入，交还给动作层自己的输出。 */
+  function applyPoseFade() {
+    if (!poseFade || !model || !model.internalModel) return;
+    var core = model.internalModel.coreModel;
+    if (!core || typeof core.getParameterValueByIndex !== 'function') {
+      poseFade = null;
+      return;
+    }
+    var elapsed = (performance.now() - poseFade.start) / poseFade.durationMs;
+    if (elapsed >= 1) {
+      poseFade = null;
+      return;
+    }
+    // smoothstep 缓动，避免线性淡出在结尾有明显停顿。
+    var k = elapsed * elapsed * (3 - 2 * elapsed);
+    try {
+      var from = poseFade.from;
+      var to = poseFade.to;
+      var count = Math.min(core.getParameterCount(), from.length);
+      if (typeof core.setParameterValueByIndex === 'function') {
+        for (var i = 0; i < count; i++) {
+          // 目标：指定快照，或本帧待机层/物理的实际输出。
+          var target = to ? to[i] : core.getParameterValueByIndex(i);
+          core.setParameterValueByIndex(i, from[i] + (target - from[i]) * k);
+        }
+      }
+      if (poseFade.partFrom
+          && typeof core.getPartCount === 'function'
+          && typeof core.getPartOpacityByIndex === 'function'
+          && typeof core.setPartOpacityByIndex === 'function') {
+        var partCount = Math.min(core.getPartCount(), poseFade.partFrom.length);
+        for (var p = 0; p < partCount; p++) {
+          var partFrom = poseFade.partFrom[p];
+          var partTarget = core.getPartOpacityByIndex(p);
+          core.setPartOpacityByIndex(p, partFrom + (partTarget - partFrom) * k);
+        }
+      }
+    } catch (e) {
+      poseFade = null;
+    }
+  }
+
   /** 记录模型加载完成时的参数值与部件透明度，作为“默认姿态”基线。 */
   function captureModelBaseline() {
     modelBaseline = capturePoseSnapshot();
@@ -890,6 +987,7 @@
     idleLayerLoops = [];
     gestureTokens = [];
     gesturePending = [];
+    poseFade = null;
     lastGesture = null;
     lastGestureError = '';
     idleSignature = '';
@@ -1204,6 +1302,8 @@
   }
 
   function applyLayeredOverrides() {
+    // 先做姿势淡出，再眨眼（眨眼只写眼睛参数，避免淡出期间眼睛被冻住）。
+    applyPoseFade();
     applyBlinkLayer();
   }
   function getCubismId(id) {
@@ -1456,6 +1556,7 @@
     clearIdlePoolTimer();
     gestureTokens = [];
     gesturePending = [];
+    poseFade = null;
     lastGesture = null;
     lastTrigger = null;
     lastGestureError = '';
@@ -1566,8 +1667,12 @@
 
       stopAllMotionLayers('state');
       if (state === 'idle') {
-        // 回到待机：恢复离开前的姿势（含单次动作保持的末帧），再让待机层继续跑。
+        // 回到待机：先记录离开状态时的姿势，恢复待机姿势后再交叉淡出，避免硬切。
+        var poseBeforeIdle = previous !== 'idle' ? capturePoseSnapshot() : null;
         restoreIdlePose();
+        if (poseBeforeIdle) {
+          beginPoseFade(null, GESTURE_FADE_MS, poseBeforeIdle);
+        }
         // 互动动作只在待机状态触发；回到待机后重新排随机池。
         scheduleIdlePool();
       } else {
@@ -1628,7 +1733,11 @@
     stopAllMotionLayers('preview');
 
     if (restoreIdle) {
+      var poseBeforePreviewCancel = capturePoseSnapshot();
       restoreIdlePose();
+      if (poseBeforePreviewCancel) {
+        beginPoseFade(null, GESTURE_FADE_MS, poseBeforePreviewCancel);
+      }
     }
     if (live.state === 'idle') {
       scheduleIdlePool();
@@ -1658,7 +1767,11 @@
     previewSession.token++;
 
     stopAllMotionLayers('preview');
+    var poseBeforePreviewEnd = capturePoseSnapshot();
     restoreIdlePose();
+    if (poseBeforePreviewEnd) {
+      beginPoseFade(null, GESTURE_FADE_MS, poseBeforePreviewEnd);
+    }
     if (live.state === 'idle') {
       scheduleIdlePool();
     }
@@ -2600,6 +2713,7 @@
         }).filter(Boolean),
         lastGesture: lastGesture,
         lastTrigger: lastTrigger,
+        poseFading: !!poseFade,
         lastGestureError: lastGestureError,
         idlePool: (config.idlePool || []).length,
         idlePoolMinSeconds: config.idlePoolMinSeconds,
