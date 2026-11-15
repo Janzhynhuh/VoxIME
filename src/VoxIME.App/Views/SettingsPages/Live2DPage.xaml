@@ -644,10 +644,10 @@
                     <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap"
                                Text="位置预览不可用，用下面滑块兜底：" />
                     <TextBlock Text="水平偏移" Style="{StaticResource ValueText}" Margin="0,6,0,0" />
-                    <Slider Minimum="-1" Maximum="1" TickFrequency="0.01" IsSnapToTickEnabled="True"
+                    <Slider Minimum="-2" Maximum="2" TickFrequency="0.01" IsSnapToTickEnabled="True"
                             Value="{Binding ModelOffsetX, Mode=TwoWay}" />
                     <TextBlock Text="垂直偏移" Style="{StaticResource ValueText}" Margin="0,6,0,0" />
-                    <Slider Minimum="-1" Maximum="1" TickFrequency="0.01" IsSnapToTickEnabled="True"
+                    <Slider Minimum="-2" Maximum="2" TickFrequency="0.01" IsSnapToTickEnabled="True"
                             Value="{Binding ModelOffsetY, Mode=TwoWay}" />
                 </StackPanel>
             </Grid>

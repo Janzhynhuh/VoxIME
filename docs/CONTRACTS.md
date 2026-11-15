@@ -46,7 +46,7 @@ Windows x64 语音输入法 **VoxIME 声语**：悬浮语音助手形态。
 - `Live2DModels.cs`：`ILive2DController`（含 `PreviewMotion`/`PreviewMotions`/`PreviewExpression` 预览、`TriggerMotion`（tap=点击桌宠/托盘互动，start=模型加载后）触发式动作；`PreviewMotions` 用于状态动作多选叠加预览）、`Live2DState`、`Live2DModelSizeEventArgs`（模型加载后上报原始宽高，用于窗口自适应）
 - `VoiceInputModels.cs`：`IVoiceInputController`（UI 唯一依赖的主控接口）、`AppState`、`AppStateChangedEventArgs`、`TranscriptionRecord`
 
-配置类型在 `VoxIME.Core.Configuration`：`AppConfig`（含 `ProviderProfile`、`HotkeyConfig`、`AudioConfig`、`InsertionConfig`、`Live2DConfig`（动作角色：`IdleMotionGroups`=`Live2DMotionEntry` 静默循环条目、`IdlePoolGroups`=`Live2DPoolEntry` 随机池条目（权重/保持末帧）+ `IdlePoolMinSeconds`/`IdlePoolMaxSeconds`、`TriggerActions`=`Live2DTriggerEntry`（tap/start 事件）；四个状态为 `*MotionGroups` 条目数组，条目含 `Group` 与可空 `Loop`（循环/进入时播一次，null=自动按名字猜）；旧 `*MotionGroup` / `IdleMotionGroup` 字符串字段仅兼容读取）、`TtsConfig`、`UiConfig`、`OverlayConfig`、`LoggingConfig`）、`IConfigStore`/`JsonConfigStore`、`ConfigExchangeService`、`ISecretProtector`/`DpapiSecretProtector`（仅旧版迁移）、`ConfigJson`。
+配置类型在 `VoxIME.Core.Configuration`：`AppConfig`（含 `ProviderProfile`、`HotkeyConfig`、`AudioConfig`、`InsertionConfig`、`Live2DConfig`（动作角色：`IdleMotionGroups`=`Live2DMotionEntry` 静默循环条目、`IdlePoolGroups`=`Live2DPoolEntry` 随机池条目（权重/保持末帧）+ `IdlePoolMinSeconds`/`IdlePoolMaxSeconds`、`TriggerActions`=`Live2DTriggerEntry`（tap/start 事件）；四个状态为 `*MotionGroups` 条目数组，条目含 `Group` 与可空 `Loop`（循环/进入时播一次，null=自动按名字猜）；旧 `*MotionGroup` / `IdleMotionGroup` 字符串字段仅兼容读取；`Live2DConfig.MaxModelOffset`=2 为模型位置归一化偏移上限）、`TtsConfig`、`UiConfig`、`OverlayConfig`、`LoggingConfig`）、`IConfigStore`/`JsonConfigStore`、`ConfigExchangeService`、`ISecretProtector`/`DpapiSecretProtector`（仅旧版迁移）、`ConfigJson`。
 日志：`VoxIME.Core.Logging.IAppLogger`、`FileLogger`、`NullLogger`、`LogLevel`。
 历史：`VoxIME.Core.History.IHistoryStore`/`JsonlHistoryStore`。
 
@@ -109,7 +109,7 @@ public sealed class Live2DController : ILive2DController
     public Live2DController(IAppLogger logger);
 }
 ```
-必须实现：透明置顶无边框窗口（不出现在任务栏）、模型目录加载（递归找 `*.model3.json`）、状态联动、口型、眼动、气泡、ClickThrough、AlwaysOnTop、Position/Size/Scale/Opacity、`ApplyConfig` 热切换、异常降级、**无模型/无 WebView2 时内置 WPF 兜底形象**；模型加载成功后通过 `ModelSizeAvailable` 上报原始宽高（`VoiceInputController` 据此把窗口宽度收紧到模型显示宽度 + 5 DIP padding，`Live2DConfig.AutoFitWindow` 可关闭）。
+必须实现：透明置顶无边框窗口（不出现在任务栏）、模型目录加载（递归找 `*.model3.json`）、状态联动、口型、眼动、气泡、ClickThrough、AlwaysOnTop、Position/Size/Scale/Opacity、`ApplyConfig` 热切换、异常降级、**无模型/无 WebView2 时内置 WPF 兜底形象**；模型加载成功后通过 `ModelSizeAvailable` 上报原始宽高（`VoiceInputController` 据此把窗口宽度收紧到模型显示宽度（含当前缩放）+ 5 DIP padding，`Live2DConfig.AutoFitWindow` 可关闭）。
 
 ### Lead
 ```csharp

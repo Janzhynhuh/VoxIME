@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
+using VoxIME.Core.Configuration;
 
 namespace VoxIME.Live2D;
 
@@ -238,8 +239,8 @@ internal sealed class PetWindow : Window
     public void SetAvatarTransform(double scale, double offsetX, double offsetY)
     {
         _avatarScale = Math.Clamp(scale, 0.2, 3.0);
-        _avatarOffsetX = Math.Clamp(offsetX, -1.0, 1.0);
-        _avatarOffsetY = Math.Clamp(offsetY, -1.0, 1.0);
+        _avatarOffsetX = Math.Clamp(offsetX, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset);
+        _avatarOffsetY = Math.Clamp(offsetY, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset);
         ApplyAvatarTransform();
     }
 

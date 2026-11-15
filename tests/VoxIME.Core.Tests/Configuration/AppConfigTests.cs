@@ -96,6 +96,19 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void Normalize_AllowsWiderModelOffset()
+    {
+        var config = new AppConfig();
+        config.Live2D.ModelOffsetX = 1.5;
+        config.Live2D.ModelOffsetY = -1.5;
+
+        config.Normalize();
+
+        Assert.Equal(1.5, config.Live2D.ModelOffsetX);
+        Assert.Equal(-1.5, config.Live2D.ModelOffsetY);
+    }
+
+    [Fact]
     public void Normalize_ClampsOutOfRangeValues()
     {
         var config = new AppConfig
@@ -116,8 +129,8 @@ public sealed class AppConfigTests
         Assert.Equal(1600, config.Live2D.Height);
         Assert.Equal(1.0, config.Live2D.Opacity);
         Assert.Equal(0.2, config.Live2D.Scale);
-        Assert.Equal(1.0, config.Live2D.ModelOffsetX);
-        Assert.Equal(-1.0, config.Live2D.ModelOffsetY);
+        Assert.Equal(2.0, config.Live2D.ModelOffsetX);
+        Assert.Equal(-2.0, config.Live2D.ModelOffsetY);
         Assert.Equal(5.0, config.Live2D.MouthSensitivity);
         Assert.Equal(300, config.Live2D.EyeFollowFps);
         Assert.Equal(10, config.Tts.Rate);

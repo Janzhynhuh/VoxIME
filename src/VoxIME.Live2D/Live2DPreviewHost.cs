@@ -5,6 +5,7 @@ using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using VoxIME.Core;
 using VoxIME.Core.Abstractions;
+using VoxIME.Core.Configuration;
 using VoxIME.Core.Logging;
 using VoxIME.Core.Services;
 
@@ -174,8 +175,8 @@ public sealed class Live2DPreviewHost : IDisposable
     public void ApplyGeometry(double scale, double offsetX, double offsetY)
     {
         _scale = Math.Clamp(scale, 0.2, 3.0);
-        _offsetX = Math.Clamp(offsetX, -1.0, 1.0);
-        _offsetY = Math.Clamp(offsetY, -1.0, 1.0);
+        _offsetX = Math.Clamp(offsetX, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset);
+        _offsetY = Math.Clamp(offsetY, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset);
         Send(new { type = "setConfig", scale = _scale, offsetX = _offsetX, offsetY = _offsetY });
     }
 
@@ -224,8 +225,8 @@ public sealed class Live2DPreviewHost : IDisposable
                     var offsetX = root.TryGetProperty("offsetX", out var xElement) && xElement.TryGetDouble(out var x) ? x : 0;
                     var offsetY = root.TryGetProperty("offsetY", out var yElement) && yElement.TryGetDouble(out var y) ? y : 0;
                     OffsetChanged?.Invoke(this, new Live2DPreviewOffsetEventArgs(
-                        Math.Clamp(offsetX, -1.0, 1.0),
-                        Math.Clamp(offsetY, -1.0, 1.0)));
+                        Math.Clamp(offsetX, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset),
+                        Math.Clamp(offsetY, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset)));
                     break;
                 }
                 case "debug":

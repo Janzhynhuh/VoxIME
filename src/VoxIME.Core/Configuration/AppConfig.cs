@@ -245,8 +245,8 @@ public sealed class AppConfig
             Live2D.RenderSupersampling,
             Live2D.HighQualityRendering);
         Live2D.HighQualityRendering = Live2D.RenderSupersampling > 1;
-        Live2D.ModelOffsetX = Math.Clamp(Live2D.ModelOffsetX, -1.0, 1.0);
-        Live2D.ModelOffsetY = Math.Clamp(Live2D.ModelOffsetY, -1.0, 1.0);
+        Live2D.ModelOffsetX = Math.Clamp(Live2D.ModelOffsetX, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset);
+        Live2D.ModelOffsetY = Math.Clamp(Live2D.ModelOffsetY, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset);
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
         Live2D.EyeFollowFps = Math.Clamp(Live2D.EyeFollowFps, 5, 300);
         Live2D.EyeFollowInvertYByModel ??= new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
@@ -492,6 +492,12 @@ public sealed class InsertionConfig
 
 public sealed class Live2DConfig
 {
+    /// <summary>
+    /// 模型在窗口内的最大归一化偏移（按窗口宽/高比例）；前端 app.js 的 MAX_MODEL_OFFSET 必须保持一致。
+    /// 足够大以允许把放大后的模型移到窗口内任意位置；0 表示默认居中贴底。
+    /// </summary>
+    public const double MaxModelOffset = 2.0;
+
     public bool Enabled { get; set; } = true;
     /// <summary>模型目录（包含 .model3.json 的文件夹）；为空时使用内置兜底形象。</summary>
     public string? ModelDirectory { get; set; }
@@ -505,9 +511,9 @@ public sealed class Live2DConfig
     public bool SnapToEdge { get; set; } = true;
     /// <summary>贴边时窗口下边缘保持在任务栏上方的工作区内。</summary>
     public bool KeepAboveTaskbar { get; set; } = true;
-    /// <summary>模型在窗口内的水平偏移（-1..1，按窗口宽度比例；正=向右）。</summary>
+    /// <summary>模型在窗口内的水平偏移（-MaxModelOffset..MaxModelOffset，按窗口宽度比例；正=向右）。</summary>
     public double ModelOffsetX { get; set; }
-    /// <summary>模型在窗口内的垂直偏移（-1..1，按窗口高度比例；正=向下）。</summary>
+    /// <summary>模型在窗口内的垂直偏移（-MaxModelOffset..MaxModelOffset，按窗口高度比例；正=向下）。</summary>
     public double ModelOffsetY { get; set; }
     /// <summary>-1 表示自动吸附屏幕右下角。</summary>
     public double Left { get; set; } = -1;

@@ -985,7 +985,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         get => _modelOffsetX;
         set
         {
-            if (SetProperty(ref _modelOffsetX, Math.Clamp(value, -1.0, 1.0)))
+            if (SetProperty(ref _modelOffsetX, Math.Clamp(value, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset)))
             {
                 OnPropertyChanged(nameof(ModelOffsetSummary));
             }
@@ -998,7 +998,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         get => _modelOffsetY;
         set
         {
-            if (SetProperty(ref _modelOffsetY, Math.Clamp(value, -1.0, 1.0)))
+            if (SetProperty(ref _modelOffsetY, Math.Clamp(value, -Live2DConfig.MaxModelOffset, Live2DConfig.MaxModelOffset)))
             {
                 OnPropertyChanged(nameof(ModelOffsetSummary));
             }

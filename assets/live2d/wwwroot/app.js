@@ -19,6 +19,9 @@
 (function () {
   'use strict';
 
+  // 与 C# Live2DConfig.MaxModelOffset 保持一致（按窗口宽/高的比例）。
+  var MAX_MODEL_OFFSET = 2.0;
+
   var VERSION = '1.1.0';
   var params = new URLSearchParams(location.search);
   var page = (document.body && document.body.dataset && document.body.dataset.page) || 'pet';
@@ -377,8 +380,8 @@
     var modelH = model.internalModel.height || 1;
     var fill = 0.95;
     var scale = Math.min(w / modelW, h / modelH) * fill * (config.scale || 1);
-    var offsetX = Math.min(1, Math.max(-1, config.offsetX || 0));
-    var offsetY = Math.min(1, Math.max(-1, config.offsetY || 0));
+    var offsetX = Math.min(MAX_MODEL_OFFSET, Math.max(-MAX_MODEL_OFFSET, config.offsetX || 0));
+    var offsetY = Math.min(MAX_MODEL_OFFSET, Math.max(-MAX_MODEL_OFFSET, config.offsetY || 0));
     model.anchor.set(0.5, 1);
     model.scale.set(scale);
     model.position.set(
@@ -2109,8 +2112,8 @@
     if (msg.mouthSync !== undefined) config.mouthSync = !!msg.mouthSync;
     if (msg.textureMaxSize !== undefined) config.textureMaxSize = normalizeTextureMaxSize(msg.textureMaxSize);
     if (typeof msg.scale === 'number' && isFinite(msg.scale)) config.scale = Math.min(3, Math.max(0.2, msg.scale));
-    if (typeof msg.offsetX === 'number' && isFinite(msg.offsetX)) config.offsetX = Math.min(1, Math.max(-1, msg.offsetX));
-    if (typeof msg.offsetY === 'number' && isFinite(msg.offsetY)) config.offsetY = Math.min(1, Math.max(-1, msg.offsetY));
+    if (typeof msg.offsetX === 'number' && isFinite(msg.offsetX)) config.offsetX = Math.min(MAX_MODEL_OFFSET, Math.max(-MAX_MODEL_OFFSET, msg.offsetX));
+    if (typeof msg.offsetY === 'number' && isFinite(msg.offsetY)) config.offsetY = Math.min(MAX_MODEL_OFFSET, Math.max(-MAX_MODEL_OFFSET, msg.offsetY));
     if (msg.idleMotionGroup) config.idleMotionGroup = String(msg.idleMotionGroup);
     // 待机动作组支持多选：新页面收数组，旧消息只带单个字符串时当单元素列表处理。
     if (msg.idleMotionGroups !== undefined) {
@@ -2707,8 +2710,8 @@
       if (!drag || event.pointerId !== drag.id) return;
       var rect = stageEl.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
-      config.offsetX = Math.max(-1, Math.min(1, drag.offsetX + (event.clientX - drag.x) / rect.width));
-      config.offsetY = Math.max(-1, Math.min(1, drag.offsetY + (event.clientY - drag.y) / rect.height));
+      config.offsetX = Math.max(-MAX_MODEL_OFFSET, Math.min(MAX_MODEL_OFFSET, drag.offsetX + (event.clientX - drag.x) / rect.width));
+      config.offsetY = Math.max(-MAX_MODEL_OFFSET, Math.min(MAX_MODEL_OFFSET, drag.offsetY + (event.clientY - drag.y) / rect.height));
       layoutModel();
       postOffset();
       event.preventDefault();
