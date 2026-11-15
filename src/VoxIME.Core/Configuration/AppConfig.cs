@@ -240,6 +240,7 @@ public sealed class AppConfig
         Live2D.Height = Math.Clamp(Live2D.Height, 160, 1600);
         Live2D.Opacity = Math.Clamp(Live2D.Opacity, 0.2, 1.0);
         Live2D.Scale = Math.Clamp(Live2D.Scale, 0.2, 3.0);
+        Live2D.TextureMaxSize = Live2DConfig.NormalizeTextureMaxSize(Live2D.TextureMaxSize);
         Live2D.ModelOffsetX = Math.Clamp(Live2D.ModelOffsetX, -1.0, 1.0);
         Live2D.ModelOffsetY = Math.Clamp(Live2D.ModelOffsetY, -1.0, 1.0);
         Live2D.MouthSensitivity = Math.Clamp(Live2D.MouthSensitivity, 0.1, 5.0);
@@ -522,6 +523,15 @@ public sealed class Live2DConfig
     public bool MouthSync { get; set; } = true;
     public double MouthSensitivity { get; set; } = 1.0;
     public bool ShowBubble { get; set; } = true;
+
+    /// <summary>
+    /// 桌宠贴图最大边长（像素）：0=原始贴图，1024/2048=加载时等比缩小到该上限。
+    /// 482×600 的桌宠窗口使用 4096/8192 大贴图没有收益，反而会持续占用内存/带宽。
+    /// </summary>
+    public int TextureMaxSize { get; set; } = 2048;
+
+    /// <summary>打开设置窗口时暂停桌宠渲染（停 Pixi ticker，关闭窗口后恢复）。</summary>
+    public bool PauseWhenSettingsOpen { get; set; } = true;
     /// <summary>旧字段：待机动作组（单个）；仅为兼容旧配置保留，保存时同步为 <see cref="IdleMotionGroups"/> 的第一项。</summary>
     public string IdleMotionGroup { get; set; } = "Idle";
 
@@ -738,6 +748,17 @@ public sealed class Live2DConfig
         }
 
         return result;
+    }
+
+    /// <summary>贴图质量只允许原始 / 1024 / 2048，非法值回退到默认 2048。</summary>
+    public static int NormalizeTextureMaxSize(int value)
+    {
+        if (value <= 0)
+        {
+            return 0;
+        }
+
+        return value <= 1024 ? 1024 : 2048;
     }
 
     /// <summary>规范化随机池间隔：min 2..600 秒，max 不小于 min 且不超过 3600 秒；0 视为默认 15/45。</summary>

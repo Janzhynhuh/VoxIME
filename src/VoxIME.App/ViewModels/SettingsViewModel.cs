@@ -111,6 +111,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private double _modelOffsetY;
     private double _live2DOpacity;
     private double _mouthSensitivity;
+    private Choice? _selectedTextureQuality;
+    private bool _pauseWhenSettingsOpen = true;
 
     private string _motionPreviewStatus = "";
     private string _expressionPreviewStatus = "";
@@ -998,6 +1000,56 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         get => _mouthSensitivity;
         set => SetProperty(ref _mouthSensitivity, Math.Clamp(value, 0.1, 5.0));
+    }
+
+    /// <summary>桌宠贴图质量/性能选项（Value 为贴图最大边长，0=原始）。</summary>
+    public IReadOnlyList<Choice> TextureQualityOptions { get; } = new[]
+    {
+        new Choice("原始（最清晰）", "0"),
+        new Choice("2048（推荐）", "2048"),
+        new Choice("1024（省内存）", "1024")
+    };
+
+    /// <summary>当前贴图质量选择；保存后重新加载模型生效。</summary>
+    public Choice? SelectedTextureQuality
+    {
+        get => _selectedTextureQuality;
+        set
+        {
+            if (SetProperty(ref _selectedTextureQuality, value))
+            {
+                OnPropertyChanged(nameof(TextureMaxSize));
+            }
+        }
+    }
+
+    /// <summary>由当前下拉选项解析出的贴图最大边长（0=原始）。</summary>
+    public int TextureMaxSize
+    {
+        get
+        {
+            var value = _selectedTextureQuality?.Value;
+            return int.TryParse(value, out var size)
+                ? Live2DConfig.NormalizeTextureMaxSize(size)
+                : 2048;
+        }
+    }
+
+    /// <summary>打开设置窗口时暂停桌宠渲染，关闭后恢复。</summary>
+    public bool PauseWhenSettingsOpen
+    {
+        get => _pauseWhenSettingsOpen;
+        set => SetProperty(ref _pauseWhenSettingsOpen, value);
+    }
+
+    private void SelectTextureQuality(int size)
+    {
+        var normalized = Live2DConfig.NormalizeTextureMaxSize(size);
+        _selectedTextureQuality = TextureQualityOptions.FirstOrDefault(
+            option => int.TryParse(option.Value, out var value) && value == normalized)
+            ?? TextureQualityOptions[1];
+        OnPropertyChanged(nameof(SelectedTextureQuality));
+        OnPropertyChanged(nameof(TextureMaxSize));
     }
 
     public bool ClickThrough
@@ -2341,6 +2393,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         IdleMotion = config.Live2D.IdleMotion;
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
+        SelectTextureQuality(config.Live2D.TextureMaxSize);
+        PauseWhenSettingsOpen = config.Live2D.PauseWhenSettingsOpen;
         IdleMotionMapping.SetGroups(ResolveMotionGroups(
             config.Live2D.IdleMotionGroups,
             Live2DConfig.IsDefaultIdleGroup(config.Live2D.IdleMotionGroup) ? null : config.Live2D.IdleMotionGroup));
@@ -3757,6 +3811,8 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             MouthSync = MouthSync,
             MouthSensitivity = MouthSensitivity,
             ShowBubble = ShowBubble,
+            TextureMaxSize = TextureMaxSize,
+            PauseWhenSettingsOpen = PauseWhenSettingsOpen,
             IdleMotionGroups = idleMotionGroups,
             IdlePoolGroups = idlePoolGroups,
             IdlePoolMinSeconds = poolInterval.Min,

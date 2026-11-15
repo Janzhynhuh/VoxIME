@@ -48,8 +48,13 @@
     idlePoolMaxSeconds: 45,
     triggers: [],
     showBubble: true,
+    textureMaxSize: 2048,
     bubbleInPage: isPreview // 嵌入时气泡由 WPF 层渲染，避免重复
   };
+
+  // 打开设置窗口时由宿主暂停 Pixi ticker，避免桌宠持续渲染拖慢设置窗口。
+  var hostPaused = false;
+  var paused = false;
 
   var live = {
     state: 'idle',
@@ -218,6 +223,63 @@
     }
   }
 
+  function normalizeTextureMaxSize(value) {
+    var size = Number(value);
+    if (!isFinite(size) || size <= 0) return 0;
+    return size <= 1024 ? 1024 : 2048;
+  }
+
+  // 在纹理上传前把大贴图等比缩小。桌宠窗口只有几百像素，4096/8192 贴图没有收益，
+  // 但会持续占用大量显存/内存。返回新的 PIXI.Texture，原对象由 Pixi 缓存自然回收。
+  function downscaleTextureAsset(texture) {
+    try {
+      var maxSize = normalizeTextureMaxSize(config.textureMaxSize);
+      if (!maxSize || !texture || !texture.source) return texture;
+      var resource = texture.source.resource;
+      if (!resource) return texture;
+      var width = resource.naturalWidth || resource.videoWidth || resource.width || texture.source.width || 0;
+      var height = resource.naturalHeight || resource.videoHeight || resource.height || texture.source.height || 0;
+      if (!width || !height || Math.max(width, height) <= maxSize) return texture;
+
+      var scale = maxSize / Math.max(width, height);
+      var targetWidth = Math.max(1, Math.round(width * scale));
+      var targetHeight = Math.max(1, Math.round(height * scale));
+      var canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      var context = canvas.getContext('2d');
+      if (!context) return texture;
+      context.drawImage(resource, 0, 0, targetWidth, targetHeight);
+
+      var scaled = PIXI.Texture.from(canvas);
+      try {
+        scaled.source.scaleMode = texture.source.scaleMode;
+        scaled.source.addressMode = texture.source.addressMode;
+      } catch (e) { /* 保留默认采样设置 */ }
+      return scaled;
+    } catch (e) {
+      log('贴图降采样失败，使用原图', e);
+      return texture;
+    }
+  }
+
+  function installTextureDownscaler() {
+    try {
+      if (!window.PIXI || !PIXI.Assets || typeof PIXI.Assets.load !== 'function') return;
+      if (PIXI.Assets.__voximeTextureScaler) return;
+      var originalLoad = PIXI.Assets.load.bind(PIXI.Assets);
+      PIXI.Assets.load = function (source, options) {
+        var result = originalLoad(source, options);
+        var isTexture = source && typeof source === 'object' && source.parser === 'texture';
+        if (!isTexture) return result;
+        return Promise.resolve(result).then(downscaleTextureAsset);
+      };
+      PIXI.Assets.__voximeTextureScaler = true;
+    } catch (e) {
+      log('安装贴图降采样失败（忽略）', e);
+    }
+  }
+
   async function createPixi() {
     var canvas = document.getElementById('live2d-canvas');
     if (!canvas) {
@@ -233,6 +295,7 @@
 
     // Cubism 5 引擎使用 PixiJS v8 Render Pipe，必须在创建 renderer 前注册。
     PIXI.extensions.add(PIXI.live2d.Live2DPlugin);
+    installTextureDownscaler();
 
     var app = new PIXI.Application();
     await app.init({
@@ -247,6 +310,9 @@
     });
     pixiApp = app;
     pixiApp.ticker.add(onTick);
+    if (paused) {
+      pixiApp.ticker.stop();
+    }
     return pixiApp;
   }
 
@@ -1413,6 +1479,7 @@
           log('读取 model3.json 失败，按原 URL 加载: ' + (settingsError && settingsError.message));
         }
       }
+      installTextureDownscaler();
       var loaded = await PIXI.live2d.Live2DModel.from(modelSource, {
         autoHitTest: false,
         autoFocus: false,
@@ -1749,6 +1816,9 @@
     if (live.state === 'idle') {
       scheduleIdlePool();
     }
+    if (restoreIdle) {
+      pauseRenderingForHostIfNeeded();
+    }
   }
 
   /** 3 秒冷却结束：停掉预览层，待机/状态动作自然恢复。 */
@@ -1783,6 +1853,7 @@
       scheduleIdlePool();
     }
     sendHost({ type: 'debug', message: '预览冷却结束，已恢复待机/状态层' });
+    pauseRenderingForHostIfNeeded();
   }
 
   function cancelExpressionPreview() {
@@ -1803,6 +1874,7 @@
 
     var label = names.join('+');
     cancelMotionPreview(false);
+    resumeRenderingForPreview();
     var session = previewSession;
     var token = ++session.token;
     var managers = motionLayers.preview || [];
@@ -1881,6 +1953,7 @@
   function previewExpression(expression) {
     var name = String(expression || '').trim();
     if (!name || !model) return;
+    resumeRenderingForPreview();
     cancelExpressionPreview();
     try {
       var result = model.expression(name);
@@ -1893,6 +1966,7 @@
             manager.expressionManager.resetExpression();
           }
           sendHost({ type: 'debug', message: '表情预览冷却结束，已恢复默认表情' });
+          pauseRenderingForHostIfNeeded();
         } catch (e) {
           log('恢复默认表情失败（忽略）', e);
         }
@@ -1948,6 +2022,40 @@
     }
   }
 
+  function setRenderingPaused(value) {
+    paused = !!value;
+    if (!pixiApp || !pixiApp.ticker) return;
+    try {
+      if (paused) {
+        pixiApp.ticker.stop();
+        log('渲染已暂停（设置窗口打开）');
+      } else {
+        pixiApp.ticker.start();
+        log('渲染已恢复');
+      }
+    } catch (e) {
+      log('切换渲染暂停失败（忽略）', e);
+    }
+  }
+
+  function applyPaused(value) {
+    hostPaused = !!value;
+    setRenderingPaused(hostPaused);
+  }
+
+  // 设置页的“预览”按钮需要看到动画：临时恢复 ticker，预览冷却结束后再按宿主状态暂停。
+  function resumeRenderingForPreview() {
+    if (hostPaused && paused) {
+      setRenderingPaused(false);
+    }
+  }
+
+  function pauseRenderingForHostIfNeeded() {
+    if (hostPaused && !paused) {
+      setRenderingPaused(true);
+    }
+  }
+
   function applyConfig(msg) {
     if (!msg || typeof msg !== 'object') return;
     var scaleChanged = typeof msg.scale === 'number' && isFinite(msg.scale)
@@ -1955,6 +2063,7 @@
     if (msg.eyeFollow !== undefined) config.eyeFollow = !!msg.eyeFollow;
     if (msg.idleMotion !== undefined) config.idleMotion = !!msg.idleMotion;
     if (msg.mouthSync !== undefined) config.mouthSync = !!msg.mouthSync;
+    if (msg.textureMaxSize !== undefined) config.textureMaxSize = normalizeTextureMaxSize(msg.textureMaxSize);
     if (typeof msg.scale === 'number' && isFinite(msg.scale)) config.scale = Math.min(3, Math.max(0.2, msg.scale));
     if (typeof msg.offsetX === 'number' && isFinite(msg.offsetX)) config.offsetX = Math.min(1, Math.max(-1, msg.offsetX));
     if (typeof msg.offsetY === 'number' && isFinite(msg.offsetY)) config.offsetY = Math.min(1, Math.max(-1, msg.offsetY));
@@ -2081,6 +2190,9 @@
         break;
       case 'setConfig':
         applyConfig(data);
+        break;
+      case 'setPaused':
+        applyPaused(data.paused);
         break;
       case 'previewMotion':
         previewMotion(data.groups || data.group);

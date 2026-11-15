@@ -290,6 +290,7 @@ internal sealed class Live2DWebHost : IDisposable
         int idlePoolMaxSeconds,
         IReadOnlyList<Live2DTriggerEntry> triggers,
         bool showBubble,
+        int textureMaxSize,
         IReadOnlyDictionary<string, string?> expressions,
         IReadOnlyDictionary<string, IReadOnlyList<Live2DMotionEntry>> motions,
         Live2DModelAssetCatalog? modelAssets)
@@ -316,6 +317,7 @@ internal sealed class Live2DWebHost : IDisposable
                 .Select(item => new { group = item.Group, @event = item.Event, hold = item.Hold, weight = item.Weight })
                 .ToArray(),
             showBubble,
+            textureMaxSize,
             expressions,
             motions = (motions ?? new Dictionary<string, IReadOnlyList<Live2DMotionEntry>>())
                 .ToDictionary(
@@ -333,6 +335,9 @@ internal sealed class Live2DWebHost : IDisposable
                 }
         });
     }
+
+    /// <summary>暂停/恢复页面 Pixi ticker；页面尚未加载时忽略，Controller 会在配置下发后补发。</summary>
+    public void SendPaused(bool paused) => Send(new { type = "setPaused", paused });
 
     /// <summary>
     /// 用网页资源时间戳做缓存版本号。WebView2 会缓存同一虚拟主机 URL；

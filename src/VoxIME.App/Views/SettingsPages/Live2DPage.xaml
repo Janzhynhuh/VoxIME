@@ -265,6 +265,33 @@
                 </StackPanel>
             </Border>
 
+            <!-- 性能与内存 -->
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="性能与内存" Style="{StaticResource SectionTitle}" />
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="贴图质量" Style="{StaticResource ValueText}"
+                                   VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding TextureQualityOptions}"
+                                  SelectedItem="{Binding SelectedTextureQuality, Mode=TwoWay}"
+                                  DisplayMemberPath="Label"
+                                  ToolTip="保存后重新加载模型/重启桌宠生效" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource HintText}" Margin="150,4,0,0" TextWrapping="Wrap"
+                               Text="482×600 的桌宠窗口使用 4096/8192 大贴图没有收益；2048 通常几乎看不出差别，但能明显降低内存和渲染压力。保存后重新加载模型生效。" />
+
+                    <CheckBox Content="打开设置窗口时暂停桌宠渲染" Margin="0,12,0,0"
+                              IsChecked="{Binding PauseWhenSettingsOpen, Mode=TwoWay}" />
+                    <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap"
+                               Text="暂停只停渲染，不改模型/动作配置；关闭设置窗口后自动恢复。适合缓解打开设置时的卡顿。" />
+                </StackPanel>
+            </Border>
+
             <!-- 动作与口型 -->
             <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                 <StackPanel>

@@ -660,6 +660,31 @@ public sealed class AppConfigTests
         entries?.Select(entry => entry.Group).ToArray() ?? Array.Empty<string>();
 
     [Fact]
+    public void Normalize_ClampsTextureQualityAndKeepsPauseDefault()
+    {
+        var defaults = new AppConfig();
+        defaults.Normalize();
+        Assert.Equal(2048, defaults.Live2D.TextureMaxSize);
+        Assert.True(defaults.Live2D.PauseWhenSettingsOpen);
+
+        var original = new AppConfig { Live2D = new Live2DConfig { TextureMaxSize = 0 } };
+        original.Normalize();
+        Assert.Equal(0, original.Live2D.TextureMaxSize);
+
+        var low = new AppConfig { Live2D = new Live2DConfig { TextureMaxSize = 512 } };
+        low.Normalize();
+        Assert.Equal(1024, low.Live2D.TextureMaxSize);
+
+        var high = new AppConfig { Live2D = new Live2DConfig { TextureMaxSize = 8192 } };
+        high.Normalize();
+        Assert.Equal(2048, high.Live2D.TextureMaxSize);
+
+        var negative = new AppConfig { Live2D = new Live2DConfig { TextureMaxSize = -1 } };
+        negative.Normalize();
+        Assert.Equal(0, negative.Live2D.TextureMaxSize);
+    }
+
+    [Fact]
     public void GetActiveProfile_SkipsDisabledProfiles()
     {
         var config = new AppConfig

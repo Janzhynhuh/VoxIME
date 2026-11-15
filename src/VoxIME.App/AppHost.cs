@@ -199,9 +199,11 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
                     viewModel.AboutRequested += (_, _) => OpenAbout();
                     viewModel.OverlayPositionResetRequested += (_, _) => Hud?.ResetPosition();
                     Settings = new SettingsWindow(viewModel, Logger);
+                    Settings.IsVisibleChanged += OnSettingsVisibilityChanged;
                 }
 
                 ShowAndActivate(Settings);
+                ApplySettingsPause();
             }
             catch (Exception ex)
             {
@@ -444,6 +446,33 @@ public sealed class AppHost : IDisposable, IAsyncDisposable
         catch (Exception ex)
         {
             _logger.Warn($"应用设置到界面失败：{ex.Message}");
+        }
+
+        // 暂停开关可能刚被修改；按当前设置窗口可见性重新同步一次。
+        ApplySettingsPause();
+    }
+
+    private void OnSettingsVisibilityChanged(object? sender, DependencyPropertyChangedEventArgs e)
+    {
+        ApplySettingsPause();
+    }
+
+    /// <summary>设置窗口可见时按配置暂停桌宠渲染；隐藏后恢复。只影响渲染，不改变动作配置。</summary>
+    private void ApplySettingsPause()
+    {
+        if (Live2D is not Live2DController controller)
+        {
+            return;
+        }
+
+        try
+        {
+            var paused = Config.Live2D.PauseWhenSettingsOpen && Settings?.IsVisible == true;
+            controller.SetPaused(paused);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug($"[Live2D] 同步设置窗口暂停状态失败：{ex.Message}");
         }
     }
 

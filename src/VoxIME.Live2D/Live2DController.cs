@@ -83,6 +83,7 @@ public sealed class Live2DController : ILive2DController
     private bool _contentInitialized;
     private bool _contentInitializing;
     private bool _fallbackActive;
+    private bool _paused;
     private string? _lastError;
     private double? _userLeft;
     private double? _userTop;
@@ -526,6 +527,36 @@ public sealed class Live2DController : ILive2DController
 
     /// <inheritdoc />
     public void Hide() => RunOnUiThread(HideCore, "Hide");
+
+    /// <summary>
+    /// 暂停/恢复桌宠渲染（设置窗口打开时暂停，关闭后恢复）。只停 Pixi ticker，
+    /// 不改动作配置；WebView2 尚未就绪时暂存状态，等页面配置下发后补发。
+    /// </summary>
+    public void SetPaused(bool paused)
+    {
+        if (_disposed || _paused == paused)
+        {
+            return;
+        }
+
+        _paused = paused;
+        RunOnUiThread(() =>
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            try
+            {
+                _webHost?.SendPaused(paused);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug($"[Live2D] 切换渲染暂停失败：{ex.Message}");
+            }
+        }, "SetPaused");
+    }
 
     /// <inheritdoc />
     public void SetClickThrough(bool clickThrough)
@@ -1254,9 +1285,11 @@ public sealed class Live2DController : ILive2DController
             motionMap.IdlePoolMaxSeconds,
             motionMap.Triggers,
             config.ShowBubble,
+            config.TextureMaxSize,
             expressions,
             motions,
             modelAssets);
+        _webHost?.SendPaused(_paused);
         // 缩放不再改 WebView2 ZoomFactor：ZoomFactor 会让页面 viewport 重排，JS 重新适配后视觉尺寸
         // 几乎不变且会被拉伸发糊。统一交给页面在 canvas 内缩放，并随缩放提高渲染分辨率。
         _webHost?.SetZoom(1.0);
