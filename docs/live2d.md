@@ -471,9 +471,9 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 
 | 项 | 数值/建议 |
 |---|---|
-| 渲染循环 | WebView2 内 pixi 60~144fps（取决于显示器刷新率）；C# 侧只以 **30Hz** 合帧推送参数，CPU 占用低 |
+| 渲染循环 | 自适应帧率：待机 **30fps**、状态/手势/口型时 **60fps**（避免 144/240Hz 显示器上常驻桌宠持续占满渲染核心）；C# 侧只以 **30Hz** 合帧推送参数 |
 | 消息量 | 口型/眼动变化小于阈值（0.004/0.01）不发消息；状态/气泡按变化发送 |
-| 显存/内存 | WebView2 进程约 100~200MB（示例 Hiyori 2 张 2048 贴图）；模型面数越高占显存越多 |
+| 显存/内存 | WebView2 进程约 100~200MB（示例 Hiyori 2 张 2048 贴图）；4096/8192 大贴图模型会明显更高，模型面数越高占显存越多 |
 | 透明窗口 | `WebView2CompositionControl` 走 D3DImage/DirectComposition，无 CPU 回读；比截屏刷新方案省很多 |
 | 省电建议 | 隐藏桌宠时 `Hide()` 会停止 30Hz 合帧定时器；不需要待机动作时可 `IdleMotion=false`；低配机可调小窗口尺寸/Scale |
 | 首次加载 | WebView2 环境/页面/模型约 0.5~2s（本机 Hiyori 约 1.5s）；加载期间显示兜底形象，不会白屏 |
