@@ -263,29 +263,68 @@ namespace
         Log(buffer);
     }
 
+    struct MonitorEntry
+    {
+        RECT WorkArea{};
+        std::wstring DeviceName;
+    };
+
     BOOL CALLBACK CollectMonitorProc(HMONITOR monitor, HDC, LPRECT, LPARAM data)
     {
-        auto* workAreas = reinterpret_cast<std::vector<RECT>*>(data);
-        MONITORINFO info{};
+        auto* monitors = reinterpret_cast<std::vector<MonitorEntry>*>(data);
+        MONITORINFOEXW info{};
         info.cbSize = sizeof(info);
         if (GetMonitorInfoW(monitor, &info))
         {
-            workAreas->push_back(info.rcWork);
+            monitors->push_back({ info.rcWork, info.szDevice });
         }
         return TRUE;
     }
 
+    int DisplayNumberFromDeviceName(const std::wstring& deviceName)
+    {
+        size_t end = deviceName.size();
+        while (end > 0 && (deviceName[end - 1] < L'0' || deviceName[end - 1] > L'9'))
+        {
+            --end;
+        }
+
+        size_t begin = end;
+        while (begin > 0 && deviceName[begin - 1] >= L'0' && deviceName[begin - 1] <= L'9')
+        {
+            --begin;
+        }
+
+        if (begin == end)
+        {
+            return 0;
+        }
+
+        return _wtoi(deviceName.substr(begin, end - begin).c_str());
+    }
+
     bool GetMonitorWorkArea(int oneBasedIndex, RECT& workArea)
     {
-        std::vector<RECT> workAreas;
-        EnumDisplayMonitors(nullptr, nullptr, CollectMonitorProc, reinterpret_cast<LPARAM>(&workAreas));
+        std::vector<MonitorEntry> monitors;
+        EnumDisplayMonitors(nullptr, nullptr, CollectMonitorProc, reinterpret_cast<LPARAM>(&monitors));
 
-        if (oneBasedIndex < 1 || static_cast<size_t>(oneBasedIndex) > workAreas.size())
+        // 优先按 Windows 显示编号匹配（\\.\DISPLAY2 -> 2），
+        // 避免 EnumDisplayMonitors 的顺序与系统“显示器 2”编号不一致。
+        for (const auto& monitor : monitors)
+        {
+            if (DisplayNumberFromDeviceName(monitor.DeviceName) == oneBasedIndex)
+            {
+                workArea = monitor.WorkArea;
+                return true;
+            }
+        }
+
+        if (oneBasedIndex < 1 || static_cast<size_t>(oneBasedIndex) > monitors.size())
         {
             return false;
         }
 
-        workArea = workAreas[static_cast<size_t>(oneBasedIndex - 1)];
+        workArea = monitors[static_cast<size_t>(oneBasedIndex - 1)].WorkArea;
         return true;
     }
 
