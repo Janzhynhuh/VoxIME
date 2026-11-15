@@ -13,6 +13,11 @@
 #include <CubismModelSettingJson.hpp>
 #include <Math/CubismMatrix44.hpp>
 #include <Rendering/D3D11/CubismRenderer_D3D11.hpp>
+#include <Effect/CubismEyeBlink.hpp>
+#include <Id/CubismIdManager.hpp>
+#include <Motion/CubismMotion.hpp>
+#include <Motion/CubismPoseUpdater.hpp>
+#include <Motion/CubismPhysicsUpdater.hpp>
 
 #include <algorithm>
 #include <cstring>
@@ -202,6 +207,11 @@ namespace VoxIME::NativePet
         // Renderer 必须在 model/textures 之前释放；CubismUserModel 基类析构
         // 的顺序相反，显式 DeleteRenderer() 可避免 SDK 内部清理顺序问题。
         DeleteRenderer();
+        if (_idleMotion)
+        {
+            ACubismMotion::Delete(_idleMotion);
+            _idleMotion = nullptr;
+        }
         ReleaseTextures();
         if (_settings)
         {
@@ -237,6 +247,8 @@ namespace VoxIME::NativePet
             return false;
         }
 
+        _eyeBlink = CubismEyeBlink::Create(_settings);
+
         const std::filesystem::path basePath = modelJsonPath.parent_path();
         const std::filesystem::path mocPath = basePath / Utf8ToWide(_settings->GetModelFileName());
         std::vector<char> moc;
@@ -256,12 +268,51 @@ namespace VoxIME::NativePet
             return false;
         }
 
+        const auto loadOptionalAsset = [&](const char* fileName, const auto& load)
+        {
+            if (!fileName || !*fileName)
+            {
+                return;
+            }
+
+            std::vector<char> bytes;
+            if (ReadAllBytes(basePath / Utf8ToWide(fileName), bytes) && !bytes.empty())
+            {
+                load(reinterpret_cast<const csmByte*>(bytes.data()), static_cast<csmSizeInt>(bytes.size()));
+            }
+        };
+
+        loadOptionalAsset(_settings->GetPoseFileName(), [this](const csmByte* bytes, csmSizeInt size)
+        {
+            LoadPose(bytes, size);
+        });
+        loadOptionalAsset(_settings->GetPhysicsFileName(), [this](const csmByte* bytes, csmSizeInt size)
+        {
+            LoadPhysics(bytes, size);
+        });
+
         SetRenderTargetSize(static_cast<csmUint32>(width), static_cast<csmUint32>(height));
         CreateRenderer(static_cast<csmUint32>(width), static_cast<csmUint32>(height));
         if (!GetRenderer<Rendering::CubismRenderer_D3D11>())
         {
             error = Error("CreateRenderer failed");
             return false;
+        }
+
+        // VoxIME 当前模型把动作放在 Animation/ 下，model3.json 没有 Motions 段。
+        // 第一阶段先加载 IDLE；后续由 C# 下发完整动作目录。
+        const std::filesystem::path idlePath = basePath / L"Animation" / L"IDLE.motion3.json";
+        std::vector<char> idleBytes;
+        if (ReadAllBytes(idlePath, idleBytes) && !idleBytes.empty())
+        {
+            _idleMotion = CubismMotion::Create(
+                reinterpret_cast<const csmByte*>(idleBytes.data()),
+                static_cast<csmSizeInt>(idleBytes.size()));
+            if (_idleMotion && _motionManager)
+            {
+                _motionManager->SetReservePriority(1);
+                _motionManager->StartMotionPriority(_idleMotion, false, 1);
+            }
         }
 
         csmMap<csmString, csmFloat32> layout;
@@ -335,8 +386,30 @@ namespace VoxIME::NativePet
 
         _timeSeconds += std::max(0.0f, deltaSeconds);
         GetModel()->LoadParameters();
-        GetModel()->Update();
+
+        if (_motionManager && _idleMotion)
+        {
+            _motionManager->UpdateMotion(GetModel(), deltaSeconds);
+        }
+        if (_eyeBlink)
+        {
+            _eyeBlink->UpdateParameters(GetModel(), deltaSeconds);
+        }
+
         GetModel()->SaveParameters();
+
+        if (_pose)
+        {
+            CubismPoseUpdater updater(*_pose);
+            updater.OnLateUpdate(GetModel(), deltaSeconds);
+        }
+        if (_physics)
+        {
+            CubismPhysicsUpdater updater(*_physics);
+            updater.OnLateUpdate(GetModel(), deltaSeconds);
+        }
+
+        GetModel()->Update();
     }
 
     void PetModel::Draw(ID3D11RenderTargetView* renderTarget, int width, int height)

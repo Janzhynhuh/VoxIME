@@ -53,6 +53,7 @@ namespace VoxIME::NativePet
         float _timeSeconds = 0.0f;
         std::wstring _name;
         Csm::CubismModelSettingJson* _settings = nullptr;
+        Csm::ACubismMotion* _idleMotion = nullptr;
         std::vector<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>> _textureViews;
     };
 }
