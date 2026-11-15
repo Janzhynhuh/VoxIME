@@ -176,6 +176,7 @@ Hiyori/
 | `EyeFollowInvertY` | false | 眼动上下反转（当前生效值；保存时按当前模型从下面的 map 解析） |
 | `EyeFollowInvertYByModel` | {} | 按模型目录记住的上下反转偏好（不同模型骨骼绑定方向可能相反） |
 | `IdleMotion` | true | 待机动作开关（关闭后停止静默循环 + 待机随机池，模型仍保持呼吸/眨眼；触发动作不受影响） |
+| `HighQualityRendering` | true | 抗锯齿（高清渲染）：后备分辨率 ×2 再缩回显示，平滑 Live2D 贴图 alpha 边缘；低配可关（GPU 像素量约 1/4） |
 | `MouthSync` | true | 口型同步开关（关闭后嘴巴闭合） |
 | `TextureMaxSize` | 2048 | 贴图最大边长：0=原始，1024/2048=加载时等比缩小；保存后重新加载模型生效 |
 | `PauseWhenSettingsOpen` | true | 打开设置窗口时暂停 Pixi ticker（停止桌宠渲染），关闭后恢复；不影响动作配置 |
@@ -478,6 +479,7 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 | 消息量 | 口型/眼动变化小于阈值（0.004/0.01）不发消息；状态/气泡按变化发送 |
 | 显存/内存 | WebView2 进程约 100~200MB（示例 Hiyori 2 张 2048 贴图）；4096/8192 大贴图模型会明显更高，可用 `TextureMaxSize` 降采样 |
 | 透明窗口 | `WebView2CompositionControl` 走 D3DImage/DirectComposition，无 CPU 回读；比截屏刷新方案省很多 |
+| 抗锯齿 | `HighQualityRendering=true` 时后备分辨率 = 设备像素比 × 2（上限 3），再由浏览器缩回显示；MSAA 对 Live2D 贴图 alpha 边缘无效，超采样才有效。关闭后退回 1x，GPU 像素量约降为 1/4 |
 | 省电建议 | 隐藏桌宠时 `Hide()` 会停止 30Hz 合帧定时器；不需要待机动作时可 `IdleMotion=false`；低配机可调小窗口尺寸/Scale |
 | 首次加载 | WebView2 环境/页面/模型约 0.5~2s（本机 Hiyori 约 1.5s）；加载期间显示兜底形象，不会白屏 |
 

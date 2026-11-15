@@ -47,6 +47,7 @@
     idlePoolMinSeconds: 15,
     idlePoolMaxSeconds: 45,
     triggers: [],
+    highQuality: true,
     showBubble: true,
     textureMaxSize: 2048,
     bubbleInPage: isPreview // 嵌入时气泡由 WPF 层渲染，避免重复
@@ -305,7 +306,7 @@
       backgroundAlpha: 0,
       antialias: true,
       autoDensity: true,
-      resolution: Math.min(window.devicePixelRatio || 1, 2),
+      resolution: computeRenderResolution(),
       preference: 'webgl'
     });
     pixiApp = app;
@@ -316,13 +317,20 @@
     return pixiApp;
   }
 
+  /** 后备分辨率：设备像素比 × 抗锯齿超采样（默认 2x）× 模型缩放，上限 3。 */
+  function computeRenderResolution() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var quality = config.highQuality === false ? 1 : 2;
+    var factor = Math.max(1, config.scale || 1);
+    return Math.min(3, dpr * quality * factor);
+  }
+
   function applyRendererResolution() {
     if (!pixiApp) return;
     // 放大模型时提高画布后备分辨率，避免把画面“拉大”后发糊；
     // 缩放只在 canvas 内完成，不再改 WebView2 ZoomFactor（否则 viewport 重排会让缩放几乎无效）。
-    var base = Math.min(window.devicePixelRatio || 1, 2);
-    var factor = Math.max(1, config.scale || 1);
-    var resolution = Math.min(3, base * factor);
+    // 抗锯齿：Live2D 的锯齿主要来自贴图 alpha 边缘（MSAA 管不到），用超采样后由浏览器缩回。
+    var resolution = computeRenderResolution();
     if (Math.abs((pixiApp.renderer.resolution || 1) - resolution) > 0.01) {
       pixiApp.renderer.resolution = resolution;
     }
@@ -335,6 +343,16 @@
     applyRendererResolution();
     try { pixiApp.renderer.resize(w, h); } catch (e) { log('resize 失败', e); }
     layoutModel();
+  }
+
+  /** 输出当前渲染分辨率与抗锯齿状态，便于真机/日志确认。 */
+  function logRendering() {
+    if (!pixiApp) return;
+    sendHost({
+      type: 'debug',
+      message: '渲染：画布 ' + pixiApp.renderer.width + 'x' + pixiApp.renderer.height
+        + ' @' + pixiApp.renderer.resolution + 'x，抗锯齿 ' + (config.highQuality === false ? '关' : '开')
+    });
   }
 
   function layoutModel() {
@@ -1504,6 +1522,7 @@
       modelGroups = setupIdleLayers() || [];
       // 初始化时应用缩放与对应的后备分辨率（模型自带尺寸可能很大）。
       resizePixi();
+      logRendering();
 
       demoActive = false;
       if (demo) demo.stop();
@@ -2062,6 +2081,14 @@
       && Math.abs(Math.min(3, Math.max(0.2, msg.scale)) - config.scale) > 0.0001;
     if (msg.eyeFollow !== undefined) config.eyeFollow = !!msg.eyeFollow;
     if (msg.idleMotion !== undefined) config.idleMotion = !!msg.idleMotion;
+    var highQualityChanged = false;
+    if (msg.highQuality !== undefined) {
+      var highQuality = !!msg.highQuality;
+      if (highQuality !== config.highQuality) {
+        config.highQuality = highQuality;
+        highQualityChanged = true;
+      }
+    }
     if (msg.mouthSync !== undefined) config.mouthSync = !!msg.mouthSync;
     if (msg.textureMaxSize !== undefined) config.textureMaxSize = normalizeTextureMaxSize(msg.textureMaxSize);
     if (typeof msg.scale === 'number' && isFinite(msg.scale)) config.scale = Math.min(3, Math.max(0.2, msg.scale));
@@ -2134,8 +2161,11 @@
         // 设置页保存后立即让当前状态的叠加动作生效（force 不清预览，避免正在预览时被中断）。
         applyModelState(live.state, true);
       }
-      if (scaleChanged) {
+      if (scaleChanged || highQualityChanged) {
         resizePixi();
+        if (highQualityChanged) {
+          logRendering();
+        }
       } else {
         layoutModel();
       }
@@ -2808,6 +2838,7 @@
               resolution: pixiApp.renderer.resolution
             }
           : null,
+        highQuality: config.highQuality,
         model: model
           ? {
               position: [model.position.x, model.position.y],

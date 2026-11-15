@@ -520,6 +520,13 @@ public sealed class Live2DConfig
     /// <summary>按模型目录记住的“眼动上下反转”偏好（不同模型的骨骼绑定可能相反）。</summary>
     public Dictionary<string, bool> EyeFollowInvertYByModel { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool IdleMotion { get; set; } = true;
+
+    /// <summary>
+    /// 抗锯齿（高清渲染）：以 2x 后备分辨率渲染再缩回显示，平滑 Live2D 贴图 alpha 边缘的锯齿。
+    /// 低配机可关闭以降低 GPU 开销。
+    /// </summary>
+    public bool HighQualityRendering { get; set; } = true;
+
     public bool MouthSync { get; set; } = true;
     public double MouthSensitivity { get; set; } = 1.0;
     public bool ShowBubble { get; set; } = true;

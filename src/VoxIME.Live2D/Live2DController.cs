@@ -1274,6 +1274,7 @@ public sealed class Live2DController : ILive2DController
         _webHost?.SendConfig(
             config.EyeFollow,
             config.IdleMotion,
+            config.HighQualityRendering,
             config.MouthSync,
             config.Scale,
             config.ModelOffsetX,

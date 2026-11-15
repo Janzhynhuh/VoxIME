@@ -96,6 +96,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private int _eyeFollowFps = 30;
     private bool _eyeFollowInvertY;
     private bool _idleMotion;
+    private bool _highQualityRendering = true;
     private int _idlePoolMinSeconds = 15;
     private int _idlePoolMaxSeconds = 45;
     private bool _mouthSync;
@@ -1107,6 +1108,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         get => _idleMotion;
         set => SetProperty(ref _idleMotion, value);
+    }
+
+    /// <summary>抗锯齿（高清渲染）：2x 后备分辨率再缩回显示，平滑 Live2D 贴图边缘；低配可关。</summary>
+    public bool HighQualityRendering
+    {
+        get => _highQualityRendering;
+        set => SetProperty(ref _highQualityRendering, value);
     }
 
     public bool TtsMouthSync
@@ -2391,6 +2399,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         _eyeFollowInvertY = ResolveEyeFollowInvertYPreference(config.Live2D.ModelDirectory) ?? false;
         OnPropertyChanged(nameof(EyeFollowInvertY));
         IdleMotion = config.Live2D.IdleMotion;
+        HighQualityRendering = config.Live2D.HighQualityRendering;
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
         SelectTextureQuality(config.Live2D.TextureMaxSize);
@@ -3808,6 +3817,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             EyeFollowInvertY = EyeFollowInvertY,
             EyeFollowInvertYByModel = invertMap,
             IdleMotion = IdleMotion,
+            HighQualityRendering = HighQualityRendering,
             MouthSync = MouthSync,
             MouthSensitivity = MouthSensitivity,
             ShowBubble = ShowBubble,
