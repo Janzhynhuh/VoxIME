@@ -537,6 +537,9 @@ public sealed class Live2DConfig
     /// </summary>
     public int RenderSupersampling { get; set; }
 
+    /// <summary>SMAA 1x 后处理边缘抗锯齿（实验）；开启后与超采样叠加，建议超采样选 1x 对比。</summary>
+    public bool SmaaEnabled { get; set; }
+
     /// <summary>旧字段：抗锯齿开关；仅兼容旧配置读取（true→2x，false→1x），保存时同步为新字段。</summary>
     public bool HighQualityRendering { get; set; } = true;
 

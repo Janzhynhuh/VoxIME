@@ -96,6 +96,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     private int _eyeFollowFps = 30;
     private bool _eyeFollowInvertY;
     private bool _idleMotion;
+    private bool _smaaEnabled;
     private bool _isPositionFallbackVisible;
     private Choice? _selectedSupersampling;
     private int _idlePoolMinSeconds = 15;
@@ -1132,6 +1133,13 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
     {
         get => _idleMotion;
         set => SetProperty(ref _idleMotion, value);
+    }
+
+    /// <summary>SMAA 1x 后处理边缘抗锯齿（实验）。</summary>
+    public bool SmaaEnabled
+    {
+        get => _smaaEnabled;
+        set => SetProperty(ref _smaaEnabled, value);
     }
 
     /// <summary>抗锯齿超采样倍数：1x 关闭 … 8x（最终受 WebGL 尺寸/像素预算自动封顶）。</summary>
@@ -2449,6 +2457,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(EyeFollowInvertY));
         IdleMotion = config.Live2D.IdleMotion;
         SelectSupersampling(config.Live2D.RenderSupersampling);
+        SmaaEnabled = config.Live2D.SmaaEnabled;
         SetMouthSync(config.Live2D.MouthSync);
         ShowBubble = config.Live2D.ShowBubble;
         SelectTextureQuality(config.Live2D.TextureMaxSize);
@@ -3875,6 +3884,7 @@ public sealed class SettingsViewModel : ObservableObject, IDisposable
             EyeFollowInvertYByModel = invertMap,
             IdleMotion = IdleMotion,
             RenderSupersampling = supersampling,
+            SmaaEnabled = SmaaEnabled,
             HighQualityRendering = supersampling > 1,
             MouthSync = MouthSync,
             MouthSensitivity = MouthSensitivity,

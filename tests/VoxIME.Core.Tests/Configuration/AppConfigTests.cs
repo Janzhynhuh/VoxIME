@@ -96,6 +96,13 @@ public sealed class AppConfigTests
     }
 
     [Fact]
+    public void SmaaEnabled_DefaultsToFalse()
+    {
+        var config = new AppConfig();
+        Assert.False(config.Live2D.SmaaEnabled);
+    }
+
+    [Fact]
     public void Normalize_AllowsWiderModelOffset()
     {
         var config = new AppConfig();

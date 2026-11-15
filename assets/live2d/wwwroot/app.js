@@ -53,10 +53,60 @@
     idlePoolMaxSeconds: 45,
     triggers: [],
     supersampling: 2,
+    smaa: false,
     showBubble: true,
     textureMaxSize: 2048,
     bubbleInPage: isPreview // 嵌入时气泡由 WPF 层渲染，避免重复
   };
+
+  // SMAA 实验滤镜（延迟加载；只在开启时挂到模型上）。
+  var smaaFilter = null;
+  var smaaLoading = false;
+  if (params.get('smaa') === '1') {
+    config.smaa = true;
+  }
+
+  function applySmaaToModel() {
+    if (!model) return;
+    model.filters = config.smaa && smaaFilter ? [smaaFilter] : [];
+  }
+
+  function setSmaaEnabled(enabled) {
+    config.smaa = !!enabled;
+    if (!config.smaa) {
+      applySmaaToModel();
+      return;
+    }
+    if (!window.VoxIME_SMAA) {
+      log('SMAA 脚本未加载（smaa.js）');
+      return;
+    }
+    if (smaaFilter) {
+      applySmaaToModel();
+      return;
+    }
+    if (smaaLoading) return;
+    smaaLoading = true;
+    var createPromise;
+    try {
+      createPromise = window.VoxIME_SMAA.create();
+    } catch (createError) {
+      smaaLoading = false;
+      log('SMAA 初始化失败', createError);
+      sendHost({ type: 'error', message: 'SMAA 初始化失败：' + ((createError && createError.message) || createError) });
+      return;
+    }
+    createPromise.then(function (filter) {
+      smaaFilter = filter;
+      applySmaaToModel();
+      log('SMAA 滤镜已加载');
+    }).catch(function (error) {
+      log('SMAA 初始化失败', error);
+      sendHost({ type: 'error', message: 'SMAA 初始化失败：' + ((error && error.message) || error) });
+    }).finally(function () {
+      smaaLoading = false;
+    });
+  }
 
   // 打开设置窗口时由宿主暂停 Pixi ticker，避免桌宠持续渲染拖慢设置窗口。
   var hostPaused = false;
@@ -1528,6 +1578,8 @@
       modelUrl = resolved;
       modelName = deriveModelName(resolved);
       app.stage.addChild(model);
+      applySmaaToModel();
+      if (config.smaa && !smaaFilter && !smaaLoading) setSmaaEnabled(true);
       // 顺序有意义：先跑分层覆盖（含眨眼），再由口型层读取“更新帧内实际值”做 diag 回读。
       model.internalModel.on('beforeModelUpdate', applyLayeredOverrides);
       model.internalModel.on('beforeModelUpdate', applyMouthOverride);
@@ -2109,6 +2161,7 @@
       config.supersampling = supersampling;
       supersamplingChanged = true;
     }
+    if (msg.smaa !== undefined) setSmaaEnabled(!!msg.smaa);
     if (msg.mouthSync !== undefined) config.mouthSync = !!msg.mouthSync;
     if (msg.textureMaxSize !== undefined) config.textureMaxSize = normalizeTextureMaxSize(msg.textureMaxSize);
     if (typeof msg.scale === 'number' && isFinite(msg.scale)) config.scale = Math.min(3, Math.max(0.2, msg.scale));
@@ -2922,6 +2975,8 @@
             }
           : null,
         supersampling: config.supersampling,
+        smaa: config.smaa,
+        smaaFilterAttached: !!(model && model.filters && model.filters.length),
         model: model
           ? {
               position: [model.position.x, model.position.y],

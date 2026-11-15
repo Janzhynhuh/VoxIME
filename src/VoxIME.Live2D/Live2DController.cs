@@ -1271,10 +1271,16 @@ public sealed class Live2DController : ILive2DController
                 $"（{Path.GetFileName(modelAssets.ModelJsonPath) ?? "未找到 model3.json"}）");
         }
 
+        if (config.SmaaEnabled)
+        {
+            _logger.Info("[Live2D] SMAA 已启用（实验）");
+        }
+
         _webHost?.SendConfig(
             config.EyeFollow,
             config.IdleMotion,
             config.RenderSupersampling,
+            config.SmaaEnabled,
             config.MouthSync,
             config.Scale,
             config.ModelOffsetX,

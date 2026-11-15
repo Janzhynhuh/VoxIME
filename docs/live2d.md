@@ -178,6 +178,7 @@ Hiyori/
 | `EyeFollowInvertYByModel` | {} | 按模型目录记住的上下反转偏好（不同模型骨骼绑定方向可能相反） |
 | `IdleMotion` | true | 待机动作开关（关闭后停止静默循环 + 待机随机池，模型仍保持呼吸/眨眼；触发动作不受影响） |
 | `RenderSupersampling` | 2 | 抗锯齿超采样倍数（1..8）：后备分辨率 = 设备像素比 × 倍数 × 模型缩放，再由浏览器缩回显示；1x=关闭。最终按画布尺寸 ≤8192、像素预算 ≤16MP 自动封顶 |
+| `SmaaEnabled` | false | **实验**：SMAA 1x 后处理边缘抗锯齿。三个全屏 pass（边缘检测/权重/混合），边缘检测包含 alpha、混合在预乘空间，适合透明桌宠；建议超采样选 1x 对比，默认关闭 |
 | `HighQualityRendering` | true | **旧字段**：抗锯齿开关；仅兼容旧配置读取（true→2x，false→1x），保存时以 `RenderSupersampling` 为准 |
 | `MouthSync` | true | 口型同步开关（关闭后嘴巴闭合） |
 | `TextureMaxSize` | 2048 | 贴图最大边长：0=原始，1024/2048=加载时等比缩小；保存后重新加载模型生效 |
@@ -481,7 +482,7 @@ $exe = "src/VoxIME.Live2D/devtools/Live2DTools/bin/Debug/net10.0-windows10.0.177
 | 消息量 | 口型/眼动变化小于阈值（0.004/0.01）不发消息；状态/气泡按变化发送 |
 | 显存/内存 | WebView2 进程约 100~200MB（示例 Hiyori 2 张 2048 贴图）；4096/8192 大贴图模型会明显更高，可用 `TextureMaxSize` 降采样 |
 | 透明窗口 | `WebView2CompositionControl` 走 D3DImage/DirectComposition，无 CPU 回读；比截屏刷新方案省很多 |
-| 抗锯齿 | `RenderSupersampling`（1..8，默认 2）为后备分辨率倍数，再乘设备像素比与模型缩放；最终受画布尺寸 ≤8192、像素预算 ≤16MP 自动封顶。MSAA 对 Live2D 贴图 alpha 边缘无效，超采样才有效。像素量与倍数平方成正比，8x 约为 2x 的 16 倍 |
+| 抗锯齿 | `RenderSupersampling`（1..8，默认 2）为后备分辨率倍数，再乘设备像素比与模型缩放；最终受画布尺寸 ≤8192、像素预算 ≤16MP 自动封顶。MSAA 对 Live2D 贴图 alpha 边缘无效，超采样才有效。像素量与倍数平方成正比，8x 约为 2x 的 16 倍。实验性 `SmaaEnabled` 走 3 个全屏 pass 的后处理 SMAA 1x，边缘更平滑但不会增加贴图细节；建议超采样 1x 对比，640×640/DPR1.25 下实测约 63fps |
 | 省电建议 | 隐藏桌宠时 `Hide()` 会停止 30Hz 合帧定时器；不需要待机动作时可 `IdleMotion=false`；低配机可调小窗口尺寸/Scale |
 | 首次加载 | WebView2 环境/页面/模型约 0.5~2s（本机 Hiyori 约 1.5s）；加载期间显示兜底形象，不会白屏 |
 
