@@ -100,7 +100,11 @@ feat(core): 支持流式识别会话
 验证：dotnet build VoxIME.sln -c Release / dotnet test（402 通过）
 ```
 
-## 10. 多 Agent 协作（2026-11-15）
+## 10. 界面动效
+
+- 窗口/设置页/侧栏/最小化等过渡约定见 [docs/ANIMATION.md](docs/ANIMATION.md)；修改显隐、展开收起、最小化/恢复时先读该文档，不要在这里重复细则。
+
+## 11. 多 Agent 协作（2026-11-15）
 
 - 遇到可拆分的多问题任务，root 应**主动**拆分并行执行，不需要用户提醒；如果任务确实适合单 agent，也可以不分。
 - 每个子 agent 必须明确：目标、允许修改的文件/目录（write scope）、验收标准、禁止事项；禁止在未授权时改用户配置、提交 git、更新便携版或创建 Release/tag。
