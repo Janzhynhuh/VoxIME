@@ -1,4 +1,4 @@
-# VoxIME 声语 - 桌面免安装版
+# VoxIME 声语 - 免安装版
 
 1. 双击 `VoxIME.exe` 启动，不需要安装。
 2. 首次运行如出现 Windows SmartScreen，点“更多信息”再点“仍要运行”。

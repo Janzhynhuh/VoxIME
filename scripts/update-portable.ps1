@@ -1,16 +1,16 @@
 <#
 .SYNOPSIS
-    更新桌面免安装版（VoxIME-Portable）。
+    更新项目内免安装版（artifacts\portable\VoxIME-Portable）。
 
 .DESCRIPTION
     每次代码/资源改动后运行：
     - 默认重新 publish 到 deploy\VoxIME-win-x64
-    - 复制到桌面 VoxIME-Portable（先关闭该目录正在运行的实例）
+    - 复制到项目内 artifacts\portable\VoxIME-Portable（先关闭该目录正在运行的实例）
     - 写入 BUILD.txt（版本/提交/构建时间）
-    - 重新生成桌面 VoxIME-Portable-latest.zip
+    - 重新生成 artifacts\portable\VoxIME-Portable-latest.zip
     - 默认启动更新后的程序
 
-    不修改 GitHub Release 资产；桌面目录是“最新构建”的本地副本。
+    不修改 GitHub Release 资产；项目内 artifacts\portable 是“最新构建”的本地副本。
 
 .EXAMPLE
     .\scripts\update-portable.ps1
@@ -19,7 +19,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Destination = (Join-Path ([Environment]::GetFolderPath('Desktop')) 'VoxIME-Portable'),
+    [string]$Destination = (Join-Path (Split-Path -Parent $PSScriptRoot) 'artifacts\portable\VoxIME-Portable'),
 
     [string]$SourceDirectory,
 
@@ -54,14 +54,14 @@ if (-not (Test-Path (Join-Path $sourceFull 'VoxIME.exe'))) {
 
 $pathRoot = [IO.Path]::GetPathRoot($destFull)
 if ([string]::IsNullOrWhiteSpace($destFull) -or $destFull.TrimEnd('\') -eq $pathRoot.TrimEnd('\')) {
-    throw "拒绝把根目录作为桌面免安装版目录：$destFull"
+    throw "拒绝把根目录作为免安装版目录：$destFull"
 }
 
 $destExe = Join-Path $destFull 'VoxIME.exe'
 Get-Process VoxIME -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -and [string]::Equals($_.Path, $destExe, [StringComparison]::OrdinalIgnoreCase) } |
     ForEach-Object {
-        Write-Host "==> 停止正在运行的桌面免安装版：$($_.Id)" -ForegroundColor Yellow
+        Write-Host "==> 停止正在运行的免安装版：$($_.Id)" -ForegroundColor Yellow
         $_ | Stop-Process -Force
     }
 Start-Sleep -Seconds 1
@@ -84,7 +84,7 @@ try {
     # git 不可用时仍生成构建包。
 }
 $buildInfo = @(
-    'VoxIME 声语 - 桌面免安装版构建信息'
+    'VoxIME 声语 - 免安装版构建信息'
     "版本：$version"
     "提交：$commit"
     "构建时间：$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -101,7 +101,7 @@ if (-not $NoZip) {
     Compress-Archive -Path $destFull -DestinationPath $zipPath -CompressionLevel Optimal
 }
 
-Write-Host "==> 桌面免安装版已更新：$destFull" -ForegroundColor Green
+Write-Host "==> 免安装版已更新：$destFull" -ForegroundColor Green
 Write-Host "    版本：$version"
 Write-Host "    提交：$commit"
 if ($zipPath) {

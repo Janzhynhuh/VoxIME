@@ -68,26 +68,26 @@
 - 如果排查过程中已经提交了错误或纯调试的改动，找到根因后必须**单独提交一次还原**，不要留在代码里。
 - 修 UI/渲染类 bug 时，至少保留一个可自动或半自动复核的证据（参数采样、单测、`--selftest`、CDP 采样等），并在提交信息里写清楚。
 
-## 8. 桌面免安装版同步（强制，2026-11-03 用户要求）
+## 8. 免安装版同步（强制，2026-11-03 用户要求；2026-11-21 移至项目内）
 
-- 每次完成代码/资源改动后，更新桌面免安装版：
+- 每次完成代码/资源改动后，更新免安装版：
   ```powershell
   .\scripts\update-portable.ps1 -NoLaunch
   ```
-  它会重新 publish、更新 `桌面\VoxIME-Portable`、写 `BUILD.txt`、重新生成
-  `桌面\VoxIME-Portable-latest.zip`。更新时用 `-NoLaunch`，由流程末尾统一启动一次。
-- **标准流程（2026-11-03 用户明确要求）**：
+  它会重新 publish、更新 `artifacts\portable\VoxIME-Portable`、写 `BUILD.txt`、重新生成
+  `artifacts\portable\VoxIME-Portable-latest.zip`。更新时用 `-NoLaunch`，由流程末尾统一启动一次。
+- **标准流程**：
   1. **开工前先停用便携版**：`Get-Process VoxIME` 有实例就全部 `Stop-Process`，确认进程数为 0；
   2. 改代码、构建、测试、自检（自检等一次性验证须在无实例状态下运行，验证进程自己退出）；
   3. 提交 + push；
-  4. `update-portable.ps1 -NoLaunch` 更新桌面免安装版；
-  5. **提交完成后自动启动一次桌面版**（`Start-Process 桌面\VoxIME-Portable\VoxIME.exe`），确认只有一个实例在运行，并在回复里给出 PID。
+  4. `update-portable.ps1 -NoLaunch` 更新免安装版；
+  5. **提交完成后自动启动一次免安装版**（`Start-Process artifacts\portable\VoxIME-Portable\VoxIME.exe`），确认只有一个实例在运行，并在回复里给出 PID。
   - 启动前必须确认没有残留实例；**绝不允许在已有实例时再启动第二个**（会弹「VoxIME 已经在运行了」）。
   - 如果用户明确说本次不要启动，则跳过第 5 步并说明。
-- 纯文档改动可跳过重建，但回复中要说明"无需更新桌面版"。
-- 桌面目录是**本地最新构建**，不是 GitHub Release 资产；不要因此自动发 Release。
-- 不要手工在桌面目录改文件；脚本更新时整个目录会重建。用户的配置仍在 `%APPDATA%\VoxIME`。
-- 改动后回复必须给出桌面路径、构建版本/提交；如生成 zip，附 SHA256。
+- 纯文档改动可跳过重建，但回复中要说明"无需更新免安装版"。
+- `artifacts\portable` 是**本地最新构建**，不是 GitHub Release 资产；不要因此自动发 Release；不要放到桌面。
+- 不要手工在 `artifacts\portable` 里改文件；脚本更新时整个目录会重建。用户的配置仍在 `%APPDATA%\VoxIME`。
+- 改动后回复必须给出项目内路径、构建版本/提交；如生成 zip，附 SHA256。
 
 ## 9. 提交示例
 
@@ -110,5 +110,5 @@ feat(core): 支持流式识别会话
 - 遇到可拆分的多问题任务，root 应**主动**拆分并行执行，不需要用户提醒；如果任务确实适合单 agent，也可以不分。
 - 每个子 agent 必须明确：目标、允许修改的文件/目录（write scope）、验收标准、禁止事项；禁止在未授权时改用户配置、提交 git、更新便携版或创建 Release/tag。
 - 同一文件多个改动必须串行或由 root 统一整合；并行任务尽量使用互不重叠的文件域。
-- 子 agent 默认不运行 `dotnet build/test`（避免并发锁和误判），最终由 root 统一构建、测试、截图、审查 diff、提交和同步桌面版。
+- 子 agent 默认不运行 `dotnet build/test`（避免并发锁和误判），最终由 root 统一构建、测试、截图、审查 diff、提交和同步免安装版。
 - 子 agent 完成时报告改动文件、关键决策、未验证风险；root 必须复核最终 diff，不能只拼接报告。
